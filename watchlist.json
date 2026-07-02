@@ -1,0 +1,6 @@
+{
+  "comment": "Tokens to monitor for revival. chainId per DexScreener (solana, bsc, ethereum, base...). Max ~30 per chain.",
+  "tokens": [
+    { "chainId": "solana", "address": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", "label": "BONK (demo entry — replace with your dormant tokens)" }
+  ]
+}

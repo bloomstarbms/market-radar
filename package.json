@@ -1,0 +1,13 @@
+{
+  "name": "market-radar",
+  "version": "0.1.0",
+  "description": "Unified Market Radar — DEX revival + CEX pump alerts via Telegram",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "once": "node src/index.js --once"
+  },
+  "engines": { "node": ">=18" },
+  "license": "MIT"
+}
