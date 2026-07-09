@@ -17,6 +17,8 @@ export const config = {
   telegramToken: process.env.TELEGRAM_BOT_TOKEN || '',
   pollIntervalSec: Number(process.env.POLL_INTERVAL || 60),
   cooldownMin: Number(process.env.ALERT_COOLDOWN_MIN || 30),
+  cexExchanges: (process.env.CEX_EXCHANGES ?? 'binance,mexc,bybit')
+    .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
   dataDir: join(ROOT, 'data'),
   watchlistPath: join(ROOT, 'watchlist.json'),
 };

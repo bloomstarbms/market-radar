@@ -5,6 +5,7 @@ import { startBot } from './core/telegram.js';
 import { dispatch } from './core/dispatcher.js';
 import { getPairsForTokens, bestPairPerToken } from './sources/dex/dexscreener.js';
 import { checkRevival } from './sources/dex/revival.js';
+import { pollCex } from './sources/cex/monitor.js';
 
 const ONCE = process.argv.includes('--once');
 
@@ -32,13 +33,17 @@ async function pollDex() {
   }
 }
 
+async function pollAll() {
+  await Promise.allSettled([pollDex(), pollCex()]);
+}
+
 async function main() {
   load();
-  console.log(`Market Radar starting · poll ${config.pollIntervalSec}s · telegram ${config.telegramToken ? 'ON' : 'OFF (console-only)'}`);
+  console.log(`Market Radar starting · poll ${config.pollIntervalSec}s · telegram ${config.telegramToken ? 'ON' : 'OFF (console-only)'} · cex [${config.cexExchanges.join(', ')}]`);
   startBot();
-  await pollDex();
+  await pollAll();
   if (ONCE) { console.log('[once] done'); process.exit(0); }
-  setInterval(pollDex, config.pollIntervalSec * 1000);
+  setInterval(pollAll, config.pollIntervalSec * 1000);
 }
 
 main();
