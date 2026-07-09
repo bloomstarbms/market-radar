@@ -1,7 +1,9 @@
-# CEX pump detector (Binance / MEXC / Bybit)
+# CEX pump detector
 
-Deliberately NOT built yet — discipline rule: no new features until the
-DEX → Telegram pipeline works end-to-end in production.
+Monitors USDT spot pairs on Binance, MEXC, and Bybit via public APIs (no keys).
 
-When unlocked, each exchange gets a module here exporting `poll()` that
-returns alerts in the dispatcher format ({source:'CEX', ...}).
+- `exchanges.js` — normalized 24h-ticker fetchers per exchange
+- `pump.js` — rolling snapshot buffer + pump rules (price jump, volume surge)
+- `monitor.js` — poll loop, sends alerts through the shared dispatcher
+
+Tune thresholds in `pump.js` (RULES). Disable exchanges via CEX_EXCHANGES in .env.
