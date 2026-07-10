@@ -28,6 +28,7 @@ const EXCHANGE_WALLETS = {
 const CHAIN_IDS = { ethereum: 1, bsc: 56, base: 8453, arbitrum: 42161, polygon: 137, optimism: 10, avalanche: 43114 };
 const lastSeen = new Map(); // tokenKey -> newest tx id already processed
 const lastCheck = new Map(); // tokenKey -> ts of last on-chain check
+const disabledChains = new Set(); // chains rejected by the API plan (logged once)
 
 export function classifyDirection(from, to) {
   const f = EXCHANGE_WALLETS[from?.toLowerCase()];
@@ -42,7 +43,12 @@ export function effectiveThreshold(liqUsd) {
   return Math.min(RULES.whaleUsd, liqUsd * (RULES.liqPct / 100));
 }
 
+let lastEvmCall = 0;
 async function evmTransfers(chainId, tokenAddress) {
+  // Etherscan free tier: 3 calls/sec — space calls out
+  const wait = lastEvmCall + 400 - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastEvmCall = Date.now();
   const url = `https://api.etherscan.io/v2/api?chainid=${CHAIN_IDS[chainId]}&module=account&action=tokentx&contractaddress=${tokenAddress}&page=1&offset=${RULES.maxTxPerPoll}&sort=desc&apikey=${config.etherscanKey}`;
   const res = await fetch(url);
   const json = await res.json();
@@ -82,17 +88,24 @@ export async function checkWhales(pair) {
   const chainId = pair.chainId;
   const token = pair.baseToken.address;
   const isSolana = chainId === 'solana';
+  if (disabledChains.has(chainId)) return;
   if (isSolana && !config.heliusKey) return;
   if (!isSolana && (!config.etherscanKey || !CHAIN_IDS[chainId])) return;
 
   const key = `${chainId}:${token}`;
   if (Date.now() - (lastCheck.get(key) || 0) < RULES.intervalSec * 1000) return;
   lastCheck.set(key, Date.now());
+  if (config.debug) console.log(`  [debug] whale check: ${pair.baseToken.symbol} (${chainId})`);
   let txs;
   try {
     txs = isSolana ? await solanaTransfers(token) : await evmTransfers(chainId, token);
   } catch (e) {
-    console.error(`[whale] ${key} fetch failed:`, e.message);
+    if (/not supported|upgrade/i.test(e.message)) {
+      disabledChains.add(chainId);
+      console.error(`[whale] ${chainId}: not covered by free API plan — whale checks disabled for this chain`);
+    } else {
+      console.error(`[whale] ${key} fetch failed:`, e.message);
+    }
     return;
   }
   if (!txs.length) return;
