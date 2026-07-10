@@ -24,6 +24,11 @@ async function pollDex() {
       const pairs = await getPairsForTokens(chainId, addrs);
       const best = bestPairPerToken(pairs);
       console.log(`[dex] ${chainId}: ${Object.keys(best).length}/${addrs.length} tokens found`);
+      if (config.debug) {
+        const top = Object.values(best).map(p => ({ s: p.baseToken.symbol, h1: p.priceChange?.h1 || 0, v: p.volume?.h1 || 0 }))
+          .sort((a, b) => Math.abs(b.h1) - Math.abs(a.h1)).slice(0, 3);
+        for (const t of top) if (t.h1 !== 0 || t.v > 0) console.log(`  [debug] ${chainId} active: ${t.s} ${t.h1 >= 0 ? '+' : ''}${t.h1}% 1h, $${(t.v/1000).toFixed(1)}K vol/1h`);
+      }
       for (const pair of Object.values(best)) {
         const alert = checkRevival(pair);
         if (alert) await dispatch(alert);

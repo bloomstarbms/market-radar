@@ -14,6 +14,7 @@ if (existsSync(envPath)) {
 }
 
 export const config = {
+  debug: ['1','true','yes'].includes((process.env.DEBUG || '').toLowerCase()),
   telegramToken: process.env.TELEGRAM_BOT_TOKEN || '',
   pollIntervalSec: Number(process.env.POLL_INTERVAL || 60),
   cooldownMin: Number(process.env.ALERT_COOLDOWN_MIN || 30),
