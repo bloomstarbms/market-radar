@@ -16,6 +16,10 @@ const RULES = {
 const buffers = new Map(); // key -> [{price, vol24h, ts}]
 const volEma = new Map();  // key -> EMA of window volume
 
+// Debug: collect per-poll stats so the monitor can log top movers / near-misses
+let debugRows = [];
+export function takeDebugStats() { const r = debugRows; debugRows = []; return r; }
+
 export function checkPump(exchange, t) {
   if (!t.price || t.quoteVol24h < RULES.minQuoteVol24h) return null;
   const key = `${exchange}:${t.symbol}`;
@@ -36,6 +40,7 @@ export function checkPump(exchange, t) {
   const volRatio = ema > 0 ? windowVol / ema : 0;
   const volSurging = windowVol >= RULES.minWindowVolUsd && volRatio >= RULES.volSurgeRatio;
 
+  debugRows.push({ symbol: t.symbol, movePct, volRatio, windowVol });
   const ctx = `Price: $${t.price} · 24h: ${t.change24hPct >= 0 ? '+' : ''}${t.change24hPct.toFixed(1)}% · Vol24h: $${fmt(t.quoteVol24h)}`;
 
   // 1) Directional move (pump or dump)

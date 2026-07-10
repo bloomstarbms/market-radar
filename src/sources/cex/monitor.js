@@ -1,6 +1,6 @@
 // CEX orchestrator: poll each enabled exchange, run pump checks, dispatch alerts.
 import { EXCHANGES } from './exchanges.js';
-import { checkPump } from './pump.js';
+import { checkPump, takeDebugStats } from './pump.js';
 import { dispatch } from '../../core/dispatcher.js';
 import { config } from '../../config.js';
 
@@ -16,6 +16,13 @@ export async function pollCex() {
         if (alert && await dispatch(alert)) alerts++;
       }
       console.log(`[cex] ${name}: ${tickers.length} USDT pairs scanned${alerts ? `, ${alerts} alerts` : ''}`);
+      if (config.debug) {
+        const rows = takeDebugStats();
+        const movers = [...rows].sort((a, b) => Math.abs(b.movePct) - Math.abs(a.movePct)).slice(0, 3);
+        const vols = [...rows].sort((a, b) => b.volRatio - a.volRatio).slice(0, 2);
+        for (const r of movers) console.log(`  [debug] ${name} mover: ${r.symbol} ${r.movePct >= 0 ? '+' : ''}${r.movePct.toFixed(2)}% (window), vol ${r.volRatio.toFixed(1)}x`);
+        for (const r of vols) if (r.volRatio > 2) console.log(`  [debug] ${name} volume: ${r.symbol} ${r.volRatio.toFixed(1)}x normal ($${(r.windowVol/1000).toFixed(0)}K in window)`);
+      }
     } catch (e) {
       console.error(`[cex] ${name} poll failed:`, e.message);
     }
