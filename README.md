@@ -1,7 +1,8 @@
 # Market Radar
 
-Unified crypto alert platform: DEX dormant-token revival signals + CEX pump
-detection (Binance / MEXC / Bybit), delivered by one Telegram bot.
+Unified crypto alert platform: DEX dormant-token revival, CEX pump/dump/volume
+anomalies (Binance / MEXC / Bybit), and on-chain whale transfers — delivered by
+one Telegram bot.
 
 ## Quick start
 
@@ -10,8 +11,9 @@ detection (Binance / MEXC / Bybit), delivered by one Telegram bot.
 3. `cp .env.example .env` and paste the token into TELEGRAM_BOT_TOKEN.
 4. Edit `watchlist.json` — add the dormant tokens you want to monitor
    (chainId + token address, as used on dexscreener.com).
-5. `npm start`
-6. Open your bot in Telegram and send `/start` to subscribe.
+5. Optional: add free ETHERSCAN_API_KEY / HELIUS_API_KEY to enable whale alerts.
+6. `npm start`
+7. Open your bot in Telegram and send `/start` to subscribe.
 
 Run `npm run once` for a single poll cycle (good for testing).
 Without a token it runs console-only and prints alerts to stdout.
@@ -27,19 +29,33 @@ Without a token it runs console-only and prints alerts to stdout.
 | Txn surge | 1h txns ≥ 3× the 24h hourly average |
 | Liquidity add | ≥ +20% vs rolling baseline |
 
-Thresholds: `src/sources/dex/revival.js` (RULES).
+Thresholds: `src/sources/dex/revival.js`
 
-### 🟠 CEX pump (all USDT spot pairs on Binance, MEXC, Bybit)
+### 🚀📉👀 CEX (all USDT spot pairs on Binance, MEXC, Bybit)
 
-| Signal | Rule |
+| Alert | Rule |
 |---|---|
-| Price jump | ≥ +5% across the snapshot window (~5 min) |
-| Big move | ≥ +10% across the window |
-| Volume surge | window volume ≥ 5× its rolling average |
+| 🚀 Pump | price ≥ +5% across the ~5 min window (+10% = big) |
+| 📉 Sell-off | price ≤ −5% across the window (−10% = big) |
+| 👀 Unusual volume | window volume ≥ 10× normal with flat price — quiet accumulation/distribution |
 
-Pairs under $200K 24h volume are ignored. Thresholds: `src/sources/cex/pump.js` (RULES).
+Pairs under $200K 24h volume are ignored. Thresholds: `src/sources/cex/pump.js`
 
-Severity: 🟡 LOW / 🟠 MEDIUM / 🔴 HIGH. Per-pair cooldown (default 30 min)
+### 🐋 Whale transfers (watchlist tokens, on-chain, optional)
+
+Alerts when a single transfer exceeds **min($1M, 20% of pair liquidity)** — so
+dormant low-liquidity tokens still trigger. Direction is tagged best-effort
+against known exchange hot wallets:
+
+- **→ exchange deposit** = possible incoming sell-off (HIGH)
+- **← exchange withdrawal** = possible accumulation (MEDIUM)
+- wallet → wallet = watch for follow-up (LOW)
+
+EVM chains use a free [Etherscan V2 key](https://etherscan.io/apis) (one key,
+all chains); Solana uses a free [Helius key](https://helius.dev). Extend the
+exchange-wallet labels in `src/sources/chain/whale.js`.
+
+Severity: 🟡 LOW / 🟠 MEDIUM / 🔴 HIGH. Per-key cooldown (default 30 min)
 prevents alert spam.
 
 ## Architecture
@@ -54,5 +70,6 @@ src/
     store.js          JSON state: subscribers, baselines, cooldowns
   sources/
     dex/              DexScreener poll + revival rules
-    cex/              exchange fetchers + pump rules + monitor
+    cex/              exchange fetchers + pump/dump/volume rules
+    chain/            whale-transfer monitor (Etherscan V2 + Helius)
 ```
