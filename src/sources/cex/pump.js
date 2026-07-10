@@ -1,15 +1,16 @@
-// Pump detection over rolling in-memory snapshots (per exchange:symbol).
+// Pump / dump / volume-anomaly detection over rolling in-memory snapshots.
 // Window = span of the snapshot buffer (~5 polls). Volume surge is measured
-// against an EMA of per-window traded volume, so sustained-high-volume pairs
-// don't alert forever.
+// against an EMA of per-window traded volume.
 
 const RULES = {
-  bufferSize: 6,          // snapshots kept (~5 min at 60s polls)
-  priceJumpPct: 5,        // % move across window -> signal
-  bigMovePct: 10,         // % move across window -> strong signal
-  volSurgeRatio: 5,       // window volume >= 5x its EMA
-  minQuoteVol24h: 200_000,// ignore illiquid pairs (USD)
-  minWindowVolUsd: 20_000,// ignore dust surges
+  bufferSize: 6,           // snapshots kept (~5 min at 60s polls)
+  priceJumpPct: 5,         // |move| across window -> signal
+  bigMovePct: 10,          // |move| across window -> strong signal
+  volSurgeRatio: 5,        // window volume >= 5x its EMA (with price move)
+  volOnlyRatio: 10,        // >= 10x EMA with flat price -> stealth volume alert
+  minQuoteVol24h: 200_000, // ignore illiquid pairs (USD)
+  minWindowVolUsd: 20_000, // ignore dust surges
+  minVolOnlyUsd: 100_000,  // stealth-volume alerts need real size
 };
 
 const buffers = new Map(); // key -> [{price, vol24h, ts}]
@@ -26,31 +27,46 @@ export function checkPump(exchange, t) {
 
   const oldest = buf[0];
   const movePct = ((t.price - oldest.price) / oldest.price) * 100;
-  const windowMin = ((Date.now() - oldest.ts) / 60000).toFixed(0);
+  const absMove = Math.abs(movePct);
+  const windowMin = Math.max(1, Math.round((Date.now() - oldest.ts) / 60000));
 
-  // Traded volume within the window (24h rolling counter delta, floor at 0)
   const windowVol = Math.max(0, t.quoteVol24h - oldest.vol24h);
   const ema = volEma.get(key) ?? windowVol;
   volEma.set(key, ema * 0.85 + windowVol * 0.15);
+  const volRatio = ema > 0 ? windowVol / ema : 0;
+  const volSurging = windowVol >= RULES.minWindowVolUsd && volRatio >= RULES.volSurgeRatio;
 
-  const signals = [];
-  if (movePct >= RULES.bigMovePct)
-    signals.push(`Price +${movePct.toFixed(1)}% in ${windowMin}m (BIG)`);
-  else if (movePct >= RULES.priceJumpPct)
-    signals.push(`Price +${movePct.toFixed(1)}% in ${windowMin}m`);
-  if (ema > 0 && windowVol >= RULES.minWindowVolUsd && windowVol / ema >= RULES.volSurgeRatio)
-    signals.push(`Volume surge: $${fmt(windowVol)} in ${windowMin}m (${(windowVol / ema).toFixed(1)}x normal)`);
+  const ctx = `Price: $${t.price} · 24h: ${t.change24hPct >= 0 ? '+' : ''}${t.change24hPct.toFixed(1)}% · Vol24h: $${fmt(t.quoteVol24h)}`;
 
-  if (!signals.length || movePct < RULES.priceJumpPct) return null; // price move required
+  // 1) Directional move (pump or dump)
+  if (absMove >= RULES.priceJumpPct) {
+    const up = movePct > 0;
+    const signals = [`Price ${up ? '+' : ''}${movePct.toFixed(1)}% in ${windowMin}m${absMove >= RULES.bigMovePct ? ' (BIG)' : ''}`];
+    if (volSurging) signals.push(`Volume surge: $${fmt(windowVol)} in ${windowMin}m (${volRatio.toFixed(1)}x normal)`);
+    const severity = (absMove >= RULES.bigMovePct && volSurging) ? 'HIGH'
+      : (absMove >= RULES.bigMovePct || volSurging) ? 'MEDIUM' : 'LOW';
+    return {
+      source: 'CEX', type: up ? 'PUMP' : 'DUMP', severity, key,
+      title: `${t.symbol} ${up ? 'pumping' : 'selling off'} on ${exchange.toUpperCase()}`,
+      lines: [...signals, ctx],
+      url: chartUrl(exchange, t.symbol),
+    };
+  }
 
-  const severity = (movePct >= RULES.bigMovePct && signals.length >= 2) ? 'HIGH'
-    : (movePct >= RULES.bigMovePct || signals.length >= 2) ? 'MEDIUM' : 'LOW';
-  return {
-    source: 'CEX', type: 'PUMP', severity, key,
-    title: `${t.symbol} pumping on ${exchange.toUpperCase()}`,
-    lines: [...signals, `Price: $${t.price} · 24h: ${t.change24hPct >= 0 ? '+' : ''}${t.change24hPct.toFixed(1)}% · Vol24h: $${fmt(t.quoteVol24h)}`],
-    url: chartUrl(exchange, t.symbol),
-  };
+  // 2) Stealth volume: big volume, flat price — possible accumulation/distribution
+  if (windowVol >= RULES.minVolOnlyUsd && volRatio >= RULES.volOnlyRatio) {
+    return {
+      source: 'CEX', type: 'VOLUME', severity: volRatio >= RULES.volOnlyRatio * 2 ? 'MEDIUM' : 'LOW', key,
+      title: `${t.symbol} unusual volume on ${exchange.toUpperCase()} (price flat)`,
+      lines: [
+        `$${fmt(windowVol)} traded in ${windowMin}m (${volRatio.toFixed(1)}x normal), price only ${movePct >= 0 ? '+' : ''}${movePct.toFixed(1)}%`,
+        `Possible quiet accumulation or distribution before a move`,
+        ctx,
+      ],
+      url: chartUrl(exchange, t.symbol),
+    };
+  }
+  return null;
 }
 
 function chartUrl(ex, symbol) {
