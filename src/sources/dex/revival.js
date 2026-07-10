@@ -24,7 +24,7 @@ export function checkRevival(pair) {
     signals.push(`Volume spike: $${fmt(volH1)}/h vs $${fmt(hourlyAvg)}/h avg (${(volH1 / hourlyAvg).toFixed(1)}x)`);
   if (priceH1 >= RULES.priceMovePct)
     signals.push(`Price +${priceH1}% in 1h`);
-  if (txAvg > 0 && txH1 / txAvg >= RULES.txnSurgeRatio)
+  if (txAvg > 0 && txH1 >= 10 && volH1 >= RULES.minH1VolumeUsd && txH1 / txAvg >= RULES.txnSurgeRatio)
     signals.push(`Txn surge: ${txH1} txns/h vs ${txAvg.toFixed(1)} avg`);
 
   // Liquidity vs stored baseline
