@@ -6,6 +6,7 @@ import { dispatch } from './core/dispatcher.js';
 import { getPairsForTokens, bestPairPerToken } from './sources/dex/dexscreener.js';
 import { checkRevival } from './sources/dex/revival.js';
 import { pollCex } from './sources/cex/monitor.js';
+import { checkWhales } from './sources/chain/whale.js';
 
 const ONCE = process.argv.includes('--once');
 
@@ -26,6 +27,7 @@ async function pollDex() {
       for (const pair of Object.values(best)) {
         const alert = checkRevival(pair);
         if (alert) await dispatch(alert);
+        await checkWhales(pair); // on-chain whale transfers (needs API keys in .env)
       }
     } catch (e) {
       console.error(`[dex] ${chainId} poll failed:`, e.message);
@@ -39,7 +41,8 @@ async function pollAll() {
 
 async function main() {
   load();
-  console.log(`Market Radar starting · poll ${config.pollIntervalSec}s · telegram ${config.telegramToken ? 'ON' : 'OFF (console-only)'} · cex [${config.cexExchanges.join(', ')}]`);
+  const whaleMode = (config.etherscanKey ? 'evm ' : '') + (config.heliusKey ? 'solana' : '') || 'OFF (no keys)';
+  console.log(`Market Radar starting · poll ${config.pollIntervalSec}s · telegram ${config.telegramToken ? 'ON' : 'OFF (console-only)'} · cex [${config.cexExchanges.join(', ')}] · whale ${whaleMode}`);
   startBot();
   await pollAll();
   if (ONCE) { console.log('[once] done'); process.exit(0); }

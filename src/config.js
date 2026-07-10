@@ -19,6 +19,8 @@ export const config = {
   cooldownMin: Number(process.env.ALERT_COOLDOWN_MIN || 30),
   cexExchanges: (process.env.CEX_EXCHANGES ?? 'binance,mexc,bybit')
     .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
+  etherscanKey: process.env.ETHERSCAN_API_KEY || '',
+  heliusKey: process.env.HELIUS_API_KEY || '',
   dataDir: join(ROOT, 'data'),
   watchlistPath: join(ROOT, 'watchlist.json'),
 };
