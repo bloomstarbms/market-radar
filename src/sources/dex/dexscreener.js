@@ -1,11 +1,16 @@
 // DexScreener client. Free API, no key. https://docs.dexscreener.com
 const BASE = 'https://api.dexscreener.com';
 
-// Batch-fetch pairs for token addresses on one chain (max 30 addresses).
+// Batch-fetch pairs for token addresses on one chain (API limit: 30 per call).
 export async function getPairsForTokens(chainId, addresses) {
-  const res = await fetch(`${BASE}/tokens/v1/${chainId}/${addresses.join(',')}`);
-  if (!res.ok) throw new Error(`dexscreener ${res.status}`);
-  return res.json(); // array of pairs
+  const all = [];
+  for (let i = 0; i < addresses.length; i += 30) {
+    const batch = addresses.slice(i, i + 30);
+    const res = await fetch(`${BASE}/tokens/v1/${chainId}/${batch.join(',')}`);
+    if (!res.ok) throw new Error(`dexscreener ${res.status}`);
+    all.push(...await res.json());
+  }
+  return all;
 }
 
 // For each token, keep only its most liquid pair.
