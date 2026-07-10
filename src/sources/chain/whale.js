@@ -10,6 +10,7 @@ const RULES = {
   whaleUsd: Number(process.env.WHALE_USD || 1_000_000),
   liqPct: Number(process.env.WHALE_LIQ_PCT || 20),
   maxTxPerPoll: 25,
+  intervalSec: Number(process.env.WHALE_INTERVAL || 300), // per-token on-chain check spacing (protects free API quotas)
 };
 
 // Best-effort labels (lowercase). Extend freely — this is the poor man's Arkham.
@@ -26,6 +27,7 @@ const EXCHANGE_WALLETS = {
 
 const CHAIN_IDS = { ethereum: 1, bsc: 56, base: 8453, arbitrum: 42161, polygon: 137, optimism: 10, avalanche: 43114 };
 const lastSeen = new Map(); // tokenKey -> newest tx id already processed
+const lastCheck = new Map(); // tokenKey -> ts of last on-chain check
 
 export function classifyDirection(from, to) {
   const f = EXCHANGE_WALLETS[from?.toLowerCase()];
@@ -84,6 +86,8 @@ export async function checkWhales(pair) {
   if (!isSolana && (!config.etherscanKey || !CHAIN_IDS[chainId])) return;
 
   const key = `${chainId}:${token}`;
+  if (Date.now() - (lastCheck.get(key) || 0) < RULES.intervalSec * 1000) return;
+  lastCheck.set(key, Date.now());
   let txs;
   try {
     txs = isSolana ? await solanaTransfers(token) : await evmTransfers(chainId, token);
