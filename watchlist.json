@@ -1,6 +1,140 @@
 {
-  "comment": "Tokens to monitor for revival. chainId per DexScreener (solana, bsc, ethereum, base...). Max ~30 per chain.",
+  "comment": "Dormant tokens: liquidity >= $30K but ~zero 24h volume (screened 2026-07-10). chainId per DexScreener.",
   "tokens": [
-    { "chainId": "solana", "address": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", "label": "BONK (demo entry — replace with your dormant tokens)" }
+    {
+      "chainId": "bsc",
+      "address": "0x3220ccbbc29d727bde85b7333d31b21e0d6bc6f4",
+      "label": "PUPDOGE (Pup Doge, liq $2125K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0x02ff5065692783374947393723dba9599e59f591",
+      "label": "YOOSHI (YooShi, liq $959K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0x243cacb4d5ff6814ad668c3e225246efa886ad5a",
+      "label": "SHI (Shina Inu, liq $591K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0xd55210bb6898c021a19de1f58d27b71f095921ee",
+      "label": "CHKN (Chickencoin, liq $565K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0x4c769928971548eb71a3392eaf66bedc8bef4b80",
+      "label": "BITCOIN (HarryPotterObamaSonic10Inu, liq $351K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0xadb2437e6f65682b85f814fbc12fec0508a7b1d0",
+      "label": "UNCX (UNCX Network, liq $338K)"
+    },
+    {
+      "chainId": "solana",
+      "address": "Buoj8HCZMnLRwzDmjzaswhkVhLZD58PG4pZ7rnYp6pCr",
+      "label": "MCDULL (McDull (Meme), liq $292K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0x4cda4daad72340b28925ccd6fa78db631267d3c4",
+      "label": "BABYDOGECASH (Baby Doge Cash, liq $276K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0x33abe795f9c1b6136608c36db211bd7590f5fdae",
+      "label": "WOLF (Landwolf, liq $182K)"
+    },
+    {
+      "chainId": "solana",
+      "address": "44bzge9EZJGPJRYNmsA64mdKZ1eeLdDcDiczRmoyAtez",
+      "label": "LOS (Lord Of SOL, liq $172K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0x71e80e96af604afc23ca2aed4c1c7466db6dd0c4",
+      "label": "BABYFLOKI (Baby Floki, liq $164K)"
+    },
+    {
+      "chainId": "solana",
+      "address": "888R77WmcLJKyGeJjk1WktFAB5u5fkvmokHYsAu6Spyd",
+      "label": "888 (888, liq $164K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0x6ad0f087501eee603aeda0407c52864bc7f83322",
+      "label": "MEFA (Metaverse Face, liq $157K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0x4ffe5ec4d8b9822e01c9e49678884baec17f60d9",
+      "label": "MONEY (BESC MONEY, liq $138K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0x07b36f2549291d320132712a1e64d3826b1fb4d7",
+      "label": "WIFEDOGE (Wifedoge, liq $131K)"
+    },
+    {
+      "chainId": "base",
+      "address": "0xc17dda248e2d50fc006d8febb5a406dd31972712",
+      "label": "ANY (Anyspend, liq $103K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0x7d38315b92d0e7a85b35b2b7fe969b25935619d7",
+      "label": "ECOIN (Ecoin Finance, liq $96K)"
+    },
+    {
+      "chainId": "solana",
+      "address": "cPZp4Sk44ecqkwVtED3YPPudQMEe5MbZsavDiwBntAU",
+      "label": "VETS (Veterans for the Cause, liq $77K)"
+    },
+    {
+      "chainId": "base",
+      "address": "0x18b66b63625a07d3671eb0a119a5e4df4708936e",
+      "label": "PLUS (PLUS, liq $69K)"
+    },
+    {
+      "chainId": "solana",
+      "address": "54g2GnhV2mcheYD7Rvdt6MWniLdUsXQKeVNz5KZhdoge",
+      "label": "BABYVIBE (Baby Vibing Cat Coin, liq $54K)"
+    },
+    {
+      "chainId": "base",
+      "address": "0x4b524015d54a27d4472f5c59c570730d69499ba3",
+      "label": "NOELCLAW (NoelClaw, liq $50K)"
+    },
+    {
+      "chainId": "solana",
+      "address": "66MH83n3jRqZMni87niTyKRoGbh9HxBkTm73sTRKpump",
+      "label": "OTCFI (OTCfi, liq $49K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0x2ff8d8cae3a9633285c60150099bad25c9b4e5d9",
+      "label": "AICZ (Artificial CZ, liq $46K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0xf7844cb890f4c339c497aeab599abdc3c874b67a",
+      "label": "NFTART (NFT Art Finance, liq $44K)"
+    },
+    {
+      "chainId": "base",
+      "address": "0x50c2cc97c4f487aa0cd742ab4b6afe8b8511bba3",
+      "label": "WAKE (Wake, liq $39K)"
+    },
+    {
+      "chainId": "solana",
+      "address": "Fdp3GvvkJZkaKLF7DBwLs5Ar1xeNgg4sPR3LCoSgXn58",
+      "label": "LEEK (LEEK, liq $37K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0xabab3b0db38f2303acbcab672905e41a18e396d8",
+      "label": "APEMAN (Ape Man, liq $32K)"
+    }
   ]
 }
