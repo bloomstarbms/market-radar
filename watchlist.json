@@ -1,5 +1,5 @@
 {
-  "comment": "Dormant tokens: liquidity >= $30K but ~zero 24h volume (screened 2026-07-10). chainId per DexScreener.",
+  "comment": "Dormant tokens (liq >= $30K, ~zero volume) + ATH-crash tokens (down 85-90% from ATH, vol < $500K). Screened 2026-07-10.",
   "tokens": [
     {
       "chainId": "bsc",
@@ -135,6 +135,286 @@
       "chainId": "ethereum",
       "address": "0xabab3b0db38f2303acbcab672905e41a18e396d8",
       "label": "APEMAN (Ape Man, liq $32K)"
+    },
+    {
+      "chainId": "solana",
+      "address": "FeR8VBqNRSUD5NtXAj2n3j1dAHkZHfyDktKuLXD4pump",
+      "label": "JELLYJELLY (Jelly-My-Jelly, ath -88%, liq $4308K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0xaecf6d1aff214fef70042740054f0f6d0caa98ab",
+      "label": "BABYSHIBAINU (Baby Shiba Inu, ath -90%, liq $3264K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0xe054017a2f0ecfa294b08a74af319bce0b985a39",
+      "label": "LUCIC (Lucidum, ath -86%, liq $2438K)"
+    },
+    {
+      "chainId": "solana",
+      "address": "Hg8bKz4mvs8KNj9zew1cEF9tDw1x2GViB4RFZjVEmfrD",
+      "label": "TDCCP (TDCCP, ath -88%, liq $2122K)"
+    },
+    {
+      "chainId": "base",
+      "address": "0x5f980dcfc4c0fa3911554cf5ab288ed0eb13dba3",
+      "label": "GITLAWB (Gitlawb, ath -86%, liq $1945K)"
+    },
+    {
+      "chainId": "base",
+      "address": "0x1bc0c42215582d5a085795f4badbac3ff36d1bcb",
+      "label": "CLANKER (tokenbot, ath -89%, liq $1637K)"
+    },
+    {
+      "chainId": "solana",
+      "address": "J1Wpmugrooj1yMyQKrdZ2vwRXG5rhfx3vTnYE39gpump",
+      "label": "WOULD (would, ath -88%, liq $1329K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0x66fd8de541c0594b4dccdfc13bf3a390e50d3afd",
+      "label": "TURTLE (Turtle, ath -88%, liq $1232K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0x76e222b07c53d28b89b0bac18602810fc22b49a8",
+      "label": "JOE (Joe Coin, ath -90%, liq $1232K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0x51363f073b1e4920fda7aa9e9d84ba97ede1560e",
+      "label": "BOB (Build On BNB, ath -88%, liq $1141K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0x2a8e1e676ec238d8a992307b495b45b3feaa5e86",
+      "label": "OUSD (Origin Dollar, ath -87%, liq $1077K)"
+    },
+    {
+      "chainId": "base",
+      "address": "0xc729777d0470f30612b1564fd96e8dd26f5814e3",
+      "label": "SAPIEN (Sapien, ath -86%, liq $913K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0x6ec90334d89dbdc89e08a133271be3d104128edb",
+      "label": "WKC (Wiki Cat, ath -89%, liq $847K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0xc0c240c870606a5cb3150795e2d0dfff9f1f7456",
+      "label": "RION (Hyperion, ath -86%, liq $709K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0xc51a9250795c0186a6fb4a7d20a90330651e4444",
+      "label": "我踏马来了 (我踏马来了, ath -88%, liq $658K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0x0b9ae6b1d4f0eeed904d1cef68b9bd47499f3fff",
+      "label": "NATI (IlluminatiCoin, ath -90%, liq $652K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0xeb2b7d5691878627eff20492ca7c9a71228d931d",
+      "label": "CREPE (CREPE, ath -87%, liq $608K)"
+    },
+    {
+      "chainId": "base",
+      "address": "0xfb31f85a8367210b2e4ed2360d2da9dc2d2ccc95",
+      "label": "EDEL (Edel, ath -90%, liq $598K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0xbb46693ebbea1ac2070e59b4d043b47e2e095f86",
+      "label": "BFG (BFG Token, ath -87%, liq $579K)"
+    },
+    {
+      "chainId": "solana",
+      "address": "7mwikw88GRsAHbFpbpyuM3QMq1hXH87d4rYNuM8Earay",
+      "label": "DAKU (Daku V2, ath -85%, liq $564K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0xa2c2c937333165d4c5f2dc5f31a43e1239fecfeb",
+      "label": "HERA (Hera Finance, ath -88%, liq $487K)"
+    },
+    {
+      "chainId": "solana",
+      "address": "zGh48JtNHVBb5evgoZLXwgPD2Qu4MhkWdJLGDAupump",
+      "label": "RETIRE (The Last Play, ath -87%, liq $465K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0x59264f02d301281f3393e1385c0aefd446eb0f00",
+      "label": "PARTI (Particle Network, ath -89%, liq $460K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0x2ebd53d035150f328bd754d6dc66b99b0edb89aa",
+      "label": "MET (Metronome, ath -89%, liq $458K)"
+    },
+    {
+      "chainId": "base",
+      "address": "0x6b2504a03ca4d43d0d73776f6ad46dab2f2a4cfd",
+      "label": "REI (Rei, ath -89%, liq $407K)"
+    },
+    {
+      "chainId": "solana",
+      "address": "PRVT6TB7uss3FrUd2D9xs2zqDBsa3GbMJMwCQsgmeta",
+      "label": "UMBRA (Umbra, ath -87%, liq $391K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0x9ac9468e7e3e1d194080827226b45d0b892c77fd",
+      "label": "YEE (Yee Token, ath -88%, liq $383K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0xbfe78de7d1c51e0868501d5fa3e88e674c79acdd",
+      "label": "LOT (League of Traders, ath -86%, liq $369K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0xc43c6bfeda065fe2c4c11765bf838789bd0bb5de",
+      "label": "RED (RedStone, ath -88%, liq $363K)"
+    },
+    {
+      "chainId": "base",
+      "address": "0x29cc30f9d113b356ce408667aa6433589cecbdca",
+      "label": "ELSA (Elsa, ath -88%, liq $357K)"
+    },
+    {
+      "chainId": "solana",
+      "address": "6nR8wBnfsmXfcdDr1hovJKjvFQxNSidN6XFyfAFZpump",
+      "label": "CLASH (GeorgePlaysClashRoyale, ath -86%, liq $352K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0xa95c5ebb86e0de73b4fb8c47a45b792cfea28c23",
+      "label": "SDL (stake.link, ath -86%, liq $323K)"
+    },
+    {
+      "chainId": "base",
+      "address": "0x9eadbe35f3ee3bf3e28180070c429298a1b02f93",
+      "label": "LMTS (Limitless, ath -89%, liq $300K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0x4b0f1812e5df2a09796481ff14017e6005508003",
+      "label": "TWT (Trust Wallet, ath -87%, liq $295K)"
+    },
+    {
+      "chainId": "arbitrum",
+      "address": "0x1337420ded5adb9980cfc35f8f2b054ea86f8ab1",
+      "label": "SQD (SQD, ath -89%, liq $290K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0x4c067de26475e1cefee8b8d1f6e2266b33a2372e",
+      "label": "RHEA (RHEA, ath -88%, liq $273K)"
+    },
+    {
+      "chainId": "base",
+      "address": "0x21cfcfc3d8f98fc728f48341d10ad8283f6eb7ab",
+      "label": "TRUE (True, ath -88%, liq $271K)"
+    },
+    {
+      "chainId": "solana",
+      "address": "Fe5c469ADZyvnZrB8gdDsYt5eLKodaVYhYJCdunVr1nA",
+      "label": "INC (Incrypt, ath -90%, liq $256K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0xfb7b4564402e5500db5bb6d63ae671302777c75a",
+      "label": "DEXT (DexTools, ath -89%, liq $232K)"
+    },
+    {
+      "chainId": "solana",
+      "address": "HKJHsYJHMVK5VRyHHk5GhvzY9tBAAtPvDkZfDH6RLDTd",
+      "label": "READY (Ready Cards, ath -87%, liq $215K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0x6de037ef9ad2725eb40118bb1702ebb27e4aeb24",
+      "label": "RENDER (Render, ath -88%, liq $212K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0x44ff8620b8ca30902395a7bd3f2407e1a091bf73",
+      "label": "VIRTUAL (Virtuals Protocol, ath -89%, liq $207K)"
+    },
+    {
+      "chainId": "solana",
+      "address": "AUuCEHQ7sm2i5GmaHrpE961voWcTY8U6mgrkhcV7pump",
+      "label": "QST (QuStream, ath -88%, liq $199K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0x666d875c600aa06ac1cf15641361dec3b00432ef",
+      "label": "BTSE (BTSE Token, ath -89%, liq $166K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0x1776e1f26f98b1a5df9cd347953a26dd3cb46671",
+      "label": "NMR (Numeraire, ath -89%, liq $135K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0xea60cd69f2b9fd6eb067bddbbf86a5bdeffbbc55",
+      "label": "WECAN (Wecan, ath -88%, liq $127K)"
+    },
+    {
+      "chainId": "solana",
+      "address": "49jdQxUkKtuvorvnwWqDzUoYKEjfgroTzHkQqXG9YFMj",
+      "label": "SOSANA (SOSANA, ath -85%, liq $119K)"
+    },
+    {
+      "chainId": "bsc",
+      "address": "0x1d0ac23f03870f768ca005c84cbb6fb82aa884fd",
+      "label": "GALEON (Galeon, ath -87%, liq $110K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0x94314a14df63779c99c0764a30e0cd22fa78fc0e",
+      "label": "EPIC (Epic Chain, ath -89%, liq $108K)"
+    },
+    {
+      "chainId": "base",
+      "address": "0xa69f80524381275a7ffdb3ae01c54150644c8792",
+      "label": "SUP (Superfluid, ath -86%, liq $89K)"
+    },
+    {
+      "chainId": "base",
+      "address": "0x90ec58ef4cc9f37b96de1e203b65bd4e6e79580e",
+      "label": "AMETA (Alpha City, ath -89%, liq $87K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0x64d0f55cd8c7133a9d7102b13987235f486f2224",
+      "label": "BORG (SwissBorg, ath -90%, liq $79K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0x6985884c4392d348587b19cb9eaaf157f13271cd",
+      "label": "ZRO (LayerZero, ath -88%, liq $64K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0x0bc37bea9068a86c221b8bd71ea6228260dad5a2",
+      "label": "SPARKLET (Upland, ath -87%, liq $43K)"
+    },
+    {
+      "chainId": "solana",
+      "address": "SAVEaeeqeXNKYb4Lyx28DkUms5gyZ76vGa6fCfdzWfK",
+      "label": "SAVE (Save, ath -90%, liq $34K)"
+    },
+    {
+      "chainId": "ethereum",
+      "address": "0x70bef3bb2f001da2fddb207dae696cd9faff3f5d",
+      "label": "NST (Ninja Squad Token, ath -86%, liq $32K)"
     }
   ]
 }
