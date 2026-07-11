@@ -26,12 +26,15 @@ export function formatAlert(a) {
   return `${head}\n${body}${link}`;
 }
 
+const SEV_RANK = { LOW: 0, MEDIUM: 1, HIGH: 2 };
+
 export async function dispatch(alert) {
-  const key = `${alert.source}:${alert.type}:${alert.key}`;
+  const key = `${alert.source}:${alert.dedupeKey ?? `${alert.type}:${alert.key}`}`;
   if (onCooldown(key, alert.cooldownMin ?? config.cooldownMin)) return false;
   const text = formatAlert(alert);
   console.log(`\n[ALERT] ${text.replace(/<[^>]+>/g, '')}\n`);
-  if (config.telegramToken) await broadcast(text);
+  const loudEnough = SEV_RANK[alert.severity] >= SEV_RANK[config.minSeverity] || alert.source === 'SYS';
+  if (config.telegramToken && loudEnough) await broadcast(text);
   markAlerted(key);
   if (alert.track) recordAlert(alert);
   return true;
