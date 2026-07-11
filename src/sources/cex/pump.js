@@ -12,7 +12,11 @@ const RULES = {
   minQuoteVol24h: 200_000, // ignore illiquid pairs (USD)
   minWindowVolUsd: 20_000, // ignore dust surges
   minVolOnlyUsd: 100_000,  // stealth-volume alerts need real size
+  majorMinUsd: 1_000_000,  // majors (BTC/ETH/SOL) need $1M+ in the window
+  volOnlyPctOf24h: 0.005,  // window vol must also be >= 0.5% of 24h volume
 };
+
+const MAJORS = /^(BTC|ETH|SOL|WBTC|WETH)USDT$/;
 
 const buffers = new Map();  // key -> [{price, vol24h, ts}]
 const volEma = new Map();   // key -> EMA of window volume
@@ -76,7 +80,13 @@ export function checkPump(exchange, t) {
   }
 
   // 3) Stealth volume: big volume, flat price
-  if (windowVol >= RULES.minVolOnlyUsd && volRatio >= RULES.volOnlyRatio) {
+  // Floor scales with the pair's own 24h volume so majors don't spam on noise.
+  const volFloor = Math.max(
+    RULES.minVolOnlyUsd,
+    t.quoteVol24h * RULES.volOnlyPctOf24h,
+    MAJORS.test(t.symbol) ? RULES.majorMinUsd : 0,
+  );
+  if (windowVol >= volFloor && volRatio >= RULES.volOnlyRatio) {
     return { source: 'CEX', type: 'VOLUME', severity: volRatio >= RULES.volOnlyRatio * 2 ? 'MEDIUM' : 'LOW', key,
       title: `${t.symbol} unusual volume on ${exchange.toUpperCase()} (price flat)`,
       lines: [`$${fmt(windowVol)} traded in ${windowMin}m (${volRatio.toFixed(1)}x normal), price only ${movePct >= 0 ? '+' : ''}${movePct.toFixed(1)}%`,
