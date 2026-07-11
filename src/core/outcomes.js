@@ -4,6 +4,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { config } from '../config.js';
+import { TRUSTED_QUOTES } from '../sources/dex/dexscreener.js';
 
 const FILE = join(config.dataDir, 'outcomes.json');
 const CHECKPOINTS = [[ 'h1', 3600e3 ], [ 'h6', 6 * 3600e3 ], [ 'h24', 24 * 3600e3 ]];
@@ -41,7 +42,10 @@ async function currentPrice(r) {
     const res = await fetch(`https://api.dexscreener.com/tokens/v1/${r.chainId}/${r.address}`);
     const pairs = await res.json();
     let best = null;
-    for (const p of pairs || []) if (!best || (p.liquidity?.usd||0) > (best.liquidity?.usd||0)) best = p;
+    for (const p of pairs || []) {
+      if (!TRUSTED_QUOTES.has((p.quoteToken?.symbol || '').toUpperCase())) continue;
+      if (!best || (p.liquidity?.usd||0) > (best.liquidity?.usd||0)) best = p;
+    }
     return Number(best?.priceUsd) || null;
   } catch { return null; }
 }
