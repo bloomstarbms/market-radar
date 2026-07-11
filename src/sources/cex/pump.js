@@ -8,10 +8,10 @@ const RULES = {
   bigMovePct: 10,          // |move| across fast window -> strong signal
   slowJumpPct: 10,         // |move| across ~1h anchor -> grinding move signal
   volSurgeRatio: 5,        // window volume >= 5x its EMA (with price move)
-  volOnlyRatio: 10,        // >= 10x EMA with flat price -> stealth volume alert
+  volOnlyRatio: 15,        // >= 15x EMA with flat price -> stealth volume alert
   minQuoteVol24h: 200_000, // ignore illiquid pairs (USD)
   minWindowVolUsd: 20_000, // ignore dust surges
-  minVolOnlyUsd: 100_000,  // stealth-volume alerts need real size
+  minVolOnlyUsd: 250_000,  // stealth-volume alerts need real size
   majorMinUsd: 1_000_000,  // majors (BTC/ETH/SOL) need $1M+ in the window
   volOnlyPctOf24h: 0.005,  // window vol must also be >= 0.5% of 24h volume
 };
@@ -21,6 +21,7 @@ const MAJORS = /^(BTC|ETH|SOL|WBTC|WETH)USDT$/;
 const buffers = new Map();  // key -> [{price, vol24h, ts}]
 const volEma = new Map();   // key -> EMA of window volume
 const hourAnchor = new Map(); // key -> {price, ts} refreshed when > 1h old
+const prevRatio = new Map();  // key -> last poll's volume ratio (persistence check)
 
 let debugRows = [];
 export function takeDebugStats() { const r = debugRows; debugRows = []; return r; }
@@ -61,7 +62,7 @@ export function checkPump(exchange, t) {
     if (volSurging) signals.push(`Volume surge: $${fmt(windowVol)} in ${windowMin}m (${volRatio.toFixed(1)}x normal)`);
     const severity = (absMove >= RULES.bigMovePct && volSurging) ? 'HIGH'
       : (absMove >= RULES.bigMovePct || volSurging) ? 'MEDIUM' : 'LOW';
-    return { source: 'CEX', type: up ? 'PUMP' : 'DUMP', severity, key,
+    return { source: 'CEX', type: up ? 'PUMP' : 'DUMP', severity, key, dedupeKey: `MOVE:${key}`,
       title: `${t.symbol} ${up ? 'pumping' : 'selling off'} on ${exchange.toUpperCase()}`,
       lines: [...signals, ctx], url: CHART_URLS[exchange]?.(t.symbol), track };
   }
@@ -72,7 +73,7 @@ export function checkPump(exchange, t) {
     hourAnchor.set(key, { price: t.price, ts: Date.now() }); // reset anchor each hour
     if (Math.abs(slowPct) >= RULES.slowJumpPct) {
       const up = slowPct > 0;
-      return { source: 'CEX', type: up ? 'PUMP' : 'DUMP', severity: Math.abs(slowPct) >= 2 * RULES.slowJumpPct ? 'HIGH' : 'MEDIUM', key: `${key}:1h`,
+      return { source: 'CEX', type: up ? 'PUMP' : 'DUMP', severity: Math.abs(slowPct) >= 2 * RULES.slowJumpPct ? 'HIGH' : 'MEDIUM', key: `${key}:1h`, dedupeKey: `MOVE:${key}:1h`,
         title: `${t.symbol} ${up ? 'grinding up' : 'bleeding'} on ${exchange.toUpperCase()} (1h)`,
         lines: [`Price ${up ? '+' : ''}${slowPct.toFixed(1)}% over the last hour`, ctx],
         url: CHART_URLS[exchange]?.(t.symbol), track };
@@ -86,7 +87,9 @@ export function checkPump(exchange, t) {
     t.quoteVol24h * RULES.volOnlyPctOf24h,
     MAJORS.test(t.symbol) ? RULES.majorMinUsd : 0,
   );
-  if (windowVol >= volFloor && volRatio >= RULES.volOnlyRatio) {
+  const wasElevated = (prevRatio.get(key) || 0) >= RULES.volOnlyRatio / 3;
+  prevRatio.set(key, volRatio);
+  if (windowVol >= volFloor && volRatio >= RULES.volOnlyRatio && wasElevated) {
     return { source: 'CEX', type: 'VOLUME', severity: volRatio >= RULES.volOnlyRatio * 2 ? 'MEDIUM' : 'LOW', key,
       title: `${t.symbol} unusual volume on ${exchange.toUpperCase()} (price flat)`,
       lines: [`$${fmt(windowVol)} traded in ${windowMin}m (${volRatio.toFixed(1)}x normal), price only ${movePct >= 0 ? '+' : ''}${movePct.toFixed(1)}%`,
