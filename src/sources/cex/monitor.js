@@ -5,12 +5,22 @@ import { checkListings } from './listings.js';
 import { dispatch } from '../../core/dispatcher.js';
 import { config } from '../../config.js';
 
+const lastFingerprint = new Map(); // exchange -> sum of all 24h volumes last poll
+
 export async function pollCex() {
   for (const name of config.cexExchanges) {
     const fetcher = EXCHANGES[name];
     if (!fetcher) { console.error(`[cex] unknown exchange: ${name}`); continue; }
     try {
       const tickers = await fetcher();
+      // Stale-feed guard: if the total 24h volume across ALL pairs is byte-identical
+      // to last poll, the exchange served frozen data — skip it entirely this cycle.
+      const fp = tickers.reduce((s, t) => s + (t.quoteVol24h || 0), 0);
+      if (lastFingerprint.get(name) === fp) {
+        console.log(`[cex] ${name}: stale feed detected, skipping poll`);
+        continue;
+      }
+      lastFingerprint.set(name, fp);
       let alerts = 0;
       for (const listing of checkListings(name, tickers)) if (await dispatch(listing)) alerts++;
       for (const t of tickers) {

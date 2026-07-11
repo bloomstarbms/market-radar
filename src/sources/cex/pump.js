@@ -12,6 +12,7 @@ const RULES = {
   minQuoteVol24h: 200_000, // ignore illiquid pairs (USD)
   minWindowVolUsd: 20_000, // ignore dust surges
   minVolOnlyUsd: 250_000,  // stealth-volume alerts need real size
+  maxSaneRatio: 500,       // ratios beyond this are data artifacts, not markets
   majorMinUsd: 1_000_000,  // majors (BTC/ETH/SOL) need $1M+ in the window
   volOnlyPctOf24h: 0.005,  // window vol must also be >= 0.5% of 24h volume
 };
@@ -30,6 +31,10 @@ export function checkPump(exchange, t) {
   if (!t.price || t.quoteVol24h < RULES.minQuoteVol24h) return null;
   const key = `${exchange}:${t.symbol}`;
   const buf = buffers.get(key) || [];
+  // Frozen-symbol guard: identical price AND volume to the last snapshot means
+  // stale data — don't push, don't decay the EMA, don't alert.
+  const last = buf[buf.length - 1];
+  if (last && last.price === t.price && last.vol24h === t.quoteVol24h) return null;
   buf.push({ price: t.price, vol24h: t.quoteVol24h, ts: Date.now() });
   if (buf.length > RULES.bufferSize) buf.shift();
   buffers.set(key, buf);
@@ -48,7 +53,8 @@ export function checkPump(exchange, t) {
   const windowVol = Math.max(0, t.quoteVol24h - oldest.vol24h);
   const ema = volEma.get(key) ?? windowVol;
   volEma.set(key, ema * 0.85 + windowVol * 0.15);
-  const volRatio = ema > 0 ? windowVol / ema : 0;
+  let volRatio = ema > 0 ? windowVol / ema : 0;
+  if (volRatio > RULES.maxSaneRatio) volRatio = 0; // data artifact — never alert on it
   const volSurging = windowVol >= RULES.minWindowVolUsd && volRatio >= RULES.volSurgeRatio;
 
   debugRows.push({ symbol: t.symbol, movePct, volRatio, windowVol });
