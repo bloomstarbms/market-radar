@@ -1,14 +1,18 @@
 import { readFileSync } from 'node:fs';
 import { config } from './config.js';
-import { load } from './core/store.js';
-import { startBot } from './core/telegram.js';
-import { dispatch } from './core/dispatcher.js';
+import { load, getState } from './core/store.js';
+import { startBot, broadcast } from './core/telegram.js';
+import { dispatch, formatAlert } from './core/dispatcher.js';
+import { loadOutcomes, checkOutcomes, statsSummary } from './core/outcomes.js';
 import { getPairsForTokens, bestPairPerToken } from './sources/dex/dexscreener.js';
 import { checkRevival } from './sources/dex/revival.js';
 import { pollCex } from './sources/cex/monitor.js';
+import { pollFunding } from './sources/cex/funding.js';
 import { checkWhales } from './sources/chain/whale.js';
 
 const ONCE = process.argv.includes('--once');
+const startedAt = Date.now();
+let alertCount = 0;
 
 function loadWatchlist() {
   const wl = JSON.parse(readFileSync(config.watchlistPath, 'utf8'));
@@ -31,8 +35,8 @@ async function pollDex() {
       }
       for (const pair of Object.values(best)) {
         const alert = checkRevival(pair);
-        if (alert) await dispatch(alert);
-        await checkWhales(pair); // on-chain whale transfers (needs API keys in .env)
+        if (alert && await dispatch(alert)) alertCount++;
+        await checkWhales(pair);
       }
     } catch (e) {
       console.error(`[dex] ${chainId} poll failed:`, e.message);
@@ -40,12 +44,27 @@ async function pollDex() {
   }
 }
 
+let lastHeartbeat = Date.now();
+async function heartbeat() {
+  if (!config.heartbeatHours || Date.now() - lastHeartbeat < config.heartbeatHours * 3600e3) return;
+  lastHeartbeat = Date.now();
+  const up = ((Date.now() - startedAt) / 3600e3).toFixed(1);
+  await broadcast(formatAlert({
+    source: 'SYS', type: 'HEARTBEAT', severity: 'LOW',
+    title: 'Market Radar is alive',
+    lines: [`Uptime ${up}h · ${alertCount} alerts this run · ${getState().subscribers.length} subscribers`, `/stats for the signal scoreboard`],
+  }));
+}
+
 async function pollAll() {
-  await Promise.allSettled([pollDex(), pollCex()]);
+  await Promise.allSettled([pollDex(), pollCex(), pollFunding()]);
+  await checkOutcomes().catch(() => {});
+  await heartbeat().catch(() => {});
 }
 
 async function main() {
   load();
+  loadOutcomes();
   const whaleMode = (config.etherscanKey ? 'evm ' : '') + (config.heliusKey ? 'solana' : '') || 'OFF (no keys)';
   console.log(`Market Radar starting · poll ${config.pollIntervalSec}s · telegram ${config.telegramToken ? 'ON' : 'OFF (console-only)'} · cex [${config.cexExchanges.join(', ')}] · whale ${whaleMode}`);
   startBot();

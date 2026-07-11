@@ -18,8 +18,9 @@ export const config = {
   telegramToken: process.env.TELEGRAM_BOT_TOKEN || '',
   pollIntervalSec: Number(process.env.POLL_INTERVAL || 60),
   cooldownMin: Number(process.env.ALERT_COOLDOWN_MIN || 30),
-  cexExchanges: (process.env.CEX_EXCHANGES ?? 'binance,mexc,bybit')
+  cexExchanges: (process.env.CEX_EXCHANGES ?? 'binance,mexc,bybit,gate,kucoin,bitget')
     .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
+  heartbeatHours: Number(process.env.HEARTBEAT_HOURS ?? 24),
   etherscanKey: process.env.ETHERSCAN_API_KEY || '',
   heliusKey: process.env.HELIUS_API_KEY || '',
   dataDir: join(ROOT, 'data'),
