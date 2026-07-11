@@ -1,8 +1,15 @@
 # Market Radar
 
-Unified crypto alert platform: DEX dormant-token revival, CEX pump/dump/volume
-anomalies (Binance / MEXC / Bybit), and on-chain whale transfers — delivered by
-one Telegram bot.
+Unified crypto alert platform delivered by one Telegram bot:
+
+- 🟢 DEX dormant-token revival (watchlist, DexScreener)
+- 🚨 Liquidity-pull (rug) alarms on watchlist tokens
+- 🚀📉👀 CEX pump / sell-off / stealth-volume across Binance, MEXC, Bybit, Gate, KuCoin, Bitget (fast ~5min + slow 1h windows)
+- 🆕 New-listing detection on all six exchanges
+- ⚡ Funding-rate extremes on Binance perps (squeeze setups)
+- 🐋 On-chain whale transfers (Etherscan V2 + Helius)
+- 📊 Outcome tracker: every alert is scored at +1h/+6h/+24h — send /stats to the bot
+- 💓 Daily heartbeat so you know it's alive
 
 ## Quick start
 
