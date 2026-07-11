@@ -6,7 +6,7 @@ const RULES = {
   priceMovePct: 10,     // h1 price change >= +10%
   liqAddPct: 20,        // liquidity up >= 20% vs baseline
   txnSurgeRatio: 3,     // h1 txns >= 3x hourly average (needs >=10 txns + min volume)
-  minH1VolumeUsd: 500,  // ignore dust
+  minH1VolumeUsd: 5_000, // ignore dust — revivals need real money flowing
   rugDropPct: 50,       // liquidity down >= 50% vs baseline -> LIQUIDITY PULL alarm
   minRugLiqUsd: 10_000, // baseline must be meaningful before rug logic applies
 };
