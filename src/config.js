@@ -13,7 +13,11 @@ if (existsSync(envPath)) {
   }
 }
 
+export const VERSION = '0.3.0';
+
 export const config = {
+  minSeverity: ['LOW','MEDIUM','HIGH'].includes((process.env.ALERT_MIN_SEVERITY || 'LOW').toUpperCase())
+    ? (process.env.ALERT_MIN_SEVERITY || 'LOW').toUpperCase() : 'LOW',
   debug: ['1','true','yes'].includes((process.env.DEBUG || '').toLowerCase()),
   telegramToken: process.env.TELEGRAM_BOT_TOKEN || '',
   pollIntervalSec: Number(process.env.POLL_INTERVAL || 60),

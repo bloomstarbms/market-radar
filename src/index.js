@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { config } from './config.js';
+import { config, VERSION } from './config.js';
 import { load, getState } from './core/store.js';
 import { startBot, broadcast } from './core/telegram.js';
 import { dispatch, formatAlert } from './core/dispatcher.js';
@@ -66,7 +66,7 @@ async function main() {
   load();
   loadOutcomes();
   const whaleMode = (config.etherscanKey ? 'evm ' : '') + (config.heliusKey ? 'solana' : '') || 'OFF (no keys)';
-  console.log(`Market Radar starting · poll ${config.pollIntervalSec}s · telegram ${config.telegramToken ? 'ON' : 'OFF (console-only)'} · cex [${config.cexExchanges.join(', ')}] · whale ${whaleMode}`);
+  console.log(`Market Radar v${VERSION} starting · poll ${config.pollIntervalSec}s · minSev ${config.minSeverity} · telegram ${config.telegramToken ? 'ON' : 'OFF (console-only)'} · cex [${config.cexExchanges.join(', ')}] · whale ${whaleMode}`);
   startBot();
   await pollAll();
   if (ONCE) { console.log('[once] done'); process.exit(0); }
