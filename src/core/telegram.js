@@ -1,6 +1,7 @@
 // Zero-dependency Telegram bot: long-polling for commands, broadcast for alerts.
 import { config } from '../config.js';
 import { addSubscriber, removeSubscriber, getState } from './store.js';
+import { statsSummary } from './outcomes.js';
 
 const API = () => `https://api.telegram.org/bot${config.telegramToken}`;
 let offset = 0;
@@ -35,11 +36,13 @@ async function handleUpdate(u) {
   if (cmd === '/start') {
     const added = addSubscriber(chatId);
     await sendTo(chatId, added
-      ? '✅ Subscribed to <b>Market Radar</b> alerts.\nSources: 🟢 DEX revival · 🟠 CEX pump (coming).\n/stop to unsubscribe, /status for info.'
+      ? '✅ Subscribed to <b>Market Radar</b> alerts.\nSources: 🟢 revival · 🚀 pump · 📉 dump · 👀 volume · 🆕 listings · ⚡ funding · 🐋 whales · 🚨 rugs\n/stop unsubscribe · /status info · /stats signal scoreboard'
       : 'Already subscribed. /status for info.');
   } else if (cmd === '/stop') {
     removeSubscriber(chatId);
     await sendTo(chatId, '🛑 Unsubscribed.');
+  } else if (cmd === '/stats') {
+    await sendTo(chatId, statsSummary());
   } else if (cmd === '/status') {
     const s = getState();
     await sendTo(chatId, `📡 Market Radar\nSubscribers: ${s.subscribers.length}\nTokens tracked: ${Object.keys(s.baselines).length}\nPoll interval: ${config.pollIntervalSec}s`);
