@@ -1,6 +1,7 @@
-// CEX orchestrator: poll each enabled exchange, run pump checks, dispatch alerts.
+// CEX orchestrator: poll each enabled exchange, run listing + pump checks.
 import { EXCHANGES } from './exchanges.js';
 import { checkPump, takeDebugStats } from './pump.js';
+import { checkListings } from './listings.js';
 import { dispatch } from '../../core/dispatcher.js';
 import { config } from '../../config.js';
 
@@ -11,6 +12,7 @@ export async function pollCex() {
     try {
       const tickers = await fetcher();
       let alerts = 0;
+      for (const listing of checkListings(name, tickers)) if (await dispatch(listing)) alerts++;
       for (const t of tickers) {
         const alert = checkPump(name, t);
         if (alert && await dispatch(alert)) alerts++;
