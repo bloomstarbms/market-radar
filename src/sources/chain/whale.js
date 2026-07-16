@@ -9,6 +9,7 @@ import { dispatch } from '../../core/dispatcher.js';
 const RULES = {
   whaleUsd: Number(process.env.WHALE_USD || 1_000_000),
   liqPct: Number(process.env.WHALE_LIQ_PCT || 20),
+  minUsd: Number(process.env.WHALE_MIN_USD || 50_000), // liquidity-relative threshold never drops below this
   maxTxPerPoll: 25,
   intervalSec: Number(process.env.WHALE_INTERVAL || 300), // per-token on-chain check spacing (protects free API quotas)
 };
@@ -97,7 +98,7 @@ export function classifyDirection(from, to) {
 
 export function effectiveThreshold(liqUsd) {
   if (!liqUsd || liqUsd <= 0) return RULES.whaleUsd;
-  return Math.min(RULES.whaleUsd, liqUsd * (RULES.liqPct / 100));
+  return Math.max(RULES.minUsd, Math.min(RULES.whaleUsd, liqUsd * (RULES.liqPct / 100)));
 }
 
 let lastEvmCall = 0;
@@ -187,7 +188,7 @@ export async function checkWhales(pair) {
       lines: [
         `${fmt(tx.amount)} ${pair.baseToken.symbol} ${dir} — ${hint}`,
         `Threshold: $${fmt(threshold)} (min of $${fmt(RULES.whaleUsd)} / ${RULES.liqPct}% of $${fmt(liq)} liquidity)`,
-        `Tx: ${tx.explorer}`,
+        `<a href="${tx.explorer}">view transaction</a>`,
       ],
       url: pair.url,
     });
