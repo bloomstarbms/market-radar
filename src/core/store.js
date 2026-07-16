@@ -23,8 +23,21 @@ export function removeSubscriber(chatId) {
   if (i >= 0) { state.subscribers.splice(i, 1); save(); return true; }
   return false;
 }
+// Escalating cooldown: repeat alerts for the same key within 6h double the wait
+// each time (30m, 1h, 2h, 4h — capped 8x). First alerts are never delayed.
 export function onCooldown(key, minutes) {
-  const last = state.lastAlert[key] || 0;
-  return Date.now() - last < minutes * 60_000;
+  const e = state.lastAlert[key];
+  if (!e) return false;
+  const ts = typeof e === 'number' ? e : e.ts;
+  const n = typeof e === 'number' ? 1 : e.n;
+  const mult = Math.min(2 ** (n - 1), 8);
+  return Date.now() - ts < minutes * mult * 60_000;
 }
-export function markAlerted(key) { state.lastAlert[key] = Date.now(); save(); }
+export function markAlerted(key) {
+  const prev = state.lastAlert[key];
+  const prevTs = typeof prev === 'number' ? prev : prev?.ts;
+  const prevN = typeof prev === 'number' ? 1 : prev?.n || 0;
+  const n = prevTs && Date.now() - prevTs < 6 * 3600e3 ? prevN + 1 : 1;
+  state.lastAlert[key] = { ts: Date.now(), n };
+  save();
+}
