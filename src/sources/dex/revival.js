@@ -16,13 +16,20 @@ export function checkRevival(pair) {
   const key = `${pair.chainId}:${pair.baseToken.address}`;
   const base = st.baselines[key];
   const liq = pair.liquidity?.usd || 0;
+  // Pair-flip guard: if the best pair changed pools, reset baseline silently —
+  // comparing liquidity across different pools creates fake rug/revival alerts.
+  if (base && base.pair && base.pair !== pair.pairAddress) {
+    st.baselines[key] = { liq, pair: pair.pairAddress, symbol: pair.baseToken.symbol, updated: Date.now() };
+    save();
+    return null;
+  }
   const track = { kind: 'dex', chainId: pair.chainId, address: pair.baseToken.address, price: Number(pair.priceUsd) || 0 };
 
   // --- Rug alarm: liquidity halved vs baseline ---
   if (base?.liq >= RULES.minRugLiqUsd && liq <= base.liq * (1 - RULES.rugDropPct / 100)) {
-    st.baselines[key] = { ...base, liq }; save(); // accept new reality, alert once
+    st.baselines[key] = { ...base, liq, pair: pair.pairAddress }; save(); // accept new reality, alert once
     return {
-      source: 'DEX', type: 'RUG', severity: 'HIGH', key,
+      source: 'DEX', type: 'RUG', severity: 'HIGH', key, cooldownMin: 1440,
       title: `${pair.baseToken.symbol}: liquidity pulled (${pair.chainId})`,
       lines: [
         `Liquidity dropped ${(100 * (1 - liq / base.liq)).toFixed(0)}%: $${fmt(base.liq)} → $${fmt(liq)}`,
@@ -52,6 +59,7 @@ export function checkRevival(pair) {
 
   st.baselines[key] = {
     liq: base ? base.liq * 0.9 + liq * 0.1 : liq,
+    pair: pair.pairAddress,
     symbol: pair.baseToken.symbol,
     updated: Date.now(),
   };
@@ -60,7 +68,7 @@ export function checkRevival(pair) {
   if (!signals.length) return null;
   const severity = signals.length >= 3 ? 'HIGH' : signals.length === 2 ? 'MEDIUM' : 'LOW';
   return {
-    source: 'DEX', type: 'REVIVAL', severity, key,
+    source: 'DEX', type: 'REVIVAL', severity, key, cooldownMin: 360,
     title: `${pair.baseToken.symbol} waking up (${pair.chainId})`,
     lines: [...signals, `Price: $${pair.priceUsd} · Liq: $${fmt(liq)} · Vol24h: $${fmt(volH24)}`],
     url: pair.url, track,
