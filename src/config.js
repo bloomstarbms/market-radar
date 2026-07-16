@@ -13,7 +13,7 @@ if (existsSync(envPath)) {
   }
 }
 
-export const VERSION = '0.3.2';
+export const VERSION = '0.3.3';
 
 export const config = {
   minSeverity: ['LOW','MEDIUM','HIGH'].includes((process.env.ALERT_MIN_SEVERITY || 'LOW').toUpperCase())
@@ -27,6 +27,7 @@ export const config = {
   heartbeatHours: Number(process.env.HEARTBEAT_HOURS ?? 24),
   etherscanKey: process.env.ETHERSCAN_API_KEY || '',
   heliusKey: process.env.HELIUS_API_KEY || '',
+  arkhamKey: process.env.ARKHAM_API_KEY || '',
   dataDir: join(ROOT, 'data'),
   watchlistPath: join(ROOT, 'watchlist.json'),
 };
