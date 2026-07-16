@@ -18,6 +18,8 @@ const RULES = {
 };
 
 const MAJORS = /^(BTC|ETH|SOL|WBTC|WETH)USDT$/;
+const LEVERAGED = /\d+[LS]USDT$/;               // 3L/5L/3S/5S leveraged tokens move 10% by design
+const STABLES = /^(USDC|USDE|USD1|DAI|FDUSD|TUSD|BUSD|USDD|PYUSD|USDP)USDT$/; // pinned at $1
 
 const buffers = new Map();  // key -> [{price, vol24h, ts}]
 const volEma = new Map();   // key -> EMA of window volume
@@ -29,6 +31,7 @@ export function takeDebugStats() { const r = debugRows; debugRows = []; return r
 
 export function checkPump(exchange, t) {
   if (!t.price || t.quoteVol24h < RULES.minQuoteVol24h) return null;
+  if (LEVERAGED.test(t.symbol) || STABLES.test(t.symbol)) return null;
   const key = `${exchange}:${t.symbol}`;
   const buf = buffers.get(key) || [];
   // Frozen-symbol guard: identical price AND volume to the last snapshot means
@@ -37,11 +40,16 @@ export function checkPump(exchange, t) {
   if (last && last.price === t.price && last.vol24h === t.quoteVol24h) return null;
   buf.push({ price: t.price, vol24h: t.quoteVol24h, ts: Date.now() });
   if (buf.length > RULES.bufferSize) buf.shift();
+  // Evict stale snapshots (illiquid pairs freeze for hours; the window must stay ~minutes)
+  while (buf.length && Date.now() - buf[0].ts > 20 * 60e3) buf.shift();
   buffers.set(key, buf);
 
-  // slow anchor bookkeeping
-  const anchor = hourAnchor.get(key);
-  if (!anchor) hourAnchor.set(key, { price: t.price, ts: Date.now() });
+  // slow anchor bookkeeping (reset if it aged past 2h — stale anchors give fake "1h" moves)
+  let anchor = hourAnchor.get(key);
+  if (!anchor || Date.now() - anchor.ts > 2 * 3600e3) {
+    anchor = { price: t.price, ts: Date.now() };
+    hourAnchor.set(key, anchor);
+  }
 
   if (buf.length < 3) return null;
 
@@ -68,7 +76,7 @@ export function checkPump(exchange, t) {
     if (volSurging) signals.push(`Volume surge: $${fmt(windowVol)} in ${windowMin}m (${volRatio.toFixed(1)}x normal)`);
     const severity = (absMove >= RULES.bigMovePct && volSurging) ? 'HIGH'
       : (absMove >= RULES.bigMovePct || volSurging) ? 'MEDIUM' : 'LOW';
-    return { source: 'CEX', type: up ? 'PUMP' : 'DUMP', severity, key, dedupeKey: `MOVE:${key}`,
+    return { source: 'CEX', type: up ? 'PUMP' : 'DUMP', severity, key, dedupeKey: `MOVE:${t.symbol}`,
       title: `${t.symbol} ${up ? 'pumping' : 'selling off'} on ${exchange.toUpperCase()}`,
       lines: [...signals, ctx], url: CHART_URLS[exchange]?.(t.symbol), track };
   }
@@ -79,7 +87,7 @@ export function checkPump(exchange, t) {
     hourAnchor.set(key, { price: t.price, ts: Date.now() }); // reset anchor each hour
     if (Math.abs(slowPct) >= RULES.slowJumpPct) {
       const up = slowPct > 0;
-      return { source: 'CEX', type: up ? 'PUMP' : 'DUMP', severity: Math.abs(slowPct) >= 2 * RULES.slowJumpPct ? 'HIGH' : 'MEDIUM', key: `${key}:1h`, dedupeKey: `MOVE:${key}:1h`,
+      return { source: 'CEX', type: up ? 'PUMP' : 'DUMP', severity: Math.abs(slowPct) >= 2 * RULES.slowJumpPct ? 'HIGH' : 'MEDIUM', key: `${key}:1h`, dedupeKey: `MOVE:${t.symbol}`,
         title: `${t.symbol} ${up ? 'grinding up' : 'bleeding'} on ${exchange.toUpperCase()} (1h)`,
         lines: [`Price ${up ? '+' : ''}${slowPct.toFixed(1)}% over the last hour`, ctx],
         url: CHART_URLS[exchange]?.(t.symbol), track };
@@ -96,7 +104,7 @@ export function checkPump(exchange, t) {
   const wasElevated = (prevRatio.get(key) || 0) >= RULES.volOnlyRatio / 3;
   prevRatio.set(key, volRatio);
   if (windowVol >= volFloor && volRatio >= RULES.volOnlyRatio && wasElevated) {
-    return { source: 'CEX', type: 'VOLUME', severity: volRatio >= RULES.volOnlyRatio * 2 ? 'MEDIUM' : 'LOW', key,
+    return { source: 'CEX', type: 'VOLUME', severity: volRatio >= RULES.volOnlyRatio * 2 ? 'MEDIUM' : 'LOW', key, dedupeKey: `VOL:${t.symbol}`,
       title: `${t.symbol} unusual volume on ${exchange.toUpperCase()} (price flat)`,
       lines: [`$${fmt(windowVol)} traded in ${windowMin}m (${volRatio.toFixed(1)}x normal), price only ${movePct >= 0 ? '+' : ''}${movePct.toFixed(1)}%`,
         `Possible quiet accumulation or distribution before a move`, ctx],
