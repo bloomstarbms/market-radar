@@ -5,6 +5,7 @@
 // list of known exchange hot wallets (extend EXCHANGE_WALLETS below).
 import { config } from '../../config.js';
 import { dispatch } from '../../core/dispatcher.js';
+import { arkhamLabel } from './arkham.js';
 
 const RULES = {
   whaleUsd: Number(process.env.WHALE_USD || 1_000_000),
@@ -86,6 +87,7 @@ const CHAIN_IDS = { ethereum: 1, bsc: 56, base: 8453, arbitrum: 42161, polygon: 
 const lastSeen = new Map(); // tokenKey -> newest tx id already processed
 const lastCheck = new Map(); // tokenKey -> ts of last on-chain check
 const disabledChains = new Set(); // chains rejected by the API plan (logged once)
+const pausedUntil = new Map();    // chain -> ts; temporary backoff after rate limits
 
 export function classifyDirection(from, to) {
   const f = lookupWallet(from);
@@ -150,6 +152,7 @@ export async function checkWhales(pair) {
   if (isSolana && !config.heliusKey) return;
   if (!isSolana && (!config.etherscanKey || !CHAIN_IDS[chainId])) return;
 
+  if (Date.now() < (pausedUntil.get(chainId) || 0)) return;
   const key = `${chainId}:${token}`;
   if (Date.now() - (lastCheck.get(key) || 0) < RULES.intervalSec * 1000) return;
   lastCheck.set(key, Date.now());
@@ -161,6 +164,9 @@ export async function checkWhales(pair) {
     if (/not supported|upgrade/i.test(e.message)) {
       disabledChains.add(chainId);
       console.error(`[whale] ${chainId}: not covered by free API plan — whale checks disabled for this chain`);
+    } else if (/429/.test(e.message)) {
+      pausedUntil.set(chainId, Date.now() + 5 * 60e3);
+      console.error(`[whale] ${chainId}: rate limited — backing off 5 min`);
     } else {
       console.error(`[whale] ${key} fetch failed:`, e.message);
     }
@@ -181,7 +187,16 @@ export async function checkWhales(pair) {
     if (tx.id === seen) break; // everything older already processed
     const usd = tx.amount * price;
     if (usd < threshold) continue;
-    const { dir, hint, sev } = classifyDirection(tx.from, tx.to);
+    let { dir, hint, sev } = classifyDirection(tx.from, tx.to);
+    // Arkham enrichment: replace "wallet"/"unknown" with real entity names
+    const [fromArk, toArk] = await Promise.all([arkhamLabel(tx.from), arkhamLabel(tx.to)]);
+    if (fromArk || toArk) {
+      const fName = fromArk?.name || lookupWallet(tx.from) || 'wallet';
+      const tName = toArk?.name || lookupWallet(tx.to) || 'wallet';
+      if (toArk?.isCex && !fromArk?.isCex) { dir = `${fName} \u2192 ${tName} (DEPOSIT)`; hint = 'coins moving onto exchange \u2014 possible incoming SELL-OFF'; sev = 'HIGH'; }
+      else if (fromArk?.isCex && !toArk?.isCex) { dir = `${fName} \u2192 ${tName} (WITHDRAWAL)`; hint = 'coins leaving exchange \u2014 likely accumulation'; sev = 'MEDIUM'; }
+      else { dir = `${fName} \u2192 ${tName}`; hint = 'named entity movement \u2014 higher signal than anonymous wallets'; if (sev === 'LOW') sev = 'MEDIUM'; }
+    }
     await dispatch({
       source: 'CHAIN', type: 'WHALE', severity: sev, key: `${key}:${tx.hash}`,
       title: `${pair.baseToken.symbol}: $${fmt(usd)} moved (${chainId})`,
