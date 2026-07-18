@@ -15,6 +15,9 @@ const TAG = {
   'CEX:LISTING': '🆕 NEW LISTING',
   'CEX:FUNDING': '⚡ FUNDING EXTREME',
   'CHAIN:WHALE': '🐋 WHALE MOVE',
+  'CAL:CPI': '📅 CPI',
+  'CAL:TGE': '🚀 TGE / LAUNCH',
+  'CAL:UNLOCK': '🔓 TOKEN UNLOCK',
   'SYS:HEARTBEAT': '💓 STATUS',
 };
 
