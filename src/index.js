@@ -9,6 +9,8 @@ import { checkRevival } from './sources/dex/revival.js';
 import { pollCex } from './sources/cex/monitor.js';
 import { pollFunding } from './sources/cex/funding.js';
 import { checkWhales } from './sources/chain/whale.js';
+import { pollCpi } from './sources/calendar/cpi.js';
+import { pollEvents } from './sources/calendar/events.js';
 
 const ONCE = process.argv.includes('--once');
 const startedAt = Date.now();
@@ -57,7 +59,7 @@ async function heartbeat() {
 }
 
 async function pollAll() {
-  await Promise.allSettled([pollDex(), pollCex(), pollFunding()]);
+  await Promise.allSettled([pollDex(), pollCex(), pollFunding(), pollCpi(), pollEvents()]);
   await checkOutcomes().catch(() => {});
   await heartbeat().catch(() => {});
 }
