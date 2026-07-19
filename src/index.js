@@ -8,6 +8,7 @@ import { getPairsForTokens, bestPairPerToken } from './sources/dex/dexscreener.j
 import { checkRevival } from './sources/dex/revival.js';
 import { pollCex } from './sources/cex/monitor.js';
 import { pollFunding } from './sources/cex/funding.js';
+import { pollAnnouncements } from './sources/cex/announcements.js';
 import { checkWhales } from './sources/chain/whale.js';
 import { checkConfluence } from './core/confluence.js';
 import { pollCpi } from './sources/calendar/cpi.js';
@@ -66,7 +67,7 @@ async function heartbeat() {
 }
 
 async function pollAll() {
-  await Promise.allSettled([pollDex(), pollCex(), pollFunding(), pollCpi(), pollEvents()]);
+  await Promise.allSettled([pollDex(), pollCex(), pollFunding(), pollAnnouncements(), pollCpi(), pollEvents()]);
   await checkOutcomes().catch(() => {});
   await heartbeat().catch(() => {});
 }
