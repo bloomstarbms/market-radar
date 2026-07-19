@@ -84,6 +84,8 @@ function lookupWallet(addr) {
 }
 
 const CHAIN_IDS = { ethereum: 1, bsc: 56, base: 8453, arbitrum: 42161, polygon: 137, optimism: 10, avalanche: 43114 };
+// Chains served by Moralis (free tier) instead of Etherscan (whose free plan is ETH-only)
+const MORALIS_CHAINS = { bsc: 'bsc', base: 'base', arbitrum: 'arbitrum', polygon: 'polygon', optimism: 'optimism', avalanche: 'avalanche' };
 const lastSeen = new Map(); // tokenKey -> newest tx id already processed
 const lastCheck = new Map(); // tokenKey -> ts of last on-chain check
 const disabledChains = new Set(); // chains rejected by the API plan (logged once)
@@ -122,6 +124,24 @@ async function evmTransfers(chainId, tokenAddress) {
   }));
 }
 
+async function moralisTransfers(chainId, tokenAddress) {
+  const res = await fetch(`https://deep-index.moralis.io/api/v2.2/erc20/${tokenAddress}/transfers?chain=${MORALIS_CHAINS[chainId]}&limit=${RULES.maxTxPerPoll}&order=DESC`, {
+    headers: { 'X-API-Key': config.moralisKey, 'Accept': 'application/json' },
+  });
+  if (res.status === 401) throw new Error('moralis key rejected');
+  if (res.status === 429) throw new Error('moralis 429');
+  if (!res.ok) throw new Error(`moralis ${res.status}`);
+  const j = await res.json();
+  const scan = { bsc: 'bscscan.com', base: 'basescan.org', arbitrum: 'arbiscan.io', polygon: 'polygonscan.com' }[chainId] || 'etherscan.io';
+  return (j.result || []).map((tx) => ({
+    id: `${tx.transaction_hash}:${tx.from_address}:${tx.to_address}`,
+    from: tx.from_address, to: tx.to_address,
+    amount: Number(tx.value) / 10 ** Number(tx.token_decimals ?? 18),
+    hash: tx.transaction_hash,
+    explorer: `https://${scan}/tx/${tx.transaction_hash}`,
+  }));
+}
+
 async function solanaTransfers(mint) {
   const url = `https://api.helius.xyz/v0/addresses/${mint}/transactions?api-key=${config.heliusKey}&limit=${RULES.maxTxPerPoll}`;
   const res = await fetch(url);
@@ -148,22 +168,31 @@ export async function checkWhales(pair) {
   const chainId = pair.chainId;
   const token = pair.baseToken.address;
   const isSolana = chainId === 'solana';
+  const viaMoralis = !isSolana && chainId !== 'ethereum' && MORALIS_CHAINS[chainId];
   if (disabledChains.has(chainId)) return;
   if (isSolana && !config.heliusKey) return;
-  if (!isSolana && (!config.etherscanKey || !CHAIN_IDS[chainId])) return;
+  if (viaMoralis && !config.moralisKey) return;
+  if (!isSolana && !viaMoralis && (!config.etherscanKey || chainId !== 'ethereum')) return;
 
   if (Date.now() < (pausedUntil.get(chainId) || 0)) return;
   const key = `${chainId}:${token}`;
-  if (Date.now() - (lastCheck.get(key) || 0) < RULES.intervalSec * 1000) return;
+  // Moralis free tier is CU-metered: space its chains 4x wider (default ~20 min/token)
+  const interval = viaMoralis ? RULES.intervalSec * 4 : RULES.intervalSec;
+  if (Date.now() - (lastCheck.get(key) || 0) < interval * 1000) return;
   lastCheck.set(key, Date.now());
   if (config.debug) console.log(`  [debug] whale check: ${pair.baseToken.symbol} (${chainId})`);
   let txs;
   try {
-    txs = isSolana ? await solanaTransfers(token) : await evmTransfers(chainId, token);
+    txs = isSolana ? await solanaTransfers(token)
+      : viaMoralis ? await moralisTransfers(chainId, token)
+      : await evmTransfers(chainId, token);
   } catch (e) {
     if (/not supported|upgrade/i.test(e.message)) {
       disabledChains.add(chainId);
       console.error(`[whale] ${chainId}: not covered by free API plan — whale checks disabled for this chain`);
+    } else if (/key rejected/.test(e.message)) {
+      disabledChains.add(chainId);
+      console.error(`[whale] ${chainId}: ${e.message} — disabled this run`);
     } else if (/429/.test(e.message)) {
       pausedUntil.set(chainId, Date.now() + 5 * 60e3);
       console.error(`[whale] ${chainId}: rate limited — backing off 5 min`);
