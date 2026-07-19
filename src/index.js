@@ -9,6 +9,7 @@ import { checkRevival } from './sources/dex/revival.js';
 import { pollCex } from './sources/cex/monitor.js';
 import { pollFunding } from './sources/cex/funding.js';
 import { checkWhales } from './sources/chain/whale.js';
+import { checkConfluence } from './core/confluence.js';
 import { pollCpi } from './sources/calendar/cpi.js';
 import { pollEvents } from './sources/calendar/events.js';
 
@@ -39,6 +40,12 @@ async function pollDex() {
         const alert = checkRevival(pair);
         if (alert && await dispatch(alert)) alertCount++;
         await checkWhales(pair);
+        // Highest-conviction signal: recent exchange withdrawal + live market activity
+        if (await checkConfluence(pair, {
+          volH1: pair.volume?.h1 || 0,
+          volAvgH1: (pair.volume?.h24 || 0) / 24,
+          priceH1: pair.priceChange?.h1 || 0,
+        })) alertCount++;
       }
     } catch (e) {
       console.error(`[dex] ${chainId} poll failed:`, e.message);
