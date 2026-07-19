@@ -13,7 +13,7 @@ if (existsSync(envPath)) {
   }
 }
 
-export const VERSION = '0.4.0';
+export const VERSION = '0.5.0';
 
 export const config = {
   minSeverity: ['LOW','MEDIUM','HIGH'].includes((process.env.ALERT_MIN_SEVERITY || 'LOW').toUpperCase())
@@ -28,6 +28,7 @@ export const config = {
   etherscanKey: process.env.ETHERSCAN_API_KEY || '',
   heliusKey: process.env.HELIUS_API_KEY || '',
   arkhamKey: process.env.ARKHAM_API_KEY || '',
+  moralisKey: process.env.MORALIS_API_KEY || '',
   coinmarketcalKey: process.env.COINMARKETCAL_API_KEY || '',
   dataDir: join(ROOT, 'data'),
   watchlistPath: join(ROOT, 'watchlist.json'),
