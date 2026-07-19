@@ -13,6 +13,11 @@ const RULES = {
   minUsd: Number(process.env.WHALE_MIN_USD || 50_000), // liquidity-relative threshold never drops below this
   maxTxPerPoll: 25,
   intervalSec: Number(process.env.WHALE_INTERVAL || 300), // per-token on-chain check spacing (protects free API quotas)
+  // Solana's Helius Enhanced API costs ~40 credits/call. 43 tokens every 5 min
+  // burns the 1M free monthly quota in ~2 days, so Solana gets its own wide
+  // spacing: 90 min keeps the whole month inside the free tier (~825K credits).
+  solIntervalSec: Number(process.env.WHALE_INTERVAL_SOL || 300),   // cheap RPC trigger spacing (1 credit/call)
+  solFullSec: Number(process.env.WHALE_SOL_FULL || 21600),         // safety-net full parse per token (6h)
 };
 
 // Best-effort exchange wallet labels (community-known hot wallets).
@@ -142,6 +147,28 @@ async function moralisTransfers(chainId, tokenAddress) {
   }));
 }
 
+// Cheap trigger: getSignaturesForAddress costs ~1 credit vs ~40 for the parsed
+// Enhanced API. Dormant tokens rarely move, so we pay the cheap call almost
+// always and the expensive one only when the signature set actually changes.
+const solLastSig = new Map();  // mint -> newest signature seen
+const solLastFull = new Map(); // mint -> ts of last full (Enhanced) parse
+
+async function solanaHasActivity(mint) {
+  const res = await fetch(`https://mainnet.helius-rpc.com/?api-key=${config.heliusKey}`, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getSignaturesForAddress', params: [mint, { limit: 5 }] }),
+  });
+  if (res.status === 429) throw new Error('helius 429');
+  if (!res.ok) throw new Error(`helius rpc ${res.status}`);
+  const j = await res.json();
+  if (j.error) throw new Error(/max usage|429/i.test(j.error.message || '') ? 'helius 429' : `helius rpc: ${j.error.message}`);
+  const newest = j.result?.[0]?.signature || null;
+  const prev = solLastSig.get(mint);
+  solLastSig.set(mint, newest);
+  if (prev === undefined) return false; // first poll = baseline only
+  return newest !== prev;
+}
+
 async function solanaTransfers(mint) {
   const url = `https://api.helius.xyz/v0/addresses/${mint}/transactions?api-key=${config.heliusKey}&limit=${RULES.maxTxPerPoll}`;
   const res = await fetch(url);
@@ -177,15 +204,25 @@ export async function checkWhales(pair) {
   if (Date.now() < (pausedUntil.get(chainId) || 0)) return;
   const key = `${chainId}:${token}`;
   // Moralis free tier is CU-metered: space its chains 4x wider (default ~20 min/token)
-  const interval = viaMoralis ? RULES.intervalSec * 4 : RULES.intervalSec;
+  const interval = isSolana ? RULES.solIntervalSec
+    : viaMoralis ? RULES.intervalSec * 4
+    : RULES.intervalSec;
   if (Date.now() - (lastCheck.get(key) || 0) < interval * 1000) return;
   lastCheck.set(key, Date.now());
   if (config.debug) console.log(`  [debug] whale check: ${pair.baseToken.symbol} (${chainId})`);
   let txs;
   try {
-    txs = isSolana ? await solanaTransfers(token)
-      : viaMoralis ? await moralisTransfers(chainId, token)
-      : await evmTransfers(chainId, token);
+    if (isSolana) {
+      // Cheap check first; only pay for the parsed feed on real activity or the periodic safety net.
+      const dueFull = Date.now() - (solLastFull.get(token) || 0) > RULES.solFullSec * 1000;
+      const active = await solanaHasActivity(token);
+      if (!active && !dueFull) return;
+      solLastFull.set(token, Date.now());
+      if (config.debug) console.log(`  [debug] solana full parse: ${pair.baseToken.symbol} (${active ? 'activity' : 'safety-net'})`);
+      txs = await solanaTransfers(token);
+    } else {
+      txs = viaMoralis ? await moralisTransfers(chainId, token) : await evmTransfers(chainId, token);
+    }
   } catch (e) {
     if (/not supported|upgrade/i.test(e.message)) {
       disabledChains.add(chainId);
