@@ -4,9 +4,9 @@ import { CHART_URLS } from './exchanges.js';
 
 const RULES = {
   bufferSize: 6,           // fast window snapshots (~5 min at 60s polls)
-  priceJumpPct: 5,         // |move| across fast window -> signal
-  bigMovePct: 10,          // |move| across fast window -> strong signal
-  slowJumpPct: 10,         // |move| across ~1h anchor -> grinding move signal
+  priceJumpPct: 8,         // |move| across fast window (raised: pumps underperform)
+  bigMovePct: 15,          // |move| across fast window -> strong signal
+  slowJumpPct: 15,         // |move| across ~1h anchor -> grinding move signal
   volSurgeRatio: 5,        // window volume >= 5x its EMA (with price move)
   volOnlyRatio: 15,        // >= 15x EMA with flat price -> stealth volume alert
   minQuoteVol24h: 200_000, // ignore illiquid pairs (USD)
@@ -72,8 +72,11 @@ export function checkPump(exchange, t) {
   // 1) Fast directional move
   if (absMove >= RULES.priceJumpPct) {
     const up = movePct > 0;
+    // Pumps without volume behind them are the worst performers — require confirmation.
+    if (up && !volSurging) return null;
     const signals = [`Price ${up ? '+' : ''}${movePct.toFixed(1)}% in ${windowMin}m${absMove >= RULES.bigMovePct ? ' (BIG)' : ''}`];
     if (volSurging) signals.push(`Volume surge: $${fmt(windowVol)} in ${windowMin}m (${volRatio.toFixed(1)}x normal)`);
+    if (up) signals.push(`⚠️ Historically these fade — treat as exit/fade candidate, not an entry`);
     const severity = (absMove >= RULES.bigMovePct && volSurging) ? 'HIGH'
       : (absMove >= RULES.bigMovePct || volSurging) ? 'MEDIUM' : 'LOW';
     return { source: 'CEX', type: up ? 'PUMP' : 'DUMP', severity, key, dedupeKey: `MOVE:${t.symbol}`,
