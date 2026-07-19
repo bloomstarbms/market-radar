@@ -18,6 +18,7 @@ const TAG = {
   'CAL:CPI': '📅 CPI',
   'CAL:TGE': '🚀 TGE / LAUNCH',
   'CAL:UNLOCK': '🔓 TOKEN UNLOCK',
+  'SIG:CONFLUENCE': '🎯 CONFLUENCE',
   'SYS:HEARTBEAT': '💓 STATUS',
 };
 

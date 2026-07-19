@@ -7,6 +7,20 @@ import { config } from '../config.js';
 import { TRUSTED_QUOTES } from '../sources/dex/dexscreener.js';
 
 const FILE = join(config.dataDir, 'outcomes.json');
+// Market benchmark: every alert stores BTC's price so returns can be judged
+// as ALPHA (alert return minus BTC return) instead of raw drift.
+let btcCache = { price: 0, ts: 0 };
+async function btcPrice() {
+  if (Date.now() - btcCache.ts < 60e3 && btcCache.price) return btcCache.price;
+  try {
+    const res = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
+    const j = await res.json();
+    const p = Number(j.price);
+    if (p) btcCache = { price: p, ts: Date.now() };
+  } catch {}
+  return btcCache.price || 0;
+}
+export { btcPrice };
 const CHECKPOINTS = [[ 'h1', 3600e3 ], [ 'h6', 6 * 3600e3 ], [ 'h24', 24 * 3600e3 ]];
 let rows = [];
 
@@ -18,8 +32,10 @@ const save = () => writeFileSync(FILE, JSON.stringify(rows, null, 1));
 
 export function recordAlert(a) {
   if (!a.track?.price) return;
-  rows.push({ ts: Date.now(), source: a.source, type: a.type, severity: a.severity,
-    title: a.title, ...a.track, results: {} });
+  const row = { ts: Date.now(), source: a.source, type: a.type, severity: a.severity,
+    title: a.title, ...a.track, btc: 0, results: {}, alpha: {} };
+  rows.push(row);
+  btcPrice().then((p) => { if (p) { row.btc = p; save(); } }).catch(() => {});
   if (rows.length > 2000) rows = rows.slice(-2000);
   save();
 }
@@ -60,6 +76,14 @@ export async function checkOutcomes() {
       if (now - r.ts > ms + 2 * 3600e3) { r.results[label] = null; dirty = true; continue; } // too late, skip
       const p = await currentPrice(r);
       r.results[label] = p ? Number((((p - r.price) / r.price) * 100).toFixed(2)) : null;
+      // alpha = asset return minus BTC return over the same window
+      if (p && r.btc) {
+        const nowBtc = await btcPrice();
+        if (nowBtc) {
+          const btcRet = ((nowBtc - r.btc) / r.btc) * 100;
+          (r.alpha ??= {})[label] = Number((r.results[label] - btcRet).toFixed(2));
+        }
+      }
       dirty = true;
     }
   }
@@ -70,14 +94,20 @@ export function statsSummary() {
   const byType = {};
   for (const r of rows) {
     const k = `${r.source}:${r.type}`;
-    (byType[k] ||= { n: 0, h1: [], h24: [] }).n++;
-    if (typeof r.results?.h1 === 'number') byType[k].h1.push(r.results.h1);
-    if (typeof r.results?.h24 === 'number') byType[k].h24.push(r.results.h24);
+    const v = (byType[k] ||= { n: 0, h1: [], h24: [], a1: [], a24: [] });
+    v.n++;
+    if (typeof r.results?.h1 === 'number') v.h1.push(r.results.h1);
+    if (typeof r.results?.h24 === 'number') v.h24.push(r.results.h24);
+    if (typeof r.alpha?.h1 === 'number') v.a1.push(r.alpha.h1);
+    if (typeof r.alpha?.h24 === 'number') v.a24.push(r.alpha.h24);
   }
   const avg = (a) => a.length ? (a.reduce((s, x) => s + x, 0) / a.length).toFixed(1) : '—';
   const win = (a) => a.length ? Math.round(100 * a.filter((x) => x > 0).length / a.length) + '%' : '—';
-  let out = `📊 Alert outcomes (${rows.length} tracked)\n`;
-  for (const [k, v] of Object.entries(byType))
-    out += `\n${k}: ${v.n} alerts\n  +1h: avg ${avg(v.h1)}% · win ${win(v.h1)}\n  +24h: avg ${avg(v.h24)}% · win ${win(v.h24)}`;
+  const sign = (x) => (x !== '—' && Number(x) > 0 ? '+' : '') + x;
+  // rank by 24h alpha — the number that actually matters
+  const ranked = Object.entries(byType).sort((A, B) => (Number(avg(B[1].a24)) || -99) - (Number(avg(A[1].a24)) || -99));
+  let out = `📊 Alert scoreboard (${rows.length} tracked)\nALPHA = return minus BTC over same window\n`;
+  for (const [k, v] of ranked)
+    out += `\n<b>${k}</b> · ${v.n} alerts\n  +1h  raw ${sign(avg(v.h1))}% · <b>alpha ${sign(avg(v.a1))}%</b> · win ${win(v.a1)}\n  +24h raw ${sign(avg(v.h24))}% · <b>alpha ${sign(avg(v.a24))}%</b> · win ${win(v.a24)}  (n=${v.a24.length})`;
   return rows.length ? out : '📊 No tracked alerts yet.';
 }
