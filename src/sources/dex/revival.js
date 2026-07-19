@@ -6,7 +6,7 @@ const RULES = {
   priceMovePct: 10,     // h1 price change >= +10%
   liqAddPct: 20,        // liquidity up >= 20% vs baseline
   txnSurgeRatio: 3,     // h1 txns >= 3x hourly average (needs >=10 txns + min volume)
-  minH1VolumeUsd: 5_000, // ignore dust — revivals need real money flowing
+  minH1VolumeUsd: 200_000, // revival alerts need REAL money flowing ($200K+/h)
   rugDropPct: 50,       // liquidity down >= 50% vs baseline -> LIQUIDITY PULL alarm
   minRugLiqUsd: 10_000, // baseline must be meaningful before rug logic applies
 };
@@ -39,7 +39,7 @@ export function checkRevival(pair) {
     };
   }
 
-  // --- Revival signals ---
+  // --- Revival signals (hard gate: no alert below the hourly volume floor) ---
   const signals = [];
   const volH1 = pair.volume?.h1 || 0;
   const volH24 = pair.volume?.h24 || 0;
@@ -65,7 +65,7 @@ export function checkRevival(pair) {
   };
   save();
 
-  if (!signals.length) return null;
+  if (!signals.length || volH1 < RULES.minH1VolumeUsd) return null;
   const severity = signals.length >= 3 ? 'HIGH' : signals.length === 2 ? 'MEDIUM' : 'LOW';
   return {
     source: 'DEX', type: 'REVIVAL', severity, key, cooldownMin: 360,
