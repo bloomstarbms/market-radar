@@ -5,8 +5,8 @@
 import { dispatch } from '../../core/dispatcher.js';
 
 const RULES = {
-  extremePct: 0.08,    // |funding| >= 0.08%/8h -> candidate (widened: this signal pays)
-  severePct: 0.25,     // |funding| >= 0.25% -> severe
+  extremePct: Number(process.env.FUNDING_MIN_PCT || 0.5),  // |funding| >= this %/8h -> alert (user-tuned)
+  severePct: Number(process.env.FUNDING_SEVERE_PCT || 0.75), // |funding| >= this -> extra-severe
   velocityPct: 0.03,   // funding moved this much since last poll -> squeeze building
   oiSurgePct: 10,      // open interest up this much in ~1h -> real positioning
   intervalSec: 900,    // poll every 15 min
