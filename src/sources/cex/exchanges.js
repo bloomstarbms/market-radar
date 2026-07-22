@@ -31,11 +31,30 @@ export async function kucoin() {
     symbol: t.symbol.replace('-', ''), price: Number(t.last), quoteVol24h: Number(t.volValue), change24hPct: Number(t.changeRate) * 100,
   }));
 }
+// Bitget lists ~577 tokenized STOCKS (rNKE, rCBRE, rTM…) that surge in volume
+// every time Wall Street opens — real, but pure equity noise for a crypto bot.
+// Bitget flags them with areaSymbol:"yes"; we fetch that list (cached 6h) and drop them.
+let bgStocks = { set: new Set(), ts: 0 };
+async function bitgetStockSet() {
+  if (Date.now() - bgStocks.ts < 6 * 3600e3 && bgStocks.set.size) return bgStocks.set;
+  try {
+    const j = await json('https://api.bitget.com/api/v2/spot/public/symbols');
+    const set = new Set((j.data || []).filter((x) => x.areaSymbol === 'yes').map((x) => x.symbol));
+    if (set.size) bgStocks = { set, ts: Date.now() };
+  } catch {}
+  return bgStocks.set;
+}
+
 export async function bitget() {
-  const data = await json('https://api.bitget.com/api/v2/spot/market/tickers');
-  return (data.data || []).filter((t) => t.symbol.endsWith('USDT')).map((t) => ({
-    symbol: t.symbol, price: Number(t.lastPr), quoteVol24h: Number(t.usdtVolume), change24hPct: Number(t.change24h) * 100,
-  }));
+  const [data, stocks] = await Promise.all([
+    json('https://api.bitget.com/api/v2/spot/market/tickers'),
+    bitgetStockSet(),
+  ]);
+  return (data.data || [])
+    .filter((t) => t.symbol.endsWith('USDT') && !stocks.has(t.symbol))
+    .map((t) => ({
+      symbol: t.symbol, price: Number(t.lastPr), quoteVol24h: Number(t.usdtVolume), change24hPct: Number(t.change24h) * 100,
+    }));
 }
 function normBinanceLike(data) {
   return data.filter((t) => t.symbol.endsWith('USDT')).map((t) => ({
