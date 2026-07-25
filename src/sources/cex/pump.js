@@ -79,7 +79,7 @@ export function checkPump(exchange, t) {
     if (up) signals.push(`⚠️ Historically these fade — treat as exit/fade candidate, not an entry`);
     const severity = (absMove >= RULES.bigMovePct && volSurging) ? 'HIGH'
       : (absMove >= RULES.bigMovePct || volSurging) ? 'MEDIUM' : 'LOW';
-    return { source: 'CEX', type: up ? 'PUMP' : 'DUMP', severity, key, dedupeKey: `MOVE:${t.symbol}`,
+    return { source: 'CEX', type: up ? 'PUMP' : 'DUMP', severity, key, dedupeKey: `MOVE:${t.symbol}`, __movePct: movePct,
       title: `${t.symbol} ${up ? 'pumping' : 'selling off'} on ${exchange.toUpperCase()}`,
       lines: [...signals, ctx], url: CHART_URLS[exchange]?.(t.symbol), track };
   }

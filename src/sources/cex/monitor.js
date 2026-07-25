@@ -8,6 +8,7 @@ import { config } from '../../config.js';
 const lastFingerprint = new Map(); // exchange -> sum of all 24h volumes last poll
 
 export async function pollCex() {
+  const moves = new Map();
   for (const name of config.cexExchanges) {
     const fetcher = EXCHANGES[name];
     if (!fetcher) { console.error(`[cex] unknown exchange: ${name}`); continue; }
@@ -25,7 +26,15 @@ export async function pollCex() {
       for (const listing of checkListings(name, tickers)) if (await dispatch(listing)) alerts++;
       for (const t of tickers) {
         const alert = checkPump(name, t);
-        if (alert && await dispatch(alert)) alerts++;
+        if (alert) {
+          if (alert.type === 'PUMP' || alert.type === 'DUMP') {
+            const base = t.symbol.replace('USDT', '');
+            const m = moves.get(base) || { up: new Set(), down: new Set() };
+            (alert.type === 'PUMP' ? m.up : m.down).add(name);
+            moves.set(base, m);
+          }
+          if (await dispatch(alert)) alerts++;
+        }
       }
       console.log(`[cex] ${name}: ${tickers.length} USDT pairs scanned${alerts ? `, ${alerts} alerts` : ''}`);
       if (config.debug) {
@@ -38,5 +47,19 @@ export async function pollCex() {
     } catch (e) {
       console.error(`[cex] ${name} poll failed:`, e.message);
     }
+  }
+  for (const [base, m] of moves) {
+    const dir = m.up.size >= 3 ? 'up' : m.down.size >= 3 ? 'down' : null;
+    if (!dir) continue;
+    const venues = dir === 'up' ? [...m.up] : [...m.down];
+    await dispatch({
+      source: 'SIG', type: 'MULTIEX', severity: venues.length >= 4 ? 'HIGH' : 'MEDIUM',
+      key: base, cooldownMin: 60,
+      title: `${base} moving ${dir === 'up' ? 'UP' : 'DOWN'} on ${venues.length} exchanges at once`,
+      lines: [
+        `Confirmed across: ${venues.join(', ')}`,
+        `A move on 3+ venues at once is real market-wide flow, not one exchange's wash trading`,
+      ],
+    });
   }
 }

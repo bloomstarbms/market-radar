@@ -17,6 +17,15 @@ let lastPoll = 0;
 const prevFunding = new Map(); // symbol -> last funding %
 const oiHistory = new Map();   // symbol -> [{oi, ts}]
 
+async function longShortRatio(symbol) {
+  try {
+    const res = await fetch(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${symbol}&period=15m&limit=1`);
+    if (!res.ok) return null;
+    const j = await res.json();
+    return j[0] ? Number(j[0].longShortRatio) : null;
+  } catch { return null; }
+}
+
 async function openInterest(symbol) {
   try {
     const res = await fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${symbol}`);
@@ -48,7 +57,7 @@ export async function pollFunding() {
 
   let n = 0;
   for (const c of candidates.slice(0, 25)) { // cap OI calls per cycle
-    const oi = await openInterest(c.symbol);
+    const [oi, ls] = await Promise.all([openInterest(c.symbol), longShortRatio(c.symbol)]);
     const hist = oiHistory.get(c.symbol) || [];
     if (oi) { hist.push({ oi, ts: Date.now() }); while (hist.length > 5) hist.shift(); oiHistory.set(c.symbol, hist); }
     const oldOi = hist.length > 1 ? hist[0].oi : null;
@@ -72,6 +81,12 @@ export async function pollFunding() {
     if (building) lines.push(`⚡ Squeeze BUILDING: funding moved ${velocity > 0 ? '+' : ''}${velocity.toFixed(3)}% since last check`);
     if (oiConfirm) lines.push(`📈 Open interest +${oiChange.toFixed(1)}% — real money entering, not just noise`);
     else if (oiChange !== null) lines.push(`Open interest ${oiChange >= 0 ? '+' : ''}${oiChange.toFixed(1)}%`);
+    // Long/short crowd confirmation: extreme positioning is where reversals fire
+    if (ls !== null) {
+      const crowded = ls >= 2.5 ? 'longs' : ls <= 0.55 ? 'shorts' : null;
+      lines.push(`Long/short ratio ${ls.toFixed(2)}${crowded ? ` — crowd heavily ${crowded} (reversal risk)` : ''}`);
+      if (crowded && shortsPay === (crowded === 'shorts')) lines[lines.length - 1] += ' ⚡ aligned with funding';
+    }
     lines.push(`Mark price: $${c.mark}`);
 
     if (await dispatch({
