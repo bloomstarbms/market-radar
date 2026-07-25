@@ -4,6 +4,7 @@
 // announcement, not when the pair goes live.
 // Also catches TGE / airdrop / unlock wording that the paid calendars charge for.
 import { dispatch } from '../../core/dispatcher.js';
+import { isStockName } from './exchanges.js';
 
 const POLL_EVERY = 10 * 60e3;
 let lastPoll = 0;
@@ -40,14 +41,19 @@ const FEEDS = {
   },
 };
 
-// Only these classes are worth a notification — everything else is exchange marketing.
+// Only SPOT listings / TGE / unlock matter for a spot revival trader.
+// Exclude derivatives (perp/expiry/futures), tokenized stocks, and marketing.
 function classify(title) {
   const t = (title || '').toLowerCase();
+  // Derivatives & non-spot products — noise for spot trading
+  if (/x-perp|perpetual|\bperp\b|expiry|futures|margined|quarterly|options?\b|dual currency|dual investment|leveraged token|structured/.test(t)) return null;
+  // Tokenized stocks / equity products — the same equity noise we drop from tickers
+  if (/tokenized stock|tokenised stock|xstock|equit(y|ies)|\bstock\b/.test(t) || isStockName(title)) return null;
   // delist FIRST: "Delisting of X" would otherwise match the listing pattern
   if (/delist|removal of|will remove|will suspend/.test(t)) return { type: 'LISTING', sev: 'MEDIUM', delist: true };
   if (/unlock|vesting|cliff release/.test(t)) return { type: 'UNLOCK', sev: 'HIGH' };
   if (/token generation|\btge\b|launchpool|launchpad|airdrop/.test(t)) return { type: 'TGE', sev: 'HIGH' };
-  if (/will list|to list|lists |listing of|new spot|new trading pair|will add|launch .*perpetual|seed tag/.test(t)) return { type: 'LISTING', sev: 'HIGH' };
+  if (/will list|to list|lists |listing of|new spot|spot trading|new trading pair|will add|seed tag/.test(t)) return { type: 'LISTING', sev: 'HIGH' };
   return null;
 }
 
