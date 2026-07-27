@@ -8,11 +8,17 @@ const POLL_EVERY = 6 * 3600e3;
 let lastPoll = 0;
 let disabled = false;
 
+// Be precise about what an event actually IS. A "Memory Market Launch" or a
+// "Payment Card Launch" is a PRODUCT launch, not a token generation event —
+// labelling those as TGE is misleading (e.g. PYTH's TGE was years ago).
 const classify = (title) => {
   const t = (title || '').toLowerCase();
   if (/unlock|vesting|cliff/.test(t)) return 'UNLOCK';
-  if (/tge|token generation|token sale|launch|listing|mainnet|airdrop/.test(t)) return 'TGE';
-  return null; // everything else is noise for our purposes
+  // Genuine token-genesis events only
+  if (/\btge\b|token generation|token sale|token launch|token debut|ido\b|ico\b|fair launch|airdrop claim|token distribution/.test(t)) return 'TGE';
+  // Product / protocol milestones — real news, but NOT a TGE. Tagged separately.
+  if (/mainnet|launch|upgrade|integration|partnership|listing|migration|hard fork|halving/.test(t)) return 'EVENT';
+  return null;
 };
 
 export async function pollEvents() {
@@ -40,14 +46,17 @@ export async function pollEvents() {
     const daysOut = Math.max(0, Math.round((t - Date.now()) / 86400e3));
     const coins = (ev.coins || []).map((c) => (c.symbol || c.name || '').toUpperCase()).filter(Boolean).slice(0, 3).join(', ') || '?';
     const impact = ev.impact != null ? ` · impact ${ev.impact}/10` : '';
+    const blurb = type === 'UNLOCK'
+      ? `Token unlock ahead — unlocks add sell-side supply; markets often front-run them${impact}`
+      : type === 'TGE'
+        ? `Token generation / first distribution — early volatility cuts both ways${impact}`
+        : `Scheduled project milestone (product/protocol event, NOT a token launch)${impact}`;
     await dispatch({
-      source: 'CAL', type, severity: daysOut <= 1 ? 'HIGH' : (ev.impact >= 7 ? 'HIGH' : 'MEDIUM'),
+      source: 'CAL', type, severity: type === 'EVENT' ? 'LOW' : (daysOut <= 1 ? 'HIGH' : (ev.impact >= 7 ? 'HIGH' : 'MEDIUM')),
       key: `${ev.id}:${ev.date?.slice(0, 10)}`, cooldownMin: 6 * 24 * 60,
       title: `${coins}: ${ev.title} — ${ev.displayedDate || ev.date?.slice(0, 10)} (${daysOut}d)`,
       lines: [
-        type === 'UNLOCK'
-          ? `Token unlock ahead — unlocks add sell-side supply; markets often front-run them${impact}`
-          : `Token generation / launch event — early volatility cuts both ways${impact}`,
+        blurb,
         ev.description ? String(ev.description).slice(0, 150) : `Coins: ${coins}`,
       ],
       url: ev.sourceUrl || `https://coinmarketcal.com/en/event/${ev.slug || ''}`,
