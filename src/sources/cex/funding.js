@@ -22,7 +22,12 @@ async function longShortRatio(symbol) {
     const res = await fetch(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${symbol}&period=15m&limit=1`);
     if (!res.ok) return null;
     const j = await res.json();
-    return j[0] ? Number(j[0].longShortRatio) : null;
+    if (!j[0]) return null;
+    return {
+      ratio: Number(j[0].longShortRatio),
+      longPct: Number(j[0].longAccount) * 100,
+      shortPct: Number(j[0].shortAccount) * 100,
+    };
   } catch { return null; }
 }
 
@@ -82,10 +87,12 @@ export async function pollFunding() {
     if (oiConfirm) lines.push(`📈 Open interest +${oiChange.toFixed(1)}% — real money entering, not just noise`);
     else if (oiChange !== null) lines.push(`Open interest ${oiChange >= 0 ? '+' : ''}${oiChange.toFixed(1)}%`);
     // Long/short crowd confirmation: extreme positioning is where reversals fire
-    if (ls !== null) {
-      const crowded = ls >= 2.5 ? 'longs' : ls <= 0.55 ? 'shorts' : null;
-      lines.push(`Long/short ratio ${ls.toFixed(2)}${crowded ? ` — crowd heavily ${crowded} (reversal risk)` : ''}`);
-      if (crowded && shortsPay === (crowded === 'shorts')) lines[lines.length - 1] += ' ⚡ aligned with funding';
+    if (ls) {
+      const crowded = ls.longPct >= 70 ? 'long' : ls.shortPct >= 65 ? 'short' : null;
+      let posLine = `Positioning: ${ls.longPct.toFixed(0)}% of traders LONG vs ${ls.shortPct.toFixed(0)}% SHORT`;
+      if (crowded) posLine += ` — crowd heavily ${crowded}, reversal risk`;
+      if (crowded && shortsPay === (crowded === 'short')) posLine += ' ⚡ matches funding';
+      lines.push(posLine);
     }
     lines.push(`Mark price: $${c.mark}`);
 

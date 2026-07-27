@@ -4,9 +4,10 @@ import { CHART_URLS } from './exchanges.js';
 
 const RULES = {
   bufferSize: 6,           // fast window snapshots (~5 min at 60s polls)
-  priceJumpPct: 8,         // |move| across fast window (raised: pumps underperform)
-  bigMovePct: 15,          // |move| across fast window -> strong signal
-  slowJumpPct: 15,         // |move| across ~1h anchor -> grinding move signal
+  priceJumpPct: Number(process.env.PUMP_MIN_PCT || 8),   // UP move threshold (fast window)
+  dumpJumpPct: Number(process.env.DUMP_MIN_PCT || 20),   // DOWN move threshold (user-tuned: only violent sell-offs)
+  bigMovePct: Number(process.env.BIG_MOVE_PCT || 25),    // |move| -> "BIG" flag
+  slowJumpPct: Number(process.env.SLOW_MOVE_PCT || 20),  // |move| across ~1h anchor
   volSurgeRatio: 5,        // window volume >= 5x its EMA (with price move)
   volOnlyRatio: 15,        // >= 15x EMA with flat price -> stealth volume alert
   minQuoteVol24h: 200_000, // ignore illiquid pairs (USD)
@@ -69,8 +70,9 @@ export function checkPump(exchange, t) {
   const ctx = `Price: $${t.price} · 24h: ${t.change24hPct >= 0 ? '+' : ''}${t.change24hPct.toFixed(1)}% · Vol24h: $${fmt(t.quoteVol24h)}`;
   const track = { kind: 'cex', exchange, symbol: t.symbol, price: t.price };
 
-  // 1) Fast directional move
-  if (absMove >= RULES.priceJumpPct) {
+  // 1) Fast directional move — separate bars for up vs down
+  const dirThreshold = movePct > 0 ? RULES.priceJumpPct : RULES.dumpJumpPct;
+  if (absMove >= dirThreshold) {
     const up = movePct > 0;
     // Pumps without volume behind them are the worst performers — require confirmation.
     if (up && !volSurging) return null;
