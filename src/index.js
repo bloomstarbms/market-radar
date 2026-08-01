@@ -14,6 +14,7 @@ import { checkWhales } from './sources/chain/whale.js';
 import { checkConfluence } from './core/confluence.js';
 import { pollCpi } from './sources/calendar/cpi.js';
 import { pollEvents } from './sources/calendar/events.js';
+import { pollUnlocks } from './sources/calendar/unlocks.js';
 
 const ONCE = process.argv.includes('--once');
 const startedAt = Date.now();
@@ -68,7 +69,7 @@ async function heartbeat() {
 }
 
 async function pollAll() {
-  await Promise.allSettled([pollDex(), pollCex(), pollFunding(), pollCascade(), pollAnnouncements(), pollCpi(), pollEvents()]);
+  await Promise.allSettled([pollDex(), pollCex(), pollFunding(), pollCascade(), pollAnnouncements(), pollCpi(), pollEvents(), pollUnlocks()]);
   await checkOutcomes().catch(() => {});
   await heartbeat().catch(() => {});
 }
