@@ -6,11 +6,13 @@
 import { config } from '../../config.js';
 import { dispatch } from '../../core/dispatcher.js';
 import { arkhamLabel } from './arkham.js';
+import { noteWhale } from '../../core/confluence.js';
 
 const RULES = {
   whaleUsd: Number(process.env.WHALE_USD || 1_000_000),
   liqPct: Number(process.env.WHALE_LIQ_PCT || 20),
   minUsd: Number(process.env.WHALE_MIN_USD || 50_000), // liquidity-relative threshold never drops below this
+  tokenCooldownMin: Number(process.env.WHALE_TOKEN_COOLDOWN || 90), // max one whale alert per token per this window
   maxTxPerPoll: 25,
   intervalSec: Number(process.env.WHALE_INTERVAL || 300), // per-token on-chain check spacing (protects free API quotas)
   // Solana's Helius Enhanced API costs ~40 credits/call. 43 tokens every 5 min
@@ -68,6 +70,17 @@ const EXCHANGE_WALLETS = {
   '0xe93381fb4c4f14bda253907b18fad305d799241a': 'HTX',
   '0xfdb16996831753d5331ff813c29a93c76834a0ad': 'HTX',
   '0x6262998ced04146fa42253a5c0af90ca02dfd2a3': 'Crypto.com',
+  // --- Bitget ---
+  '0x0639556f03714a74a5feeaf5736a4a64ff70d206': 'Bitget',
+  '0x51971c86b04516062c1e708cdc048cb04fbe959f': 'Bitget',
+  '0x5bdf85216ec1e38d6458c870992a69e38e03f7ef': 'Bitget',
+  // --- Cold storage / reserves (movements here are high-signal) ---
+  '0x34ea4138580435b5a521e460035edb19df1938c1': 'Binance cold',
+  '0x8894e0a0c962cb723c1976a4421c95949be2d4e3': 'Binance cold',
+  '0x2f7e209e0f5f645c7612d7610193fe268f118b28': 'Bybit cold',
+  '0xd6153f5af5679a75cc85d8974463545181f48772': 'KuCoin cold',
+  '0x1692e170361cefd1eb7240ec13d048fd9af6d667': 'KuCoin cold',
+  '0xf16e9b0d03470827a95cdfd0cb8a8a3b46969b91': 'KuCoin cold',
   '0x46340b20830761efd32832a74d7169b29feb9758': 'Crypto.com',
   // --- Solana (case-sensitive) ---
   '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM': 'Binance',
@@ -113,7 +126,7 @@ export function effectiveThreshold(liqUsd) {
 let lastEvmCall = 0;
 async function evmTransfers(chainId, tokenAddress) {
   // Etherscan free tier: 3 calls/sec — space calls out
-  const wait = lastEvmCall + 400 - Date.now();
+  const wait = lastEvmCall + 550 - Date.now();
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   lastEvmCall = Date.now();
   const url = `https://api.etherscan.io/v2/api?chainid=${CHAIN_IDS[chainId]}&module=account&action=tokentx&contractaddress=${tokenAddress}&page=1&offset=${RULES.maxTxPerPoll}&sort=desc&apikey=${config.etherscanKey}`;
@@ -204,8 +217,10 @@ export async function checkWhales(pair) {
   if (Date.now() < (pausedUntil.get(chainId) || 0)) return;
   const key = `${chainId}:${token}`;
   // Moralis free tier is CU-metered: space its chains 4x wider (default ~20 min/token)
+  // Moralis free plan is 40K compute-units/DAY. 61 tokens at 20-min spacing burned
+  // it in hours, so alt-EVM chains get 2h spacing (~730 calls/day, well inside budget).
   const interval = isSolana ? RULES.solIntervalSec
-    : viaMoralis ? RULES.intervalSec * 4
+    : viaMoralis ? Number(process.env.WHALE_INTERVAL_EVM_ALT || 7200)
     : RULES.intervalSec;
   if (Date.now() - (lastCheck.get(key) || 0) < interval * 1000) return;
   lastCheck.set(key, Date.now());
@@ -263,8 +278,13 @@ export async function checkWhales(pair) {
       else if (fromArk?.isCex && !toArk?.isCex) { dir = `${fName} \u2192 ${tName} (WITHDRAWAL)`; hint = 'coins leaving exchange \u2014 likely accumulation'; sev = 'MEDIUM'; }
       else { dir = `${fName} \u2192 ${tName}`; hint = 'named entity movement \u2014 higher signal than anonymous wallets'; if (sev === 'LOW') sev = 'MEDIUM'; }
     }
+    const isWithdrawal = /WITHDRAWAL/.test(dir);
+    if (isWithdrawal) {
+      const exch = (dir.split('\u2192')[0] || '').trim() || 'exchange';
+      noteWhale(key, { direction: dir, exchange: exch, usd, symbol: pair.baseToken.symbol, isWithdrawal: true });
+    }
     await dispatch({
-      source: 'CHAIN', type: 'WHALE', severity: sev, key: `${key}:${tx.hash}`,
+      source: 'CHAIN', type: 'WHALE', severity: sev, key, dedupeKey: `WHALE:${key}`, cooldownMin: RULES.tokenCooldownMin,
       title: `${pair.baseToken.symbol}: $${fmt(usd)} moved (${chainId})`,
       lines: [
         `${fmt(tx.amount)} ${pair.baseToken.symbol} ${dir} — ${hint}`,
