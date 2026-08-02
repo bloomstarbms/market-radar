@@ -1,5 +1,5 @@
 // Simple JSON persistence: subscribers, per-token baselines, alert cooldowns.
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { config } from '../config.js';
 
@@ -11,7 +11,20 @@ export function load() {
   if (existsSync(FILE)) state = { ...state, ...JSON.parse(readFileSync(FILE, 'utf8')) };
   return state;
 }
-export function save() { writeFileSync(FILE, JSON.stringify(state, null, 2)); }
+// OneDrive scans the folder and briefly locks state.json, which makes a plain write
+// throw EBUSY and abort the whole poll. Write to a temp file, then swap it in; if the
+// swap is blocked, retry a few times and give up quietly — state is rewritten constantly.
+export function save() {
+  const tmp = `${FILE}.tmp`;
+  const body = JSON.stringify(state, null, 2);
+  for (let i = 0; i < 4; i++) {
+    try { writeFileSync(tmp, body); renameSync(tmp, FILE); return; }
+    catch (e) {
+      if (e.code !== 'EBUSY' && e.code !== 'EPERM') throw e;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 120); // brief sync pause
+    }
+  }
+}
 export function getState() { return state; }
 
 export function addSubscriber(chatId) {
