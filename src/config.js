@@ -13,7 +13,7 @@ if (existsSync(envPath)) {
   }
 }
 
-export const VERSION = '0.9.2';
+export const VERSION = '0.9.3';
 
 export const config = {
   minSeverity: ['LOW','MEDIUM','HIGH'].includes((process.env.ALERT_MIN_SEVERITY || 'LOW').toUpperCase())
@@ -30,6 +30,7 @@ export const config = {
   arkhamKey: process.env.ARKHAM_API_KEY || '',
   moralisKey: process.env.MORALIS_API_KEY || '',
   coinmarketcalKey: process.env.COINMARKETCAL_API_KEY || '',
+  cryptorankKey: process.env.CRYPTORANK_API_KEY || '',
   dataDir: join(ROOT, 'data'),
   watchlistPath: join(ROOT, 'watchlist.json'),
 };
