@@ -5,6 +5,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { config } from '../config.js';
 import { TRUSTED_QUOTES } from '../sources/dex/dexscreener.js';
+import { fallbackPrice } from '../sources/price-fallback.js';
 
 const FILE = join(config.dataDir, 'outcomes.json');
 // Market benchmark: every alert stores BTC's price so returns can be judged
@@ -18,6 +19,15 @@ async function btcPrice() {
     const p = Number(j.price);
     if (p) btcCache = { price: p, ts: Date.now() };
   } catch {}
+  // Binance is a single point of failure here, and a miss is permanent: btc is stamped
+  // once when the alert is recorded, so a 0 means that alert never gets an alpha score.
+  if (!btcCache.price || Date.now() - btcCache.ts >= 60e3) {
+    const p = await fallbackPrice('BTC');
+    if (p) {
+      btcCache = { price: p, ts: Date.now() };
+      console.log('[outcomes] BTC benchmark served by CryptoRank fallback');
+    }
+  }
   return btcCache.price || 0;
 }
 export { btcPrice };
