@@ -146,7 +146,13 @@ async function moralisTransfers(chainId, tokenAddress) {
   const res = await fetch(`https://deep-index.moralis.io/api/v2.2/erc20/${tokenAddress}/transfers?chain=${MORALIS_CHAINS[chainId]}&limit=${RULES.maxTxPerPoll}&order=DESC`, {
     headers: { 'X-API-Key': config.moralisKey, 'Accept': 'application/json' },
   });
-  if (res.status === 401) throw new Error('moralis key rejected');
+  if (res.status === 401) {
+    // Moralis returns 401 (not 429) when the daily CU allowance is spent. The key is
+    // fine — it just has to wait for the UTC-midnight reset, so don't disable the chain.
+    const body = await res.text().catch(() => '');
+    if (/usage has been consumed|upgrade your plan/i.test(body)) throw new Error('moralis quota spent');
+    throw new Error('moralis key rejected');
+  }
   if (res.status === 429) throw new Error('moralis 429');
   if (!res.ok) throw new Error(`moralis ${res.status}`);
   const j = await res.json();
@@ -242,6 +248,11 @@ export async function checkWhales(pair) {
     if (/not supported|upgrade/i.test(e.message)) {
       disabledChains.add(chainId);
       console.error(`[whale] ${chainId}: not covered by free API plan — whale checks disabled for this chain`);
+    } else if (/quota spent/.test(e.message)) {
+      const reset = new Date();
+      reset.setUTCHours(24, 5, 0, 0); // next UTC midnight + 5 min of slack
+      pausedUntil.set(chainId, reset.getTime());
+      console.error(`[whale] ${chainId}: Moralis daily quota spent — resuming ${reset.toISOString().slice(11, 16)} UTC`);
     } else if (/key rejected/.test(e.message)) {
       disabledChains.add(chainId);
       console.error(`[whale] ${chainId}: ${e.message} — disabled this run`);
