@@ -12,6 +12,30 @@ async function json(url) {
 const STOCK_NAME_RX = /\b(Inc|Corp|Corporation|Incorporated|Ltd|LLC|PLC|N\.?V|S\.?A|ADR|Company|Holdings?|Group|ETF|ProShares|iShares|Trust|Fund|Index|Bull|Bear|Ultra|UltraPro|Daily|Leveraged|Tokenized|Shares)\b|,\s*Inc|\d+X\b/i;
 export const isStockName = (name) => STOCK_NAME_RX.test(name || '');
 
+// Union of every exchange's cached tokenized-stock symbols (JNJUSDT, XOMUSDT, RDDTUSDT…).
+// The ticker fetchers below populate these caches. The announcement classifier needs this
+// because announcement titles carry a bare ticker and no company name — "New listing:
+// JNJUSDT Perpetual Contract" has nothing for the company-name regex to match on.
+// Equity PERPS live in a separate namespace from equity SPOT pairs: JNJUSDT is a linear
+// contract, so the spot-derived sets above never contained it. Bybit flags these with
+// symbolType:'stock', which is the authoritative source. Call this to warm the cache
+// before classifying announcements; it self-caches for 6h.
+export async function loadDerivStockSymbols() {
+  return stockSet('bybit-linear', async () => {
+    const j = await json('https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000');
+    return new Set((j?.result?.list || [])
+      .filter((x) => String(x.symbolType).toLowerCase() === 'stock')
+      .map((x) => String(x.symbol).toUpperCase()));
+  });
+}
+
+export function isStockSymbol(sym) {
+  if (!sym) return false;
+  const s = String(sym).toUpperCase();
+  for (const c of Object.values(stockCache)) if (c?.set?.has(s)) return true;
+  return false;
+}
+
 // Per-exchange stock-symbol sets, each refreshed at most every 6h.
 const stockCache = {}; // exchange -> { set, ts }
 async function stockSet(exchange, loader) {

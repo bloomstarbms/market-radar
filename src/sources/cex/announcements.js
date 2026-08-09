@@ -4,7 +4,7 @@
 // announcement, not when the pair goes live.
 // Also catches TGE / airdrop / unlock wording that the paid calendars charge for.
 import { dispatch } from '../../core/dispatcher.js';
-import { isStockName } from './exchanges.js';
+import { isStockName, isStockSymbol, loadDerivStockSymbols } from './exchanges.js';
 
 const POLL_EVERY = 10 * 60e3;
 let lastPoll = 0;
@@ -41,25 +41,54 @@ const FEEDS = {
   },
 };
 
-// Only SPOT listings / TGE / unlock matter for a spot revival trader.
-// Exclude derivatives (perp/expiry/futures), tokenized stocks, and marketing.
-function classify(title) {
+// Spot listings / TGE / unlock / perp listings matter. Ongoing derivatives plumbing
+// (expiry, settlement, options, structured products) and tokenized equities do not.
+//
+// A new PERP listing is a genuine signal and used to be discarded: opening leverage and
+// a short side on a token reliably precedes volatility. The old filter killed anything
+// containing "perpetual", which silently dropped 20/20 of Bybit's feed. What we still
+// drop is equity perps — Bybit and Bitget list far more tokenized stocks than coins.
+const LEVERAGE_BOILERPLATE = /,?\s*with up to \d+x leverage/ig;
+
+function isEquityAnnouncement(title, t) {
+  if (/tokenized stock|tokenised stock|xstock|equit(y|ies)|\bstocks?\b/.test(t)) return true;
+  // "with up to 25x leverage" is on every perp announcement and would trip the \d+X
+  // ETF-name rule, so strip it before the company-name check.
+  if (isStockName(String(title).replace(LEVERAGE_BOILERPLATE, ''))) return true;
+  // Titles give a bare ticker ("JNJUSDT") with no company name — match it against the
+  // tokenized-stock symbol sets the ticker fetchers already maintain.
+  for (const [, sym] of String(title).toUpperCase().matchAll(/\b([A-Z0-9]{2,15}USDT)\b/g)) {
+    if (isStockSymbol(sym)) return true;
+  }
+  return false;
+}
+
+export function classify(title) {
   const t = (title || '').toLowerCase();
-  // Derivatives & non-spot products — noise for spot trading
-  if (/x-perp|perpetual|\bperp\b|expiry|futures|margined|quarterly|options?\b|dual currency|dual investment|leveraged token|structured/.test(t)) return null;
-  // Tokenized stocks / equity products — the same equity noise we drop from tickers
-  if (/tokenized stock|tokenised stock|xstock|equit(y|ies)|\bstock\b/.test(t) || isStockName(title)) return null;
+  // Equities first — they arrive dressed as perp listings, so this must precede both
+  // the perp branch and the derivatives drop.
+  if (isEquityAnnouncement(title, t)) return null;
   // delist FIRST: "Delisting of X" would otherwise match the listing pattern
   if (/delist|removal of|will remove|will suspend/.test(t)) return { type: 'LISTING', sev: 'MEDIUM', delist: true };
   if (/unlock|vesting|cliff release/.test(t)) return { type: 'UNLOCK', sev: 'HIGH' };
   if (/token generation|\btge\b|launchpool|launchpad|airdrop/.test(t)) return { type: 'TGE', sev: 'HIGH' };
-  if (/will list|to list|lists |listing of|new spot|spot trading|new trading pair|will add|seed tag/.test(t)) return { type: 'LISTING', sev: 'HIGH' };
+  // Perp/futures LISTING — before the spot branch, whose "will list" also matches these.
+  if (/perpetual|\bperps?\b|futures|x-perp/.test(t)
+      && /will list|to list|lists |listing of|new listing|now launched|will launch|launches|now available|will add/.test(t)) {
+    return { type: 'PERP', sev: 'MEDIUM' };
+  }
+  // Remaining derivatives are plumbing, not events: settlement, expiry, param changes.
+  if (/x-perp|perpetual|\bperp\b|expiry|futures|margined|quarterly|options?\b|dual currency|dual investment|leveraged token|structured/.test(t)) return null;
+  if (/will list|to list|lists |listing of|new spot|spot trading|new trading pair|will add|seed tag/.test(t)) { return { type: 'LISTING', sev: 'HIGH' }; }
   return null;
 }
 
 export async function pollAnnouncements() {
   if (Date.now() - lastPoll < POLL_EVERY) return;
   lastPoll = Date.now();
+  // Warm the equity-perp symbol set (6h cache) so classify() can tell a stock perp
+  // from a crypto perp. Failure is non-fatal: the name-based checks still apply.
+  await loadDerivStockSymbols().catch(() => {});
   let total = 0, fired = 0;
   for (const [exch, fetcher] of Object.entries(FEEDS)) {
     const items = await fetcher();
@@ -81,6 +110,7 @@ export async function pollAnnouncements() {
         lines: [
           c.type === 'UNLOCK' ? 'Token unlock notice — added supply hits the market'
             : c.type === 'TGE' ? 'Token generation / launchpool event — early volatility both ways'
+            : c.type === 'PERP' ? 'Perp/futures listing — leverage and a short side open up, so expect wider swings'
             : isDelist ? '⚠️ Delisting notice — these usually dump hard and fast'
             : 'Listing announced — published BEFORE trading opens, so this is your lead time',
           'Announcements move price on their own; verify on the exchange before acting.',

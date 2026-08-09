@@ -1,7 +1,7 @@
 // Outcome tracker: records every tracked alert, then measures price change
 // +1h/+6h/+24h later so signal quality can be judged from data, not vibes.
 // alert.track = { kind:'cex'|'dex', exchange?, symbol?, chainId?, address?, price }
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync, copyFileSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { config } from '../config.js';
 import { TRUSTED_QUOTES } from '../sources/dex/dexscreener.js';
@@ -32,7 +32,13 @@ async function btcPrice() {
 }
 export { btcPrice };
 const CHECKPOINTS = [[ 'h1', 3600e3 ], [ 'h6', 6 * 3600e3 ], [ 'h24', 24 * 3600e3 ]];
+const MAX_ROWS = Number(process.env.OUTCOMES_MAX_ROWS || 20000);
 let rows = [];
+
+// Exposed to the scorer without an import cycle (outcomes imports the dispatcher's
+// dependencies; the dispatcher imports the scorer). Set once at load.
+export function allOutcomes() { return rows; }
+globalThis.__outcomesHook = { allOutcomes };
 
 export function loadOutcomes() {
   mkdirSync(config.dataDir, { recursive: true });
@@ -43,10 +49,38 @@ const save = () => writeFileSync(FILE, JSON.stringify(rows, null, 1));
 export function recordAlert(a) {
   if (!a.track?.price) return;
   const row = { ts: Date.now(), source: a.source, type: a.type, severity: a.severity,
-    title: a.title, ...a.track, btc: 0, results: {}, alpha: {} };
+    title: a.title, ...a.track, btc: 0, results: {}, alpha: {},
+    // null when the alert was actually pushed; otherwise the suppression reason, so
+    // pushed vs suppressed precision can be compared per module.
+    suppressed: a.suppressed ?? null, score: a.score ?? null,
+    // Which sampling regime produced this row. Pre-v0.11 the bot pushed essentially
+    // everything, so those rows are an unfiltered census. From v0.11 the floor and
+    // budget select what gets pushed, and only the suppression logging keeps the
+    // sample complete. The corpus is about to be a mixture of the two, and multipliers
+    // will drift for sampling reasons rather than performance reasons — this column is
+    // what lets those be told apart later. Unrecoverable if added after the fact.
+    collectedUnder: 'FLOORED',
+    // Contract-risk verdict at alert time, when one was computed. Recorded even on
+    // blocked candidates so the screen accumulates a point-in-time calibration set
+    // with forward outcomes attached.
+    rug: a.rug ?? null };
   rows.push(row);
   btcPrice().then((p) => { if (p) { row.btc = p; save(); } }).catch(() => {});
-  if (rows.length > 2000) rows = rows.slice(-2000);
+  // 2000 was ~2.5 weeks of alerts and the cap was silently evicting the oldest rows
+  // right as the history became useful for threshold tuning. At ~320 bytes/row,
+  // 20000 is ~6MB — still trivial to load, and roughly six months of runway.
+  // Evict-to-archive, never evict-to-nothing. Precision multipliers need long windows,
+  // n>=100 accumulates slowly, and the rug calibration set attaches +72h outcomes to
+  // verdicts frozen weeks earlier — oldest-first deletion would give all of that a
+  // silent shelf life. Archived rows are JSONL (append-only, crash-safe, greppable).
+  if (rows.length > MAX_ROWS) {
+    const evicted = rows.slice(0, rows.length - MAX_ROWS);
+    try {
+      appendFileSync(join(config.dataDir, 'outcomes-archive.jsonl'),
+        evicted.map((r) => JSON.stringify(r)).join('\n') + '\n');
+    } catch (e) { console.error('[outcomes] archive append failed — keeping rows in memory:', e.message); return; }
+    rows = rows.slice(-MAX_ROWS);
+  }
   save();
 }
 
@@ -74,6 +108,44 @@ async function currentPrice(r) {
     }
     return Number(best?.priceUsd) || null;
   } catch { return null; }
+}
+
+// Daily consistent backup — the JSON analogue of SQLite's VACUUM INTO.
+// The outcomes corpus is the least replaceable artifact in the project: point-in-time
+// rug verdicts frozen at alert time, the regime-tagged rows the precision multipliers
+// are computed from. Code is rewritable in a weekend; this is not.
+// PARSE-VERIFY BEFORE WRITE: the snapshot is round-tripped through JSON.parse first,
+// so a torn/corrupt live file can never overwrite a good backup. Resulting files are
+// closed, which makes them safe for OneDrive sync in a way the live file never was.
+// Keeps 14 dailies.
+let lastBackup = 0;
+export function backupOutcomes() {
+  if (Date.now() - lastBackup < 24 * 3600e3) return;
+  lastBackup = Date.now();
+  try {
+    const dir = join(config.dataDir, 'backups');
+    mkdirSync(dir, { recursive: true });
+    const day = new Date().toISOString().slice(0, 10);
+    const snapshot = JSON.stringify(rows);          // from live memory, not the file
+    JSON.parse(snapshot);                           // verify before it touches disk
+    writeFileSync(join(dir, `outcomes-${day}.json`), snapshot);
+    const arch = join(config.dataDir, 'outcomes-archive.jsonl');
+    if (existsSync(arch)) copyFileSync(arch, join(dir, `archive-${day}.jsonl`));
+    const stateFile = join(config.dataDir, 'state.json');
+    if (existsSync(stateFile)) {
+      const s = readFileSync(stateFile, 'utf8');
+      JSON.parse(s);                                // same guard for state (ADV, universe, threads)
+      writeFileSync(join(dir, `state-${day}.json`), s);
+    }
+    // prune to 14 days
+    for (const f of readdirSync(dir)) {
+      const m = f.match(/(\d{4}-\d{2}-\d{2})/);
+      if (m && Date.now() - Date.parse(m[1]) > 14 * 86400e3) rmSync(join(dir, f), { force: true });
+    }
+    console.log(`[backup] daily snapshot written: ${rows.length} rows -> data/backups/*-${day}.*`);
+  } catch (e) {
+    console.error('[backup][OPERATOR] daily backup FAILED:', e.message);
+  }
 }
 
 // Called periodically: fill in any due checkpoints.

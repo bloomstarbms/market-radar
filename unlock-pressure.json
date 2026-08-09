@@ -1,0 +1,290 @@
+[
+ {
+  "sym": "SUI",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 124849,
+  "venue": "bitget",
+  "gatePass": true,
+  "pvb": null
+ },
+ {
+  "sym": "ENA",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 94425,
+  "venue": "bitget",
+  "gatePass": true,
+  "pvb": null
+ },
+ {
+  "sym": "TIA",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 89522,
+  "venue": "binance",
+  "gatePass": true,
+  "pvb": null
+ },
+ {
+  "sym": "ARB",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 54776,
+  "venue": "binance",
+  "gatePass": true,
+  "pvb": null
+ },
+ {
+  "sym": "INJ",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 49208,
+  "venue": "bitget",
+  "gatePass": true,
+  "pvb": null
+ },
+ {
+  "sym": "SEI",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 44368,
+  "venue": "binance",
+  "gatePass": true,
+  "pvb": null
+ },
+ {
+  "sym": "APT",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 41016,
+  "venue": "binance",
+  "gatePass": true,
+  "pvb": null
+ },
+ {
+  "sym": "JUP",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 37634,
+  "venue": "binance",
+  "gatePass": true,
+  "pvb": null
+ },
+ {
+  "sym": "OP",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 34779,
+  "venue": "binance",
+  "gatePass": true,
+  "pvb": null
+ },
+ {
+  "sym": "STRK",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 30562,
+  "venue": "binance",
+  "gatePass": true,
+  "pvb": null
+ },
+ {
+  "sym": "ZRO",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 25648,
+  "venue": "binance",
+  "gatePass": true,
+  "pvb": null
+ },
+ {
+  "sym": "EIGEN",
+  "pct": 4.97,
+  "unlockUsd": 6651795.7156,
+  "exec": 25080,
+  "venue": "binance",
+  "gatePass": true,
+  "pvb": 265.22311465709726
+ },
+ {
+  "sym": "SCR",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 19525,
+  "venue": "binance",
+  "gatePass": false,
+  "pvb": null
+ },
+ {
+  "sym": "MANTA",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 18366,
+  "venue": "binance",
+  "gatePass": false,
+  "pvb": null
+ },
+ {
+  "sym": "ZK",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 17709,
+  "venue": "bitget",
+  "gatePass": false,
+  "pvb": null
+ },
+ {
+  "sym": "PYTH",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 12107,
+  "venue": "bitget",
+  "gatePass": false,
+  "pvb": null
+ },
+ {
+  "sym": "BERA",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 11594,
+  "venue": "binance",
+  "gatePass": false,
+  "pvb": null
+ },
+ {
+  "sym": "CYBER",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 10246,
+  "venue": "binance",
+  "gatePass": false,
+  "pvb": null
+ },
+ {
+  "sym": "W",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 9388,
+  "venue": "binance",
+  "gatePass": false,
+  "pvb": null
+ },
+ {
+  "sym": "ALT",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 8902,
+  "venue": "binance",
+  "gatePass": false,
+  "pvb": null
+ },
+ {
+  "sym": "SAGA",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 8628,
+  "venue": "binance",
+  "gatePass": false,
+  "pvb": null
+ },
+ {
+  "sym": "S",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 8002,
+  "venue": "gate",
+  "gatePass": false,
+  "pvb": null
+ },
+ {
+  "sym": "ZETA",
+  "pct": 3.21,
+  "unlockUsd": 1501898.01,
+  "exec": 7195,
+  "venue": "bybit",
+  "gatePass": false,
+  "pvb": 208.74190548992357
+ },
+ {
+  "sym": "IMX",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 6369,
+  "venue": "binance",
+  "gatePass": false,
+  "pvb": null
+ },
+ {
+  "sym": "MOVE",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 3037,
+  "venue": "bitget",
+  "gatePass": false,
+  "pvb": null
+ },
+ {
+  "sym": "DYM",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 2659,
+  "venue": "binance",
+  "gatePass": false,
+  "pvb": null
+ },
+ {
+  "sym": "MAV",
+  "pct": 1.32,
+  "unlockUsd": 150612.33,
+  "exec": 2268,
+  "venue": "gate",
+  "gatePass": false,
+  "pvb": 66.4075529100529
+ },
+ {
+  "sym": "TAIKO",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 1087,
+  "venue": "bitget",
+  "gatePass": false,
+  "pvb": null
+ },
+ {
+  "sym": "METIS",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 936,
+  "venue": "binance",
+  "gatePass": false,
+  "pvb": null
+ },
+ {
+  "sym": "RLS",
+  "pct": 3.56,
+  "unlockUsd": 135653.44400000002,
+  "exec": 640,
+  "venue": "gate",
+  "gatePass": false,
+  "pvb": 211.95850625000003
+ },
+ {
+  "sym": "BLAST",
+  "pct": null,
+  "unlockUsd": null,
+  "exec": 532,
+  "venue": "bybit",
+  "gatePass": false,
+  "pvb": null
+ },
+ {
+  "sym": "HOOK",
+  "pct": 5.75,
+  "unlockUsd": 60033.795,
+  "exec": 0,
+  "venue": "",
+  "gatePass": false,
+  "pvb": null
+ }
+]

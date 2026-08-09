@@ -1,0 +1,58 @@
+# Next session
+
+## 0. FIRST: restore drill on tonight's backup (before push, before EIGEN)
+Load `data/backups/outcomes-2026-08-09.json` as if the live file were gone:
+parse it, assert row count vs live `data/outcomes.json`, then run
+`modulePrecision()` from budget.js against the restored rows and confirm the
+multipliers match the live ones. (No SQLite here, so this is the JSON analogue
+of `PRAGMA integrity_check`.) Parse-verified at write time is a gate; the first
+restore is the only real proof a backup works — do it before it's needed.
+Then: GitHub push, v0.9.4 -> v0.16.3.
+
+# EIGEN vesting contract read (then STRK, ARB)
+
+Target list = gate-pass ∩ unlock-schedule, 12 tokens (see `unlock-pressure.json`):
+SUI ENA TIA ARB INJ SEI APT JUP OP STRK ZRO EIGEN. Twenty others failed the
+executability gate — zero integration minutes on them, ever.
+
+## Read protocol (agreed 2026-08-10)
+
+1. **Enumerate ALL vesting contracts, not one.** Team / investors / ecosystem /
+   foundation each have their own contract, cliff, and dates. One contract = a
+   fraction of the unlock and a confidently wrong number. The deliverable per date
+   is the AGGREGATE across contracts, split by recipient type (VC/team sell very
+   differently from ecosystem).
+
+2. **Backtest before trusting forward.** Pick a cliff the contract says already
+   happened; verify tokens actually MOVED on-chain that day (Etherscan token-tx
+   for the vesting address). Contract says cliff, chain shows nothing → wrong
+   contract or wrong units. Find out now, not three months into a silent module.
+
+3. **Decimals.** Raw uint256 / 10^18. Assert every amount < circulating supply
+   (CoinGecko free) or refuse the read. A quintillion-scale error looks plausible
+   next to pressure ratios already in the hundreds.
+
+4. **Ship dates immediately; don't wait for ADV.** Date detection (contract read)
+   and severity (ADV accumulating in state.adv, ~30d to maturity) are independent.
+   Until ADV matures, print `pressure_vs_book` as ORDINAL rank only — §4.2's
+   0.5/2/5 severity bands apply to ADV, never to book depth (2+ orders of
+   magnitude apart).
+
+5. **Bucket-four path.** Multisig-held with off-chain schedule → a project-announced
+   date (docs/governance/blog) is a legitimate `verified` source, stored as
+   `events[].source: 'announcement'`. Minutes, not half an hour, and the only
+   route for those tokens.
+
+## Verified-date schema (already live in unlocks.js, v0.16.1+)
+```json
+{ "sym": "EIGEN", "events": [
+    { "date": "2026-09-01", "amountTokens": 12345678, "usdAtEntry": 6700000,
+      "recipientType": "team+vc", "source": "contract",
+      "contract": "0x...", "backtested": "2026-08-01 cliff confirmed on-chain" } ] }
+```
+No `events[]` → module stays silent for that token. That is correct behavior.
+
+## Tools in place
+- Etherscan key (free, ethereum only, 3 req/s) supports `eth_call` for reads.
+- ADV accumulator: `state.adv[symbol][YYYY-MM-DD]` since v0.16.2, prune 35d.
+- Three-state discipline live: verified / estimated(silent, logged) / unverifiable.

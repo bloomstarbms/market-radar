@@ -14,6 +14,7 @@ const FILE = join(ROOT, 'unlocks.json');
 const LEAD_DAYS = [7, 3];          // ping windows
 const CHECK_EVERY = 6 * 3600e3;    // re-evaluate every 6h
 let lastPoll = 0;
+let estimatedSkipped = 0;
 let cache = null, cacheTs = 0;
 
 function loadSchedule() {
@@ -43,6 +44,13 @@ export async function pollUnlocks() {
   const now = new Date();
   let fired = 0;
   for (const t of sched.tokens) {
+    // THREE-STATE DISCIPLINE (spec §4.2): only a VERIFIED DATE may alert — a date
+    // read from the vesting contract or a project announcement, stored in
+    // t.events[]. `monthlyDay` recurrences and pct-only rows are ESTIMATED:
+    // logged, ranked for integration priority, never alerted. The module degrades
+    // to silence, not to guessing — a 🔴 directive on an admitted guess was the
+    // original defect here.
+    if (!Array.isArray(t.events) || !t.events.length) { estimatedSkipped++; continue; }
     const when = t.date ? new Date(t.date + 'T00:00:00Z') : (t.monthlyDay ? nextMonthlyDate(t.monthlyDay, new Date()) : null);
     if (!when) continue;
     const daysOut = Math.round((when - now) / 86400e3);
@@ -71,5 +79,5 @@ export async function pollUnlocks() {
       })) fired++;
     }
   }
-  if (config.debug || fired) console.log(`[unlocks] ${sched.tokens.length} tracked${fired ? ` · ${fired} reminders sent` : ''}`);
+  if (config.debug || fired) console.log(`[unlocks] ${sched.tokens.length} tracked${fired ? ` · ${fired} reminders sent · ${estimatedSkipped} estimated-only (silent, pending contract reads)` : ''}`);
 }

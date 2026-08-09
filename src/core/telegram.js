@@ -22,10 +22,35 @@ export async function sendTo(chatId, text) {
   return tg('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true });
 }
 
-export async function broadcast(text) {
+// Returns [{chatId, messageId}] so a follow-up can EDIT this message rather than
+// posting a second one (spec §5.3: one live alert per symbol per direction).
+export async function broadcast(text, { toChannel = true } = {}) {
+  // Recipients: DM subscribers plus the public channel (@radaralert22) when configured.
+  // The channel is the public product; SYS noise (heartbeats) stays DM-only via
+  // toChannel:false so subscribers only ever see signals.
   const subs = getState().subscribers;
-  if (!subs.length) console.log('[telegram] no subscribers yet — send /start to the bot');
-  await Promise.allSettled(subs.map((id) => sendTo(id, text)));
+  const targets = [...subs];
+  if (toChannel && config.telegramChannel) targets.push(config.telegramChannel);
+  if (!targets.length) console.log('[telegram] no recipients — send /start or set TELEGRAM_CHANNEL');
+  const results = await Promise.allSettled(targets.map((id) => sendTo(id, text)));
+  const ids = [];
+  results.forEach((r, i) => {
+    const mid = r.status === 'fulfilled' ? r.value?.result?.message_id : null;
+    if (mid) ids.push({ chatId: targets[i], messageId: mid });
+    else if (r.status === 'fulfilled' && targets[i] === config.telegramChannel)
+      console.error('[telegram][OPERATOR] channel post failed — is the bot still admin of ' + config.telegramChannel + '?');
+  });
+  return ids;
+}
+
+export async function editBroadcast(messageIds, text) {
+  if (!messageIds?.length) return false;
+  const res = await Promise.allSettled(messageIds.map(({ chatId, messageId }) =>
+    tg('editMessageText', {
+      chat_id: chatId, message_id: messageId, text,
+      parse_mode: 'HTML', disable_web_page_preview: true,
+    })));
+  return res.some((r) => r.status === 'fulfilled' && r.value?.ok);
 }
 
 async function handleUpdate(u) {

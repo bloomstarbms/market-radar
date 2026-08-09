@@ -2,19 +2,22 @@ import { readFileSync } from 'node:fs';
 import { config, VERSION } from './config.js';
 import { load, getState } from './core/store.js';
 import { startBot, broadcast } from './core/telegram.js';
-import { dispatch, formatAlert } from './core/dispatcher.js';
-import { loadOutcomes, checkOutcomes, statsSummary } from './core/outcomes.js';
+import { dispatch, formatAlert, recordSuppressedRug } from './core/dispatcher.js';
+import { loadOutcomes, checkOutcomes, statsSummary, recordAlert, backupOutcomes } from './core/outcomes.js';
 import { getPairsForTokens, bestPairPerToken } from './sources/dex/dexscreener.js';
 import { checkRevival } from './sources/dex/revival.js';
+import { screen as screenContract } from './sources/dex/rugscreen.js';
 import { pollCex } from './sources/cex/monitor.js';
 import { pollFunding } from './sources/cex/funding.js';
 import { pollAnnouncements } from './sources/cex/announcements.js';
+import { pollUpbit } from './sources/cex/upbit.js';
 import { pollCascade } from './sources/cex/cascade.js';
 import { checkWhales } from './sources/chain/whale.js';
 import { checkConfluence } from './core/confluence.js';
-import { pollCpi } from './sources/calendar/cpi.js';
+import { pollMacro, verifyCalendar } from './sources/calendar/macro.js';
 import { pollEvents } from './sources/calendar/events.js';
 import { pollUnlocks } from './sources/calendar/unlocks.js';
+import { startUniverseSweep } from './core/universe.js';
 
 const ONCE = process.argv.includes('--once');
 const startedAt = Date.now();
@@ -41,7 +44,24 @@ async function pollDex() {
       }
       for (const pair of Object.values(best)) {
         const alert = checkRevival(pair);
-        if (alert && await dispatch(alert)) alertCount++;
+        // Contract-risk screen is BLOCKING and runs before the alert can be scored
+        // (spec §3.5). Only paid for on a live candidate, and cached 24h per token,
+        // so the cost is a handful of calls a day rather than one per poll.
+        if (alert) {
+          const rug = await screenContract(pair);
+          alert.rug = { status: rug.status, failures: rug.failures };
+          if (!rug.pass) {
+            // Blocked, but still recorded with forward outcomes. This is the passive
+            // calibration set: a hand-picked "known-good thin pool" list would be a
+            // survivor sample screened against today's contract state, which is
+            // circular. These rows are point-in-time by construction — the verdict is
+            // stored as of the alert, and the outcome accrues afterwards. When REVIVAL
+            // earns its way back past the floor, the discrimination question is
+            // already answerable.
+            recordSuppressedRug(alert, rug.status);
+            console.log(`  [rug] ${pair.baseToken?.symbol} ${rug.status}: ${rug.failures.join(', ')}`);
+          } else if (await dispatch(alert)) alertCount++;
+        }
         await checkWhales(pair);
         // Highest-conviction signal: recent exchange withdrawal + live market activity
         if (await checkConfluence(pair, {
@@ -65,13 +85,15 @@ async function heartbeat() {
     source: 'SYS', type: 'HEARTBEAT', severity: 'LOW',
     title: 'Market Radar is alive',
     lines: [`Uptime ${up}h · ${alertCount} alerts this run · ${getState().subscribers.length} subscribers`, `/stats for the signal scoreboard`],
-  }));
+  }), { toChannel: false });
 }
 
 async function pollAll() {
-  await Promise.allSettled([pollDex(), pollCex(), pollFunding(), pollCascade(), pollAnnouncements(), pollCpi(), pollEvents(), pollUnlocks()]);
+  await Promise.allSettled([pollDex(), pollCex(), pollFunding(), pollCascade(), pollAnnouncements(), pollMacro(), pollEvents(), pollUnlocks(), pollUpbit()]);
   await checkOutcomes().catch(() => {});
   await heartbeat().catch(() => {});
+  await verifyCalendar().catch(() => {});
+  backupOutcomes();
 }
 
 async function main() {
@@ -80,6 +102,7 @@ async function main() {
   const whaleMode = (config.etherscanKey ? 'evm ' : '') + (config.heliusKey ? 'solana' : '') || 'OFF (no keys)';
   console.log(`Market Radar v${VERSION} starting · poll ${config.pollIntervalSec}s · minSev ${config.minSeverity} · telegram ${config.telegramToken ? 'ON' : 'OFF (console-only)'} · cex [${config.cexExchanges.join(', ')}] · whale ${whaleMode}`);
   startBot();
+  startUniverseSweep();
   await pollAll();
   if (ONCE) { console.log('[once] done'); process.exit(0); }
   setInterval(pollAll, config.pollIntervalSec * 1000);

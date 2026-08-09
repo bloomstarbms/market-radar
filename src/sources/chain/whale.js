@@ -296,6 +296,11 @@ export async function checkWhales(pair) {
     }
     await dispatch({
       source: 'CHAIN', type: 'WHALE', severity: sev, key, dedupeKey: `WHALE:${key}`, cooldownMin: RULES.tokenCooldownMin,
+      // Reference price at alert time, from the SAME pair snapshot the threshold was
+      // computed against. Without this the whole on-chain module is unscoreable and
+      // step 10 would ship blind — 954 historical whale alerts produced zero outcome
+      // rows for exactly this reason.
+      track: { kind: 'dex', chainId, address: pair.baseToken.address, symbol: pair.baseToken.symbol, price },
       title: `${pair.baseToken.symbol}: $${fmt(usd)} moved (${chainId})`,
       lines: [
         `${fmt(tx.amount)} ${pair.baseToken.symbol} ${dir} — ${hint}`,

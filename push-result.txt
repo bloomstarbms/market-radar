@@ -1,0 +1,5 @@
+Pushing to github.com/bloomstarbms/market-radar ... 
+Initialized empty Git repository in C:/Users/bloom/OneDrive/Desktop/market-radar/.git/
+From https://github.com/bloomstarbms/market-radar
+ * branch            main       -> FETCH_HEAD
+ * [new branch]      main       -> origin/main
