@@ -6,3 +6,8 @@ data/
 
 node_modules/
 *.log
+
+# Runtime droppings — outputs of the .bat helpers, never source
+status.txt
+*-result.txt
+staged-files.txt
