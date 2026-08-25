@@ -30,7 +30,12 @@ NEXT-SESSION.md and regression-fixtures.js before writing any code.
 
 ## Current state
 
-- Alert volume: 87.9/day → ~3.4/day (26.2x reduction). Budget is ≤12/day.
+- Alert volume: 87.9/day → ~3.2/day. BUDGET IS A CIRCUIT BREAKER, not a
+  quality gate (v0.17.1): RISK types and A-tier bypass entirely; B-tier is
+  hard-capped at 12 per ROLLING 24h; C-tier is digest-only, never pushed.
+  NOTHING IS EVER DEFERRED — deliver or suppress, never delay (same rule as
+  macro's `missed` stages). If the B cap binds 3 days running, the operator
+  is told the floor is miscalibrated; the fix is upstream, never the cap.
 - Suppression stack: conviction floor → budget → 12h rolling thread TTL
   (72h absolute cap) → 2h global cooldown → per-module cooldown →
   recurrence suppression (3 fires in 14 days).
@@ -165,6 +170,44 @@ T-14d (only if pressure is significant) · T-3d · T-0 (confirmed on-chain)
 ```
 Two detectors, both free from exchange public endpoints. Funding already
 exists; these do not.
+
+## CASCADE splits across the FACT/CALL boundary — build it as TWO things
+
+v0.23.0 changed what this step inherits. Read this before designing.
+
+  CASCADE ACTIVE is a FACT: "$4.2M liquidated in 60s on BTC perps, 82%
+  longs." Verifiable, no direction asserted. Pushes immediately, carries
+  NO conviction and NO tier, is not budgeted, is not multiplied or
+  laddered. Most of the value is here and it is available NOW.
+
+  CASCADE EXHAUSTION is a CALL: "forced selling is done, mean reversion
+  from here." Directional. Needs the full apparatus — entry, invalidation,
+  horizon (cross-cutting A), the HARD executability gate, expectancy
+  weighting, the ladder, budget. It must EARN its way in and may never
+  qualify; that is an acceptable outcome, and the fact carries the module
+  regardless.
+
+Do not build the call first. Ship the fact, accumulate outcomes against
+it, and let the exhaustion call be decided by measurement.
+
+## The old RISK-bypass note is OBSOLETE — read this instead
+
+CASCADE was previously flagged as having an UNTESTED bypass premise
+(in RISK_TYPES, no producer, so never fired). That framing is now dead:
+as of v0.23.0 every RISK_TYPES member is ALSO a FACT_TYPES member, so the
+RISK-bypass branch inside admit() is UNREACHABLE — facts return above it.
+CASCADE-as-fact therefore has no unconditional scored bypass to audit; it
+has the fact path, whose discipline is recurrence suppression + module
+cooldown + thread escalation and NO budget.
+What still needs a stated qualifying condition is the FACT path's volume
+premise: facts are unbudgeted because their volume is naturally bounded.
+A liquidation-cascade detector is the FIRST fact type whose volume is set
+by a THRESHOLD WE CHOOSE rather than by how often a venue posts a notice —
+so it is the first real test of that premise. State the threshold ($ per
+window, % one-directional), and watch fact volume for 48h after shipping.
+If cascades alone push fact volume past ~25/day, the threshold is wrong
+(per Part 6 of the v0.23.0 spec: fix the classifier or the threshold,
+never add a cap).
 
 ## Liquidation cascade
 
@@ -403,6 +446,21 @@ not fall back to a constant.
 Last, and most gated. Both currently silent — REVIVAL self-silenced via
 precision weighting (42% win, -0.6% median alpha), VOLUME scores 42-50 and
 never clears.
+
+## BEFORE YOU RE-ENABLE ANYTHING: the RUG bypass expires with this step
+
+RUG is a RISK_TYPE and bypasses the budget entirely. Its low volume (6 of
+69 pushes) is NOT a property of RUG — it fires on BLOCKED DEX candidates,
+and DEX is near-silent precisely because REVIVAL is silenced. Un-silencing
+REVIVAL scales RUG push volume directly with DEX candidate volume, through
+an unconditional bypass.
+
+This is the "unconditional bypass wearing a justification" class (see
+REMAINING-WORK-NOTES.md): a bypass granted for a good reason whose
+qualifying condition stops holding when something else changes. State
+RUG's qualifying condition and the check that tests it BEFORE the first
+re-enabled REVIVAL candidate reaches dispatch — not after the channel
+floods. Venue/liquidity tiering (catalystRoute) is the existing pattern.
 
 ## Do not simply un-silence them. Rebuild the signal.
 

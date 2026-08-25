@@ -19,6 +19,7 @@ import { config } from '../../config.js';
 import { dispatch } from '../../core/dispatcher.js';
 import { getState, save } from '../../core/store.js';
 import { btcPrice } from '../../core/outcomes.js';
+import { notePulse } from '../../core/pulse.js';
 
 const CAL_PATH = join(process.cwd(), 'data', 'macro-calendar.json');
 const STAGES = {
@@ -27,6 +28,14 @@ const STAGES = {
   DIGEST: [],
 };
 const STAGE_AT = { t24h: -24 * 3600e3, t60m: -3600e3, t5m: 5 * 60e3, t30m: 30 * 60e3 };
+
+// Freshness is PER-STAGE because warnings and reports decay in opposite directions
+// (learned on the Aug 12 2026 CPI). A WARNING delivered late is worse than silence —
+// "CPI in 60 minutes" arriving at T-15m invites a position there's no time to manage,
+// so missed-not-late stays strict, and strictest for t60m. An OBSERVATION REPORT
+// ("BTC moved X across the print") is still true hours later, PROVIDED the message
+// states its observation window and delivery lag rather than presenting stale as live.
+const STAGE_FRESH = { t24h: 45 * 60e3, t60m: 20 * 60e3, t5m: 6 * 3600e3, t30m: 6 * 3600e3 };
 
 // ET wall-clock -> UTC ms for that specific date. Tries the two possible NY offsets
 // and keeps the one that round-trips — DST handled by construction, no offset table.
@@ -67,10 +76,21 @@ export async function pollMacro() {
 
   for (const ev of loadCalendar()) {
     const stages = STAGES[ev.tier] ?? [];
-    if (!stages.length) continue;
     const t0 = etToUtc(ev.date, ev.et);
     if (now - t0 > 24 * 3600e3) continue; // fully in the past
     const rec = (st.macro[ev.id] ??= { fired: {} });
+    // DIGEST tier never pushes, but MUST reach a reader (fix 3: Core PPI was
+    // computed, classified, and dropped — a tier with no route). One entry into the
+    // digest pool at release time; telemetry.js drains it into the daily digest.
+    if (!stages.length) {
+      if (now >= t0 && !rec.fired.digest) {
+        rec.fired.digest = now;
+        (st.digestPool ??= []).push({ ts: now, kind: ev.kind, title: `${ev.kind} released — ${ev.date} ${ev.et} ET (digest-tier macro, never pushed by design)` });
+        while (st.digestPool.length > 100) st.digestPool.shift();
+        save();
+      }
+      continue;
+    }
 
     // Freeze the pre-print market state just before the release so T+5m has a basis.
     if (now >= t0 - 10 * 60e3 && now < t0 && !rec.pre) { rec.pre = await marketSnap(); save(); }
@@ -79,7 +99,7 @@ export async function pollMacro() {
       if (rec.fired[stage]) continue;
       const due = t0 + STAGE_AT[stage];
       if (now < due) continue;
-      if (now - due > 45 * 60e3) { rec.fired[stage] = 'missed'; save(); continue; } // bot was down; stale, don't fake it
+      if (now - due > STAGE_FRESH[stage]) { rec.fired[stage] = 'missed'; save(); continue; } // bot was down; stale, don't fake it
 
       const utc = new Date(t0).toISOString().slice(11, 16);
       let title, lines;
@@ -96,10 +116,15 @@ export async function pollMacro() {
         const snap = await marketSnap();
         const b = pct(rec.pre?.btc, snap.btc), e = pct(rec.pre?.eth, snap.eth);
         rec.post5 = snap;
-        title = `${ev.kind} released — first reaction`;
+        // Observation window is pre-print -> NOW, which is only "the first 5 minutes"
+        // when delivery is on time. State the actual window; disclose lag when late.
+        const tPlus = Math.round((now - t0) / 60e3);
+        const lagMin = Math.round((now - due) / 60e3);
+        title = `${ev.kind} released — first reaction (T+${tPlus}m)`;
         lines = [
-          b !== null ? `BTC ${b > 0 ? '+' : ''}${b}% · ETH ${e > 0 ? '+' : ''}${e}% since just before the print`
+          b !== null ? `BTC ${b > 0 ? '+' : ''}${b}% · ETH ${e > 0 ? '+' : ''}${e}% from just before the print to T+${tPlus}m`
             : 'Reaction basis unavailable (bot was not up pre-print).',
+          ...(lagMin > 5 ? [`⏱ delivered ${lagMin}m after the T+5m mark — the window above is as stated, not live`] : []),
           'Print value not yet published by the source — reaction is the tradeable part; figure follows at T+30m if available.',
         ];
       } else { // t30m
@@ -108,9 +133,12 @@ export async function pollMacro() {
         const held = b5 !== null && b30 !== null
           ? (Math.sign(b30) === Math.sign(b5) && Math.abs(b30) >= Math.abs(b5) * 0.5 ? 'HOLDING' : 'FADING')
           : 'unknown';
-        title = `${ev.kind} +30m — initial move is ${held}`;
+        const tPlus = Math.round((now - t0) / 60e3);
+        const lagMin = Math.round((now - due) / 60e3);
+        title = `${ev.kind} +${tPlus}m — initial move is ${held}`;
         lines = [
-          b30 !== null ? `BTC ${b30 > 0 ? '+' : ''}${b30}% from pre-print (was ${b5 > 0 ? '+' : ''}${b5}% at +5m)` : 'No pre-print basis.',
+          b30 !== null ? `BTC ${b30 > 0 ? '+' : ''}${b30}% from pre-print to T+${tPlus}m (was ${b5 > 0 ? '+' : ''}${b5}% at the first reading)` : 'No pre-print basis.',
+          ...(lagMin > 5 ? [`⏱ delivered ${lagMin}m after the T+30m mark — observation window as stated, not live`] : []),
           'No claim about the follow-through rate yet — that statistic starts accumulating from this event forward.',
         ];
       }
@@ -121,6 +149,7 @@ export async function pollMacro() {
       })) { rec.fired[stage] = Date.now(); save(); }
     }
   }
+  notePulse('macro');
 }
 
 // Weekly verifier: fetch the BLS schedule page, look for our hand-entered dates near

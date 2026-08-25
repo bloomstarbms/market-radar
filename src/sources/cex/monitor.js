@@ -4,6 +4,7 @@ import { checkPump, takeDebugStats } from './pump.js';
 import { checkListings } from './listings.js';
 import { dispatch } from '../../core/dispatcher.js';
 import { config } from '../../config.js';
+import { notePulse } from '../../core/pulse.js';
 
 const lastFingerprint = new Map(); // exchange -> sum of all 24h volumes last poll
 
@@ -37,6 +38,7 @@ export async function pollCex() {
         }
       }
       console.log(`[cex] ${name}: ${tickers.length} USDT pairs scanned${alerts ? `, ${alerts} alerts` : ''}`);
+      notePulse(name);
       if (config.debug) {
         const rows = takeDebugStats();
         const movers = [...rows].sort((a, b) => Math.abs(b.movePct) - Math.abs(a.movePct)).slice(0, 3);

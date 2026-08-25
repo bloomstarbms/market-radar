@@ -12,6 +12,7 @@
 //      phrase matching misses. dedupeKey stops you being told twice.
 import { dispatch } from '../../core/dispatcher.js';
 import { getState, save } from '../../core/store.js';
+import { notePulse } from '../../core/pulse.js';
 
 const MARKETS_URL = 'https://api.upbit.com/v1/market/all?isDetails=true';
 const NOTICE_URL = 'https://api-manager.upbit.com/api/v1/announcements?os=web&page=1&per_page=10&category=all';
@@ -61,6 +62,7 @@ export async function pollUpbit() {
   // ---- detector 2 (also refreshes the ticker -> English name map) ----
   const markets = await jsonSafe(MARKETS_URL);
   if (Array.isArray(markets)) {
+    notePulse('upbit');
     const codes = markets.map((m) => m.market).filter(Boolean);
     for (const m of markets) {
       const tk = String(m.market || '').split('-')[1];

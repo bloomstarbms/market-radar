@@ -1,0 +1,20 @@
+rm 'acceptance2-result.txt'
+rm 'backfill-result.txt'
+rm 'cryptorank-result.txt'
+rm 'moralis-result.txt'
+rm 'push-result.txt'
+rm 'status.txt'
+rm 'v0.17.0'
+warning: in the working copy of '.gitignore', LF will be replaced by CRLF the next time Git touches it
+[main 2ac5876] Ignore runtime output files; remove stray artifacts
+ 8 files changed, 5 insertions(+), 66 deletions(-)
+ delete mode 100644 acceptance2-result.txt
+ delete mode 100644 backfill-result.txt
+ delete mode 100644 cryptorank-result.txt
+ delete mode 100644 moralis-result.txt
+ delete mode 100644 push-result.txt
+ delete mode 100644 status.txt
+ delete mode 100644 v0.17.0
+To https://github.com/bloomstarbms/market-radar.git
+   de44f19..2ac5876  main -> main
+DONE 

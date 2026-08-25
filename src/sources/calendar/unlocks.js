@@ -50,6 +50,7 @@ export async function pollUnlocks() {
     // logged, ranked for integration priority, never alerted. The module degrades
     // to silence, not to guessing — a 🔴 directive on an admitted guess was the
     // original defect here.
+    if (t.retired) continue; // positive state, asserted at boot — never alert
     if (!Array.isArray(t.events) || !t.events.length) { estimatedSkipped++; continue; }
     const when = t.date ? new Date(t.date + 'T00:00:00Z') : (t.monthlyDay ? nextMonthlyDate(t.monthlyDay, new Date()) : null);
     if (!when) continue;
@@ -59,7 +60,14 @@ export async function pollUnlocks() {
       if (daysOut !== lead) continue;
       const dateKey = when.toISOString().slice(0, 10);
       const pct = t.pctOfMcap ? ` (~${t.pctOfMcap}% of market cap)` : '';
-      const confidence = t.verified
+      // Provenance stated precisely: an events[]-backed date says HOW it was verified
+      // (contract read / announcement / on-chain backtest), not a generic calendar
+      // claim. The first live push carried 'verified against the public unlock
+      // calendar' on a date that had actually replayed ten times on-chain — underselling
+      // the strongest evidence in the system.
+      const confidence = (Array.isArray(t.events) && t.events.length)
+        ? `Date verified — source: ${t.events[0].source}.`
+        : t.verified
         ? 'Date verified against the public unlock calendar.'
         : '⚠️ Recurring-schedule estimate — confirm the exact date on cryptorank.io/token-unlock.';
       if (await dispatch({

@@ -40,17 +40,36 @@ export async function broadcast(text, { toChannel = true } = {}) {
     else if (r.status === 'fulfilled' && targets[i] === config.telegramChannel)
       console.error('[telegram][OPERATOR] channel post failed — is the bot still admin of ' + config.telegramChannel + '?');
   });
+  // Aug 12 2026 CPI: the T+5m/T+30m alerts fired while the network was down. The
+  // rejected sends landed in allSettled and were never looked at — the alerts were
+  // marked delivered and lost. A total delivery failure must be LOUD, and callers
+  // must be able to see it (empty ids with recipients configured = failed).
+  if (targets.length && !ids.length)
+    console.error(`[telegram][OPERATOR] broadcast: 0/${targets.length} sends succeeded — delivery FAILED (network or Telegram down)`);
   return ids;
 }
 
+// True when a send has someone to reach — distinguishes "delivery failed" (retry)
+// from "nobody subscribed yet" (not a failure, don't retry-loop).
+export function hasRecipients(toChannel = true) {
+  return getState().subscribers.length > 0 || (toChannel && !!config.telegramChannel);
+}
+
+// Returns { ok, networkDown }. Fourth instance of the uninspected-allSettled class:
+// a rejected edit (network down) used to be indistinguishable from Telegram refusing
+// the edit (message too old), so the dispatcher logged the wrong diagnosis.
 export async function editBroadcast(messageIds, text) {
-  if (!messageIds?.length) return false;
+  if (!messageIds?.length) return { ok: false, networkDown: false };
   const res = await Promise.allSettled(messageIds.map(({ chatId, messageId }) =>
     tg('editMessageText', {
       chat_id: chatId, message_id: messageId, text,
       parse_mode: 'HTML', disable_web_page_preview: true,
     })));
-  return res.some((r) => r.status === 'fulfilled' && r.value?.ok);
+  const ok = res.some((r) => r.status === 'fulfilled' && r.value?.ok);
+  const networkDown = !ok && res.every((r) => r.status === 'rejected');
+  if (networkDown)
+    console.error(`[telegram][OPERATOR] edit: all ${res.length} sends rejected — network down, update NOT delivered`);
+  return { ok, networkDown };
 }
 
 async function handleUpdate(u) {

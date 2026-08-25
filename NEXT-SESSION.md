@@ -56,3 +56,20 @@ No `events[]` → module stays silent for that token. That is correct behavior.
 - Etherscan key (free, ethereum only, 3 req/s) supports `eth_call` for reads.
 - ADV accumulator: `state.adv[symbol][YYYY-MM-DD]` since v0.16.2, prune 35d.
 - Three-state discipline live: verified / estimated(silent, logged) / unverifiable.
+
+## Calendar-edit habit (updated v0.20.0)
+Any macro-calendar edit — new date OR tier promotion — is ALSO a wake-timer
+regeneration: run `node gen-wake-timers.js` then SETUP-WAKE-TIMERS.bat.
+STANDARD stages are covered too now (t24h/t5m), not just FULL.
+
+## STANDING ORDER (18 Aug, operator-set)
+The delivery layer is DONE: four boot gates, three named bug classes, 168+
+fixtures, instruments on every quiet path. Marginal value has moved.
+THE NEXT SESSION OPENS WITH THIS FILE — step 6, nothing else, unless there
+is a LIVE INCIDENT (not a refinement). Verified unlock dates are the
+highest-value fact type on the list: dated events with lead time, feeding
+the exact facts pipeline just hardened, and the module has been silent
+since three-state honesty landed. Triage the twelve into buckets A-D
+FIRST (expect ~half in bucket D), then EIGEN — enumerate ALL vesting
+contracts, sum by recipient type — and BACKTEST A PAST CLIFF against
+actual on-chain movement before trusting any forward date.

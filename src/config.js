@@ -13,7 +13,7 @@ if (existsSync(envPath)) {
   }
 }
 
-export const VERSION = '0.17.0';
+export const VERSION = '0.24.3';
 
 export const config = {
   minSeverity: ['LOW','MEDIUM','HIGH'].includes((process.env.ALERT_MIN_SEVERITY || 'LOW').toUpperCase())
@@ -32,6 +32,20 @@ export const config = {
   moralisKey: process.env.MORALIS_API_KEY || '',
   coinmarketcalKey: process.env.COINMARKETCAL_API_KEY || '',
   cryptorankKey: process.env.CRYPTORANK_API_KEY || '',
+  // Tier delivery declarations — read by the boot assertion in core/routes.js.
+  // A tier with no reader is a CONFIG BUG unless it is DECLARED recorded-only here;
+  // that distinction (intent vs accident) is the entire value of the guard, and
+  // without it you would have to route around your own gate to express this.
+  // C is recorded-only by decision (14 Aug): single-factor price signals below the
+  // push bar are still measured — they enter outcomes with their suppression reason
+  // and mult stamp for the FLOORED re-derivation — but they are not worth a daily
+  // message. RECORDED-ONLY MEANS STILL RECORDED.
+  tiers: {
+    A: { push: true, digest: false, record: true },
+    B: { push: true, digest: false, record: true },
+    C: { push: false, digest: false, record: true },
+    D: { push: false, digest: false, record: true },
+  },
   dataDir: join(ROOT, 'data'),
   watchlistPath: join(ROOT, 'watchlist.json'),
 };

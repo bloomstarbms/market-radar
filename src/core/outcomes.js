@@ -1,7 +1,7 @@
 // Outcome tracker: records every tracked alert, then measures price change
 // +1h/+6h/+24h later so signal quality can be judged from data, not vibes.
 // alert.track = { kind:'cex'|'dex', exchange?, symbol?, chainId?, address?, price }
-import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync, copyFileSync, readdirSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync, copyFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { config } from '../config.js';
 import { TRUSTED_QUOTES } from '../sources/dex/dexscreener.js';
@@ -42,17 +42,83 @@ globalThis.__outcomesHook = { allOutcomes };
 
 export function loadOutcomes() {
   mkdirSync(config.dataDir, { recursive: true });
-  if (existsSync(FILE)) rows = JSON.parse(readFileSync(FILE, 'utf8'));
+  if (existsSync(FILE)) { rows = JSON.parse(readFileSync(FILE, 'utf8')); expectedMtime = statSync(FILE).mtimeMs; }
+  // Regime tags are DERIVED, not stored-and-hoped: an earlier file-edit backfill was
+  // silently clobbered by the running bot's save() (lost-update race). The floor's
+  // epoch is self-evident from the data — the first row carrying a suppression
+  // reason — so recompute missing tags on every load. Editing outcomes.json while
+  // the bot runs is forbidden; this makes the tag survive it anyway.
+  const firstSup = Math.min(...rows.filter((r) => r.suppressed).map((r) => r.ts));
+  if (Number.isFinite(firstSup)) {
+    for (const r of rows) r.collectedUnder ??= r.ts < firstSup ? 'UNFILTERED' : 'FLOORED';
+  }
 }
-const save = () => writeFileSync(FILE, JSON.stringify(rows, null, 1));
+// LOST-UPDATE GUARD (structural, not a rule enforced by memory): the regime-tag
+// backfill was clobbered because save() blindly overwrote a file someone else had
+// modified. Now every save checks the file's mtime against the one WE last wrote.
+// Mismatch = external edit (backfill script, OneDrive restore, conflict copy) ->
+// our state goes to a .conflict sidecar and the operator is told, never a clobber.
+let expectedMtime = null;
+function guardedWrite(file, body) {
+  try {
+    if (expectedMtime !== null && existsSync(file)) {
+      const m = statSync(file).mtimeMs;
+      if (Math.abs(m - expectedMtime) > 1) {
+        const side = file + '.conflict-' + Date.now() + '.json';
+        writeFileSync(side, body);
+        console.error(`[outcomes][OPERATOR] ${file} modified externally (mtime drift) — state written to ${side}, reconcile manually. NOT overwriting.`);
+        return;
+      }
+    }
+    writeFileSync(file, body);
+    expectedMtime = statSync(file).mtimeMs;
+  } catch (e) { console.error('[outcomes] save failed:', e.message); }
+}
+const save = () => guardedWrite(FILE, JSON.stringify(rows, null, 1));
+
+// The row literal below is a WHITELIST — deliberate schema control, but it silently
+// discards any field a producer adds and nobody mirrors here. `mult` was dropped that
+// way for two days and was only caught because it happened to be instrumented; the
+// NEXT field would not be, and the discovery would be a query returning nulls weeks
+// later. So: keep the whitelist, make the omission LOUD. Anything a caller supplies
+// that is neither persisted nor deliberately transient is named once per process.
+const ROW_FIELDS = new Set(['ts', 'source', 'type', 'severity', 'title', 'btc', 'results', 'alpha',
+  'suppressed', 'score', 'mult', 'kind', 'collectedUnder', 'rug', 'mfe', 'mae']);
+// Transient by design: routing/formatting inputs that were never meant to persist.
+const NOT_PERSISTED = new Set(['lines', 'url', 'key', 'dedupeKey', 'cooldownMin', 'track',
+  'snapshotTs', 'gate', 'assetClass', 'deferredEval', 'venue', 'delist', 'scoreBonus',
+  'novel', 'would', 'provisional', 'updates', 'tier', 'allow', 'mode', 'charge', 'bypass', 'reason']);
+// Pure, so it can be tested WITHOUT calling recordAlert against the live module —
+// which would push rows into memory and can flush them to the real outcomes file.
+export function droppedFields(a) {
+  return Object.keys(a || {}).filter((k) => !ROW_FIELDS.has(k) && !NOT_PERSISTED.has(k));
+}
+const reportedDrops = new Set();
+function warnDroppedFields(a) {
+  for (const k of droppedFields(a)) {
+    if (reportedDrops.has(k)) continue;
+    reportedDrops.add(k);
+    console.error(`[outcomes][OPERATOR] field '${k}' was supplied to recordAlert but is NOT in the row whitelist — it is being DISCARDED on every write. If it should persist, add it to the row literal AND to ROW_FIELDS in core/outcomes.js; if it is transient, add it to NOT_PERSISTED to silence this.`);
+  }
+}
 
 export function recordAlert(a) {
   if (!a.track?.price) return;
+  warnDroppedFields(a);
   const row = { ts: Date.now(), source: a.source, type: a.type, severity: a.severity,
     title: a.title, ...a.track, btc: 0, results: {}, alpha: {},
     // null when the alert was actually pushed; otherwise the suppression reason, so
     // pushed vs suppressed precision can be compared per module.
     suppressed: a.suppressed ?? null, score: a.score ?? null,
+    // Multiplier AT DECISION TIME (v0.20.2). This row is built from an explicit
+    // WHITELIST, so a field the caller passes but this literal omits is silently
+    // dropped — which is what happened to `mult` for two days: dispatcher stamped it,
+    // recordAlert discarded it, and nothing complained. Any new per-row field must be
+    // added HERE as well as at the call site.
+    mult: a.mult ?? null,
+    // FACT | CALL (v0.23.0) — facts are unscored by design, so without this column a
+    // future analysis cannot tell an unscored fact from a scoring failure.
+    kind: a.kind ?? null,
     // Which sampling regime produced this row. Pre-v0.11 the bot pushed essentially
     // everything, so those rows are an unfiltered census. From v0.11 the floor and
     // budget select what gets pushed, and only the suppression logging keeps the
@@ -158,6 +224,13 @@ export async function checkOutcomes() {
       if (now - r.ts > ms + 2 * 3600e3) { r.results[label] = null; dirty = true; continue; } // too late, skip
       const p = await currentPrice(r);
       r.results[label] = p ? Number((((p - r.price) / r.price) * 100).toFixed(2)) : null;
+      // 3-point path (h1/h6/h24) MFE/MAE — free, since we fetched the price anyway.
+      // Crude, but it is what converts "would a stop/target help" from the path-free
+      // approximation (which says stops HURT here) into a measurable question.
+      if (typeof r.results[label] === 'number') {
+        r.mfe = Math.max(r.mfe ?? -Infinity, r.results[label]);
+        r.mae = Math.min(r.mae ?? Infinity, r.results[label]);
+      }
       // alpha = asset return minus BTC return over the same window
       if (p && r.btc) {
         const nowBtc = await btcPrice();

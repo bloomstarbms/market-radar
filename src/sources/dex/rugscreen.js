@@ -18,6 +18,11 @@ const cache = new Map(); // chain:address -> { at, result }
 
 // Thresholds. GoPlus returns percentages as FRACTIONS ("0.0855" = 8.55%), which is an
 // easy way to be wrong by 100x — keep everything in fraction space here.
+// AUDIT-TRIGGER (trigger 3, REMAINING-WORK-NOTES.md): RUG is a RISK_TYPE with an
+// unconditional budget bypass, and it fires on candidates BLOCKED by these rules —
+// so loosening any of them increases RUG push volume through that bypass. Its low
+// volume today is also contingent on DEX being quiet (REVIVAL silenced; see step 11).
+// Re-run the bypass audit when you tune these.
 export const RULES = {
   maxTaxFraction: Number(process.env.RUG_MAX_TAX || 0.05),
   minLpLocked: Number(process.env.RUG_MIN_LP_LOCKED || 0.80),

@@ -27,6 +27,7 @@ import { config } from '../config.js';
 import { EXCHANGES } from '../sources/cex/exchanges.js';
 import { checkExecutable } from './executability.js';
 import { getState, save } from './store.js';
+import { classifySymbol } from './taxonomy.js';
 
 const SWEEP_H = Number(process.env.UNIVERSE_SWEEP_H || 6);
 const MIN_CANDIDATE_VOL = Number(process.env.UNIVERSE_MIN_VOL || 2_000_000);
@@ -88,7 +89,14 @@ export function startUniverseSweep() {
               // pressure metric we print is pressure_vs_book — book depth and ADV
               // differ by 2+ orders of magnitude, so §4.2's 0.5/2/5 severity bands
               // must NOT be applied to the book-depth proxy.
-              if ((t.quoteVol24h || 0) > 0) {
+              // Leveraged tokens and xStocks must not accumulate ADV: they are not
+              // tradeable universe members, and 429 of 3,061 entries were EXCLUDE-class
+              // before v0.23.5. Harmless to other symbols' denominators, but they
+              // inflated the heartbeat's `adv N cells` figure and made the instrument
+              // less readable — an instrument you have to mentally discount is a
+              // degraded instrument.
+              if ((t.quoteVol24h || 0) > 0
+                  && classifySymbol(String(t.symbol).toUpperCase().replace(/(USDT|USDC|USD|BUSD|KRW|BTC|ETH)$/, '')).state !== 'EXCLUDE') {
                 const a = (st.adv[t.symbol] ??= {});
                 a[today] = Math.max(a[today] || 0, Math.round(t.quoteVol24h));
                 for (const d of Object.keys(a)) if (Date.now() - Date.parse(d) > 35 * 86400e3) delete a[d];

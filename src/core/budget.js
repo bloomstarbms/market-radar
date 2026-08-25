@@ -15,16 +15,31 @@
 // Honest limitation: a true "top 12 of the day" needs lookahead we don't have in a
 // live stream, so this is a pacing approximation. It is strictly better than no cap.
 import { getState, save } from './store.js';
+import { universeVerdict } from './universe.js';
 
 export const DAILY_BUDGET = Number(process.env.ALERT_DAILY_BUDGET || 12);
 const WINDOW_MS = 24 * 3600e3;
 const BASE_SCORE = 55;   // floor: below this nothing is ever worth a push
 const MAX_SCORE = 100;
 
-// Catalysts bypass the budget: their timing is externally scheduled, they are rare
-// (~2/day combined, measured), and a missed listing or unlock is the expensive kind
-// of miss. Everything price/flow-derived is budgeted.
-const BYPASS_TYPES = new Set([
+// RISK tier: position-threatening or externally-scheduled information is never
+// budgeted. Unlocks, macro, cascades, depegs, rugs, listings — a missed one is the
+// expensive kind of miss.
+// FACT types — verifiable statements about the world. NOT scored, NOT tiered, NOT
+// budgeted, NOT subject to multipliers or the ladder. Volume is naturally bounded by
+// how many listings/suspensions/prints actually happen; if facts ever exceed ~25/day
+// the NOISE CLASSIFIER is leaking (promos, equities, duplicates) and that is what to
+// fix — never a cap on facts, which would reintroduce the queue by another name.
+export const FACT_TYPES = new Set([
+  'LISTING', 'ANNOUNCE', 'PERP', 'UPBIT', 'DELIST_SCHEDULED', 'SUSPENSION',
+  'UNLOCK', 'TGE', 'CPI', 'MACRO', 'DEPEG', 'RUG', 'FUNDING', 'CASCADE',
+]);
+export function isFact(alert) {
+  if (alert.kind === 'CALL') return false;      // explicit call wins
+  return alert.kind === 'FACT' || FACT_TYPES.has(alert.type);
+}
+
+const RISK_TYPES = new Set([
   'UPBIT', 'LISTING', 'PERP', 'ANNOUNCE', 'UNLOCK', 'CPI', 'MACRO', 'TGE', 'RUG', 'CASCADE', 'DEPEG',
 ]);
 
@@ -61,10 +76,18 @@ const MIN_SAMPLE = 100;              // §7.3: don't act on a module statistic b
 let precisionCache = { at: 0, mult: {} };
 
 export function modulePrecision(rows) {
+  // One sample per (module, symbol, UTC day). The Aug-9 recording flood left ~673
+  // near-duplicate rows of the same few tokens; counted independently they dragged
+  // REVIVAL's measured precision from 42% to 58% and its multiplier above 1.0 —
+  // duplicated samples masquerading as evidence. Dedup kills that class permanently.
   const tally = {};
+  const seen = new Set();
   for (const r of rows) {
     const a = r.alpha?.h24;
     if (a === undefined || a === null) continue;
+    const key = r.type + ':' + (r.symbol || r.address || '?') + ':' + new Date(r.ts).toISOString().slice(0, 10);
+    if (seen.has(key)) continue;
+    seen.add(key);
     (tally[r.type] ??= { n: 0, w: 0 }).n++;
     if (a > 0) tally[r.type].w++;
   }
@@ -76,21 +99,186 @@ export function modulePrecision(rows) {
   return mult;
 }
 
+// EXPECTANCY basis (v0.18.0) — replaces win-rate as the multiplier's foundation.
+// Win rate is the wrong basis: a 37% hit rate with +9%/-3% payoffs is strongly
+// profitable, and momentum/catalyst strategies characteristically live there.
+// Measured on this corpus the bases DISAGREE on ordering: REVIVAL is worst-but-one
+// on hit rate yet BEST on expectancy (-0.13%/alert, +1.8/-1.4 asymmetry) while
+// DUMP is best on hit rate and fourth on expectancy (worst loss tail, -2.3).
+//   expectancy = p_shrunk x medianWin - (1 - p_shrunk) x |medianLoss|
+// p shrunk with the same Beta(10,10); normalized against ZERO, not 50%.
+// All five are currently negative (-0.13..-0.54) — nothing has an edge yet, which
+// is the empirical case for conjunction scoring stated by the data itself.
+const E_SCALE = Number(process.env.EXPECTANCY_SCALE_PCT || 2); // +2%/alert -> x2 cap region
+
+// COST MODEL (v0.18.2) — every expectancy from here is NET. Stored alphas stay GROSS
+// (raw data is never mutated); costs are applied at analysis time. Round trip =
+// 2x taker + 2x half-spread slippage estimate. Venue taker fees, bps, spot standard
+// tiers; slippage default is conservative for the microcap-heavy corpus.
+// EXCLUDED: perp funding payments and borrow costs — this models a SPOT round
+// trip only. Short-side evaluations must add funding before being believed;
+// on a pumping microcap funding can invert violently (the squeeze scenario).
+const TAKER_BPS = { binance: 10, bybit: 10, kucoin: 10, gate: 20, bitget: 10, mexc: 5 };
+const SLIP_HALF_SPREAD_BPS = Number(process.env.COST_SLIP_BPS || 10);
+export function roundTripCostPct(exchange) {
+  const taker = TAKER_BPS[exchange] ?? 15;
+  return (2 * taker + 2 * SLIP_HALF_SPREAD_BPS) / 100; // in percent
+}
+const MULT_MIN = 0.6, MULT_MAX = 1.4;
+export function moduleExpectancy(rows) {
+  const seen = new Set(), S = {};
+  for (const r of rows) {
+    const a = r.alpha?.h24;
+    if (a === undefined || a === null) continue;
+    const k = r.type + ':' + (r.symbol || r.address || '?') + ':' + new Date(r.ts).toISOString().slice(0, 10);
+    if (seen.has(k)) continue; seen.add(k);
+    const net = a - roundTripCostPct(r.exchange);   // GROSS stored, NET analyzed
+    (S[r.type] ??= { wins: [], losses: [] })[net > 0 ? 'wins' : 'losses'].push(Math.abs(net));
+  }
+  const med = (x) => { if (!x.length) return 0; const s2 = [...x].sort((a, b) => a - b); const m = s2.length >> 1; return s2.length % 2 ? s2[m] : (s2[m - 1] + s2[m]) / 2; };
+  const mult = {}, multRaw = {}, expectancy = {};
+  for (const [t, { wins, losses }] of Object.entries(S)) {
+    const n = wins.length + losses.length;
+    if (n < MIN_SAMPLE) continue;
+    const pWin = (wins.length + PRIOR_A) / (n + PRIOR_A + PRIOR_B);
+    const E = pWin * med(wins) - (1 - pWin) * med(losses);
+    expectancy[t] = { E: Number(E.toFixed(3)), n, floor: floorFor(n) };
+    // UNCLAMPED — for composite weighting (step 8). "How much should this contribute
+    // to a composite" and "can this alone clear the push floor" are different
+    // questions, and one clamped value cannot answer both. Conjunction weights must
+    // inherit live values, not three constants pinned at the floor.
+    // Clamped BELOW AT ZERO, not unbounded: E=-4.79 gives 1+E/E_SCALE = -1.40, and a
+    // NEGATIVE weight would invert a module's contribution to a composite — a claim
+    // ("this module predicts the opposite") that has not been earned and that the
+    // magnitude-not-direction finding argues against. Zero means "contributes
+    // nothing", which is the honest floor for a weight.
+    multRaw[t] = Math.max(0, Math.min(MULT_MAX, 1 + E / E_SCALE));
+    mult[t] = Math.max(floorFor(n), multRaw[t]);
+  }
+  return { mult, multRaw, expectancy };
+}
+
+// A noise floor exists so a THIN, UNCERTAIN estimate cannot zero out a module
+// prematurely. A FIXED 0.6 floor did the opposite: at n=394 PUMP's unclamped
+// multiplier is ~0.08 (E=-4.59) and the floor lifted it 7x, overriding a confident,
+// strongly negative measurement — rescuing, not protecting. Uncertainty is a function
+// of n, so the floor is too: 0.6 while thin (n<100), relaxing toward 0.1 once the
+// estimate has earned confidence (n>=300). Shrinkage already does this continuously;
+// the hard clamp was overriding it, and this restores the intent.
+// DISABLING is the ladder's job (§7.3), not the clamp's — two mechanisms, two
+// distinct jobs, neither pretending to be the other.
+const FLOOR_THIN = Number(process.env.MULT_FLOOR_THIN || 0.6);
+const FLOOR_CONFIDENT = Number(process.env.MULT_FLOOR_CONFIDENT || 0.1);
+const FLOOR_N_LO = 100, FLOOR_N_HI = 300;
+export function floorFor(n) {
+  if (n < FLOOR_N_LO) return FLOOR_THIN;
+  if (n >= FLOOR_N_HI) return FLOOR_CONFIDENT;
+  const w = (n - FLOOR_N_LO) / (FLOOR_N_HI - FLOOR_N_LO);
+  return Number((FLOOR_THIN + (FLOOR_CONFIDENT - FLOOR_THIN) * w).toFixed(4));
+}
+
+// ---- §7.3 ladder: the multiplier scales a module down; the ladder REMOVES it.
+// Negative expectancy for 3 consecutive COMPLETE weeks (each week n>=25 deduped
+// samples) -> TIGHTENED (extra x0.85). Four weeks -> DISABLED: never pushes,
+// still recorded, operator notified. Distinct mechanism from the multiplier.
+const LADDER_WEEK_N = Number(process.env.LADDER_WEEK_MIN_N || 25);
+// `injectedState` makes this testable WITHOUT touching live state: passing one both
+// isolates the ladder map and suppresses the save. Without it the ladder fixture
+// wrote synthetic modules into the running bot's state.json — the same read-only
+// discipline breach that tore outcomes.json in v0.17.
+export function evaluateLadder(rows, injectedState = null) {
+  const weekOf = (ts) => { const d = new Date(ts); const on = new Date(Date.UTC(d.getUTCFullYear(), 0, 1)); return d.getUTCFullYear() + '-' + String(Math.floor((ts - on.getTime()) / (7 * 864e5))).padStart(2, '0'); };
+  const thisWeek = weekOf(Date.now());
+  const seen = new Set(), W = {};
+  for (const r of rows) {
+    const a = r.alpha?.h24; if (a == null) continue;
+    const k = r.type + ':' + (r.symbol || r.address || '?') + ':' + new Date(r.ts).toISOString().slice(0, 10);
+    if (seen.has(k)) continue; seen.add(k);
+    const wk = weekOf(r.ts); if (wk === thisWeek) continue; // complete weeks only
+    ((W[r.type] ??= {})[wk] ??= { wins: [], losses: [] })[a > 0 ? 'wins' : 'losses'].push(Math.abs(a));
+  }
+  const med = (x) => { if (!x.length) return 0; const s2 = [...x].sort((a, b) => a - b); const m = s2.length >> 1; return s2.length % 2 ? s2[m] : (s2[m - 1] + s2[m]) / 2; };
+  const st = injectedState ?? getState(); st.ladder ??= {};
+  for (const [t, weeks] of Object.entries(W)) {
+    // WINDOW OVER QUALIFYING WEEKS, NOT CALENDAR WEEKS (fixed 16 Aug).
+    // Previously: last 4 calendar weeks, with n<25 weeks neither counted as bad nor
+    // excluded — they simply occupied a slot. Measured effect on PUMP: weeks 28/29/31
+    // all negative (E -0.81, -3.13, -11.47) but week 30 had n=17, so bad.length stuck
+    // at 3 and DISABLED was UNREACHABLE. Worse, as weeks advance a thin week dilutes
+    // the window and can silently REVERT TIGHTENED -> OK with no improvement in
+    // performance. A quiet market or a day of downtime therefore acted as a permanent
+    // shield against the ladder — which is why the expectancy clamp had become
+    // load-bearing. "Complete week" must mean "enough samples to judge", so thin weeks
+    // are dropped from the window entirely rather than filling it.
+    const qualifying = Object.keys(weeks).sort().filter((wk) => {
+      const { wins, losses } = weeks[wk];
+      return wins.length + losses.length >= LADDER_WEEK_N;
+    }).slice(-4);
+    const bad = qualifying.filter((wk) => {
+      const { wins, losses } = weeks[wk]; const n = wins.length + losses.length;
+      const p = (wins.length + PRIOR_A) / (n + PRIOR_A + PRIOR_B);
+      return (p * med(wins) - (1 - p) * med(losses)) < 0;
+    });
+    const prev = st.ladder[t]?.status || 'OK';
+    const next = bad.length >= 4 ? 'DISABLED' : bad.length >= 3 ? 'TIGHTENED' : 'OK';
+    if (next !== prev) {
+      st.ladder[t] = { status: next, since: Date.now(), badWeeks: bad.length };
+      console.error('[ladder][OPERATOR] ' + t + ': ' + prev + ' -> ' + next + ' (' + bad.length + ' consecutive negative-expectancy weeks)');
+      if (!injectedState) save();   // never persist a test's synthetic ladder
+    }
+  }
+  return st.ladder;
+}
+// Test-only ladder injection, same shape as withMultipliers and for the same reason:
+// the boot self-test was hermetic against multipliers but still read the LIVE ladder,
+// so when the windowing fix let PUMP/DUMP reach DISABLED for real (21 Aug — the
+// ladder doing its job), the self-test's PUMP cases dropped as ladder-disabled and
+// the gate crash-looped the bot on a DATA state, not a code defect. Any live state a
+// gate reads is a clock that will eventually strike; inject all of it.
+let ladderOverride = null;
+export function withLadder(map, fn) {
+  ladderOverride = map;
+  try { return fn(); } finally { ladderOverride = null; }
+}
+export function ladderStatus(type) {
+  if (ladderOverride) return ladderOverride[type] || 'OK';
+  return (getState().ladder || {})[type]?.status || 'OK';
+}
+
 // Refreshed hourly from the live outcomes table so the loop stays closed as data grows.
-function multipliers() {
+export function multipliers() {
   if (Date.now() - precisionCache.at < 3600e3) return precisionCache.mult;
   let mult = precisionCache.mult;
   try {
     const { allOutcomes } = globalThis.__outcomesHook ?? {};
-    if (allOutcomes) mult = modulePrecision(allOutcomes());
+    if (allOutcomes) {
+      const rows = allOutcomes();
+      mult = moduleExpectancy(rows).mult;
+      const ladder = evaluateLadder(rows);
+      for (const [t, l] of Object.entries(ladder)) if (l.status === 'TIGHTENED' && mult[t]) mult[t] *= 0.85;
+    }
   } catch { /* keep last known */ }
   precisionCache = { at: Date.now(), mult };
   return mult;
 }
 
+// Test-only multiplier injection, so the BOOT SELF-TEST is hermetic. Without it the
+// gate's verdict depended on live multipliers: a fresh/restored data dir (multiplier
+// 1.0) scored FUNDING-MEDIUM above the floor and FAILED BOOT — blocking startup
+// precisely in the restore-from-backup scenario the backups exist for — and a
+// multiplier drifting across the 55 boundary could fail a Tuesday boot with no code
+// change. A guard that fails for non-code reasons eventually gets commented out.
+// The gate asserts LOGIC with injected multipliers; live-data conditions are a
+// separate NON-FATAL diagnostic in index.js.
+let multOverride = null;
+export function withMultipliers(map, fn) {
+  multOverride = map;
+  try { return fn(); } finally { multOverride = null; }
+}
+
 export function scoreOf(alert) {
   const base = MODULE_SCORE[alert.type] ?? 50;
-  const m = multipliers()[alert.type] ?? 1;
+  const m = (multOverride ?? multipliers())[alert.type] ?? 1;
   const weighted = base * m;
   return Math.max(0, Math.min(100, weighted + (SEV_ADJ[alert.severity] ?? 0) + (alert.scoreBonus ?? 0)));
 }
@@ -132,19 +320,41 @@ function spentIn24h() {
   return st.budgetLog.length;
 }
 
-// Required score rises with the fraction of budget already spent. Power curve so the
-// bar climbs slowly at first, then hard — 6 of 12 spent needs 71, 10 of 12 needs 89.
-export function requiredScore() {
-  const used = spentIn24h();
-  if (used >= DAILY_BUDGET) return Infinity;
-  const frac = used / DAILY_BUDGET;
-  return BASE_SCORE + (MAX_SCORE - BASE_SCORE) * Math.pow(frac, 1.5);
-}
-
+// CIRCUIT-BREAKER SEMANTICS (replaces the escalating counter).
+//
+// "Top 12 of the day" is unimplementable online: irreversible push decisions are made
+// one at a time, so a better 18:00 alert has nowhere to go once noon spent the cap.
+// And NOTHING IS EVER DEFERRED — a late alert is worse than a silent one (same rule
+// as macro's `missed` stages). So the budget is not the quality gate; the conviction
+// floor is. The budget only exists for the day the floor FAILS:
+//
+//   RISK types  — never budgeted (position-threatening / externally scheduled)
+//   A-tier      — never budgeted; rare by construction. If A floods, the scorer is
+//                 broken and the fix is upstream, not a cap.
+//   B-tier      — hard cap on a ROLLING 24h window (no midnight cliff)
+//   C-tier      — digest-only, never a push, so outside the question entirely
+//
+// A breaker that trips regularly is not protecting anything — it is diagnosing
+// miscalibration upstream. Hence the operator log on consecutive bound days.
 function chargeBudget() {
   const st = getState();
   st.budgetLog ??= [];
   st.budgetLog.push(Date.now());
+}
+
+function noteBudgetBound() {
+  const st = getState();
+  const today = new Date().toISOString().slice(0, 10);
+  st.budgetBound ??= [];
+  if (!st.budgetBound.includes(today)) st.budgetBound.push(today);
+  st.budgetBound = st.budgetBound.slice(-10);
+  // consecutive-day check
+  let run = 0;
+  for (let i = 0; ; i++) {
+    const d = new Date(Date.now() - i * 86400e3).toISOString().slice(0, 10);
+    if (st.budgetBound.includes(d)) run++; else break;
+  }
+  if (run >= 3) console.error(`[budget][OPERATOR] B-tier budget bound ${run} days running — the conviction floor is too low; recalibrate upstream, do not raise the cap.`);
 }
 
 // ---------------------------------------------------------------- recurrence
@@ -241,7 +451,7 @@ export function classifyArrival(alert) {
   return 'escalate';
 }
 
-export function openThread(alert, score, messageIds) {
+export function openThread(alert, score, messageIds, charge = false) {
   const st = getState();
   st.threads ??= {};
   st.threads[threadKey(alert)] = {
@@ -250,7 +460,7 @@ export function openThread(alert, score, messageIds) {
     modules: [alert.type], score, messageIds: messageIds || [], updates: 0,
   };
   noteFire(alert);
-  chargeBudget();
+  if (charge) chargeBudget();
   save();
 }
 
@@ -285,17 +495,52 @@ export function resolveThread(symbol, direction, verdict) {
 // ---------------------------------------------------------------- entry point
 // Returns { allow, mode, score, tier, reason }
 export function admit(alert) {
+  // CANONICAL v0.19.0 admit — rewritten wholesale after discovering the v0.17.1
+  // tier-semantics tail was never installed: a patch ordering bug deleted the line
+  // its match text began with, the replace silently no-opped, and the tail kept
+  // referencing an undefined `bypass` and a deleted requiredScore(). Runtime
+  // ReferenceError for any candidate reaching it; RISK pushes survived only by
+  // returning earlier. Lesson: string-replace patches fail SILENTLY — verify the
+  // installed function, not the patch exit code.
+  // ---------------------------------------------------------------- FACTS (v0.23.0)
+  // A FACT is a verifiable statement about the world: a pair listed, deposits
+  // suspended, funding is at X%, CPI printed Y. A CALL asserts direction.
+  //
+  // Every expectancy number this project measured answers "is this TRADEABLE".
+  // "Shorts are paying longs 1.02%/8h" is true regardless of whether trading it
+  // makes money — the measurement never argued against being TOLD. Scoring a fact
+  // was a category error: conviction is a property of a prediction, and printing
+  // "conviction 78" on "MEXC listed PLUMBER" asserted something we never meant.
+  //
+  // So facts skip the entire apparatus built to judge calls — score, tier,
+  // multipliers, ladder, budget — while KEEPING the mechanisms that stop repetition
+  // (recurrence suppression, module cooldown, thread escalation). Those are about
+  // saying the same thing twice, which applies to facts as much as calls.
+  if (isFact(alert)) {
+    if (isSuppressed(alert)) {
+      logDrop(alert, 'recurrence-suppressed');
+      return { allow: false, reason: 'recurrence-suppressed', kind: 'FACT' };
+    }
+    const fArrival = classifyArrival(alert);
+    if (fArrival === 'cooldown-module') {
+      logDrop(alert, 'cooldown-module', '6h same symbol+module');
+      return { allow: false, reason: 'cooldown-module', kind: 'FACT' };
+    }
+    if (fArrival === 'escalate') return { allow: true, mode: 'escalate', kind: 'FACT' };
+    return { allow: true, mode: 'new', kind: 'FACT', charge: false };
+  }
+
   const score = scoreOf(alert);
   const tier = tierOf(score);
   if (alert.source === 'SYS') return { allow: true, mode: 'new', score, tier };
 
+  if (ladderStatus(alert.type) === 'DISABLED' && !RISK_TYPES.has(alert.type)) {
+    logDrop(alert, 'ladder-disabled');
+    return { allow: false, reason: 'ladder-disabled', score, tier: 'D' };
+  }
   if (isSuppressed(alert)) {
     logDrop(alert, 'recurrence-suppressed');
     return { allow: false, reason: 'recurrence-suppressed', score, tier };
-  }
-  if (tier === 'D') {
-    logDrop(alert, 'below-floor', `score ${score.toFixed(0)} < ${BASE_SCORE}`);
-    return { allow: false, reason: 'below-floor', score, tier };
   }
 
   const arrival = classifyArrival(alert);
@@ -303,24 +548,48 @@ export function admit(alert) {
     logDrop(alert, 'cooldown-module', '6h same symbol+module');
     return { allow: false, reason: 'cooldown-module', score, tier };
   }
-  if (arrival === 'escalate') {
-    // Updates ride the existing thread and cost nothing from the budget.
-    return { allow: true, mode: 'escalate', score, tier };
+  if (arrival === 'escalate') return { allow: true, mode: 'escalate', score, tier };
+
+  // RISK types and A-tier bypass the budget entirely (circuit-breaker semantics).
+  if (RISK_TYPES.has(alert.type) || tier === 'A') {
+    return { allow: true, mode: 'new', score, tier, bypass: true, charge: false };
   }
 
-  const bypass = BYPASS_TYPES.has(alert.type);
-  if (!bypass) {
-    const need = requiredScore();
-    if (score < need) {
-      logDrop(alert, 'budget', `score ${score.toFixed(0)} < required ${need === Infinity ? '∞ (budget spent)' : need.toFixed(0)}`);
+  // PROVISIONAL GATED-POPULATION PATH — sits ABOVE the floor deliberately: post-cost
+  // multipliers score every single-factor HIGH as tier D, so a check below the floor
+  // is dead code (exactly how the digest went structurally empty). Gate-passing HIGH
+  // singles push at B (budget-capped), tagged provisional, because the evidence that
+  // silenced them was measured on a sub-gate population and gated n can never reach
+  // 100 if they never push. EXIT: gated expectancy decides at n>=100 per module.
+  const PROVISIONAL_TYPES = new Set(['PUMP', 'DUMP', 'FUNDING', 'VOLUME', 'REVIVAL', 'WHALE', 'MULTIEX']);
+  if (alert.severity === 'HIGH' && PROVISIONAL_TYPES.has(alert.type)
+      && alert.track?.exchange && alert.track?.symbol
+      && universeVerdict(alert.track.exchange, alert.track.symbol) === 'PASS') {
+    if (spentIn24h() >= DAILY_BUDGET) {
+      noteBudgetBound();
+      logDrop(alert, 'budget', `provisional B cap ${DAILY_BUDGET}/24h`);
       return { allow: false, reason: 'budget', score, tier };
     }
+    return { allow: true, mode: 'new', score, tier: 'B', charge: true, provisional: true };
   }
-  return { allow: true, mode: 'new', score, tier, bypass };
+
+  if (tier === 'D') {
+    logDrop(alert, 'below-floor', `score ${score.toFixed(0)} < ${BASE_SCORE}`);
+    return { allow: false, reason: 'below-floor', score, tier };
+  }
+  if (tier === 'C') {
+    logDrop(alert, 'digest-only', `C-tier score ${score.toFixed(0)}`);
+    return { allow: false, reason: 'digest-only', score, tier };
+  }
+  // B-tier: hard cap, rolling 24h.
+  if (spentIn24h() >= DAILY_BUDGET) {
+    noteBudgetBound();
+    logDrop(alert, 'budget', `B-tier cap ${DAILY_BUDGET}/24h reached`);
+    return { allow: false, reason: 'budget', score, tier };
+  }
+  return { allow: true, mode: 'new', score, tier, charge: true };
 }
 
 export function budgetStatus() {
-  const used = spentIn24h();
-  const need = requiredScore();
-  return { used, limit: DAILY_BUDGET, required: need === Infinity ? null : Math.round(need) };
+  return { used: spentIn24h(), limit: DAILY_BUDGET, scope: 'B-tier only' };
 }

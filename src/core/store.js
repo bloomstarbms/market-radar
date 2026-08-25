@@ -15,7 +15,13 @@ export function load() {
 // throw EBUSY and abort the whole poll. Write to a temp file, then swap it in; if the
 // swap is blocked, retry a few times and give up quietly — state is rewritten constantly.
 export function save() {
-  const tmp = `${FILE}.tmp`;
+  // PER-PROCESS temp name. A FIXED `.tmp` meant any second writer — a replay script,
+  // a fixture, a second bot instance after a bad restart — shared one scratch file
+  // with the running bot: process A writes tmp, process B writes the same tmp and
+  // renames it away, and A's rename throws ENOENT with a half-written state on disk.
+  // Observed as a suite crash on 17 Aug while the bot was live. Unique names make
+  // concurrent writers independent, and rename stays atomic per writer.
+  const tmp = `${FILE}.${process.pid}.tmp`;
   const body = JSON.stringify(state, null, 2);
   for (let i = 0; i < 4; i++) {
     try { writeFileSync(tmp, body); renameSync(tmp, FILE); return; }

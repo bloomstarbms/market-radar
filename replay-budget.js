@@ -26,7 +26,7 @@ for (const [t,{n,w}] of Object.entries(tally)) if (n>=100) MULT[t] = ((w+10)/(n+
 const score = (r) => Math.max(0, Math.min(100, (MODULE_SCORE[r.type] ?? 50) * (MULT[r.type] ?? 1) + (SEV_ADJ[r.severity] ?? 0)));
 
 const spent = () => { state.budgetLog = state.budgetLog.filter((t) => t >= NOW - WINDOW); return state.budgetLog.length; };
-const required = () => { const u = spent(); return u >= DAILY_BUDGET ? Infinity : BASE + (MAX - BASE) * Math.pow(u / DAILY_BUDGET, 1.5); };
+const tierOf = (s) => s >= 85 ? 'A' : s >= 70 ? 'B' : s >= BASE ? 'C' : 'D';
 const symOf = (r) => r.symbol || r.address || r.title;
 const dirOf = (r) => (['DUMP', 'RUG'].includes(r.type) ? 'DOWN' : 'UP');
 const rkey = (r) => `${r.type}:${symOf(r)}`;
@@ -49,13 +49,18 @@ for (const r of rows.sort((a, b) => a.ts - b.ts)) {
     th.lastTs = NOW; th.updates++; if (!th.modules.includes(r.type)) th.modules.push(r.type);
     out.updated++; continue;
   }
-  if (!BYPASS.has(r.type) && s < required()) { drop('budget'); continue; }
+  // v0.17.1 circuit-breaker semantics: RISK & A bypass; B hard-capped; C digest-only.
+  const tier = tierOf(s);
+  if (!BYPASS.has(r.type) && tier !== 'A') {
+    if (tier === 'C') { drop('digest-only'); continue; }
+    if (spent() >= DAILY_BUDGET) { drop('budget'); continue; }
+    state.budgetLog.push(NOW); // charge B
+  }
 
   state.threads[tk] = { lastTs: NOW, modules: [r.type], updates: 0 };
   const hits = (state.recur[rkey(r)] || []).filter((t) => t >= NOW - 7 * 24 * 3600e3);
   hits.push(NOW); state.recur[rkey(r)] = hits;
   if (hits.length > 3) state.suppressed[rkey(r)] = NOW + 30 * 24 * 3600e3;
-  state.budgetLog.push(NOW);
   out.sent++;
 }
 

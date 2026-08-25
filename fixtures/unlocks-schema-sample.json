@@ -1,0 +1,50 @@
+{
+ "comment": "FROZEN copy of the real unlocks.json schema (trimmed) for the end-to-end loader fixture. The loadUnlockEvents bug — wrong path + array-as-object — survived weeks of passing hermetic fixtures because nothing ever exercised the loader against the real format. Gates stay hermetic; ONE path test per module proves the plumbing exists.",
+ "tokens": [
+  {
+   "sym": "EIGEN",
+   "name": "EigenCloud",
+   "monthlyDay": 30,
+   "pctOfMcap": 4.97,
+   "verified": true,
+   "note": "Custody-held (BitGo WalletSimple x21, 484M family). Announced 1yr-lock-then-monthly schedule BACKTESTED on-chain: 10 consecutive month-end distributions Oct 30 2025 - Jul 30 2026, ~9.6M EIGEN/mo aggregate (largest wallet 7.95M/mo on the 30th). Largest wallet (176.7M) mostly dormant = later tranches.",
+   "events": [
+    {
+     "date": "2026-08-30",
+     "source": "announcement+onchain-backtest",
+     "detail": "Monthly custody distribution, ~9.5M EIGEN observed last cycle. Backtest: eth wallets 0x3De6b6b1/0x34BcF805 outbound transfers, monthly on the 30th (28th/29th short months) since 2025-10-30."
+    }
+   ]
+  },
+  {
+   "sym": "ARB",
+   "name": "Arbitrum",
+   "monthlyDay": 16,
+   "note": "Team+investor linear vesting, 92.65M ARB monthly on the 16th, runs through 2027. Publicly documented since launch; hundreds of on-chain vesting wallets (bucket C) — contract enumeration deferred, announcement path used.",
+   "verified": true,
+   "events": [
+    {
+     "date": "2026-09-16",
+     "source": "announcement",
+     "detail": "92.65M ARB monthly (team/advisors/investors), 16th of each month per Arbitrum published schedule; Aug 16 2026 event occurred as scheduled (multiple public confirmations)."
+    }
+   ]
+  },
+  {
+   "sym": "INJ",
+   "name": "Injective",
+   "note": "RETIRED: fully unlocked since Jan 2024 (all vesting complete; deflationary buybacks). retired field is a POSITIVE state asserted at boot — re-adding events/monthlyDay from a stale aggregator list fails startup instead of silently reviving the token.",
+   "verified": false,
+   "retired": "fully-unlocked",
+   "retiredAt": "2026-08-21"
+  },
+  {
+   "sym": "ZETA",
+   "name": "ZetaChain",
+   "monthlyDay": 1,
+   "pctOfMcap": 3.21,
+   "verified": true,
+   "note": "~$1.4M/mo, thin liquidity L1"
+  }
+ ]
+}

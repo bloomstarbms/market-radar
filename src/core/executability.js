@@ -16,6 +16,11 @@ import { config } from '../config.js';
 const CACHE_MS = 5 * 60e3;
 const cache = new Map(); // exch:symbol -> { at, result }
 
+// AUDIT-TRIGGER: a BYPASS depends on these numbers. The tier-2 delist proxy pushes
+// only on symbols this gate marks tradeable (standing in for position awareness until
+// cross-cutting B lands), so moving minExecutableUsd silently moves which delist
+// sweeps reach you. Changing anything here = re-run the bypass audit in
+// REMAINING-WORK-NOTES.md ("unconditional bypass wearing a justification"), trigger 3.
 export const GATE = {
   minExecutableUsd: Number(process.env.GATE_MIN_EXEC_USD || 25_000),
   maxSlippageBps: Number(process.env.GATE_SLIPPAGE_BPS || 50),

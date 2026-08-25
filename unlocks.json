@@ -1,42 +1,232 @@
 {
-  "comment": "Token unlock watchlist. Two entry types: 'monthlyDay' = recurring cliff on that day each month (most vesting contracts release monthly); 'date' = one-off YYYY-MM-DD. Bot pings 7 days and 3 days before. verified:true = confirmed against cryptorank.io/token-unlock on 2026-08-01; others are recurring-schedule estimates — check the date on cryptorank before acting.",
-  "source": "https://cryptorank.io/token-unlock (free public page)",
-  "lastReviewed": "2026-08-01",
-  "tokens": [
-    { "sym": "EIGEN", "name": "EigenCloud", "monthlyDay": 1, "pctOfMcap": 4.97, "verified": true, "note": "~$6.7M/mo, heavy VC+team vesting" },
-    { "sym": "ZETA", "name": "ZetaChain", "monthlyDay": 1, "pctOfMcap": 3.21, "verified": true, "note": "~$1.4M/mo, thin liquidity L1" },
-    { "sym": "HOOK", "name": "Hooked Protocol", "monthlyDay": 1, "pctOfMcap": 5.75, "verified": true, "note": "very high % of small mcap" },
-    { "sym": "MAV", "name": "Maverick Protocol", "monthlyDay": 1, "pctOfMcap": 1.32, "verified": true },
-    { "sym": "RLS", "name": "Rayls", "monthlyDay": 1, "pctOfMcap": 3.56, "verified": true, "note": "only 20% circulating — 80% still locked" },
-
-    { "sym": "STRK", "name": "Starknet", "monthlyDay": 15, "note": "L2, large monthly cliff vs thin volume — top risk" },
-    { "sym": "ARB", "name": "Arbitrum", "monthlyDay": 16, "note": "L2, team+investor monthly release" },
-    { "sym": "OP", "name": "Optimism", "monthlyDay": 30, "note": "L2 monthly unlock" },
-    { "sym": "ZK", "name": "zkSync", "monthlyDay": 17, "note": "L2, huge FDV vs float" },
-    { "sym": "MANTA", "name": "Manta Network", "monthlyDay": 18, "note": "L2, low float high unlock ratio" },
-    { "sym": "TAIKO", "name": "Taiko", "monthlyDay": 5, "note": "L2, thin liquidity" },
-    { "sym": "SCR", "name": "Scroll", "monthlyDay": 22, "note": "L2, post-TGE vesting" },
-    { "sym": "BLAST", "name": "Blast", "monthlyDay": 26, "note": "L2, heavy airdrop+VC overhang" },
-    { "sym": "METIS", "name": "Metis", "monthlyDay": 8, "note": "L2, very low volume vs unlock size" },
-    { "sym": "CYBER", "name": "Cyber", "monthlyDay": 15, "note": "L2/social, small float" },
-    { "sym": "IMX", "name": "Immutable X", "monthlyDay": 7, "note": "L2 gaming" },
-
-    { "sym": "SUI", "name": "Sui", "monthlyDay": 1, "note": "L1, large monthly emission" },
-    { "sym": "SEI", "name": "Sei", "monthlyDay": 15, "note": "L1, ongoing vesting" },
-    { "sym": "APT", "name": "Aptos", "monthlyDay": 12, "note": "L1, big monthly cliff" },
-    { "sym": "TIA", "name": "Celestia", "monthlyDay": 30, "note": "L1, investor unlocks weigh heavily" },
-    { "sym": "DYM", "name": "Dymension", "monthlyDay": 6, "note": "L1, low volume + high unlock % — top risk" },
-    { "sym": "SAGA", "name": "Saga", "monthlyDay": 8, "note": "L1, thin book" },
-    { "sym": "BERA", "name": "Berachain", "monthlyDay": 6, "note": "new L1, first cliffs" },
-    { "sym": "MOVE", "name": "Movement", "monthlyDay": 9, "note": "new L1, heavy vesting" },
-    { "sym": "INJ", "name": "Injective", "monthlyDay": 20 },
-    { "sym": "S", "name": "Sonic", "monthlyDay": 3, "note": "rebranded L1" },
-
-    { "sym": "W", "name": "Wormhole", "monthlyDay": 3, "note": "high FDV, big cliffs" },
-    { "sym": "JUP", "name": "Jupiter", "monthlyDay": 31, "note": "large team/airdrop tranches" },
-    { "sym": "ENA", "name": "Ethena", "monthlyDay": 2, "note": "big investor unlocks" },
-    { "sym": "ALT", "name": "AltLayer", "monthlyDay": 25, "note": "low float, high unlock ratio — top risk" },
-    { "sym": "ZRO", "name": "LayerZero", "monthlyDay": 20, "note": "heavy VC vesting" },
-    { "sym": "PYTH", "name": "Pyth Network", "monthlyDay": 20, "note": "large scheduled tranches" }
-  ]
+ "comment": "Token unlock watchlist. Two entry types: 'monthlyDay' = recurring cliff on that day each month (most vesting contracts release monthly); 'date' = one-off YYYY-MM-DD. Bot pings 7 days and 3 days before. verified:true = confirmed against cryptorank.io/token-unlock on 2026-08-01; others are recurring-schedule estimates — check the date on cryptorank before acting.",
+ "source": "https://cryptorank.io/token-unlock (free public page)",
+ "lastReviewed": "2026-08-21 (step 6 session: EIGEN backtested on-chain; ARB/STRK announcement-verified; INJ retired)",
+ "tokens": [
+  {
+   "sym": "EIGEN",
+   "name": "EigenCloud",
+   "monthlyDay": 30,
+   "verified": true,
+   "note": "Custody-held (BitGo WalletSimple x21, 484M family). Announced 1yr-lock-then-monthly schedule BACKTESTED on-chain: 10 consecutive month-end distributions Oct 30 2025 - Jul 30 2026, ~9.6M EIGEN/mo aggregate (largest wallet 7.95M/mo on the 30th). Largest wallet (176.7M) mostly dormant = later tranches.",
+   "events": [
+    {
+     "date": "2026-08-30",
+     "source": "announcement+onchain-backtest",
+     "detail": "Monthly custody distribution, ~9.5M EIGEN observed last cycle. Backtest: eth wallets 0x3De6b6b1/0x34BcF805 outbound transfers, monthly on the 30th (28th/29th short months) since 2025-10-30."
+    }
+   ]
+  },
+  {
+   "sym": "ZETA",
+   "name": "ZetaChain",
+   "monthlyDay": 1,
+   "pctOfMcap": 3.21,
+   "verified": true,
+   "note": "~$1.4M/mo, thin liquidity L1"
+  },
+  {
+   "sym": "HOOK",
+   "name": "Hooked Protocol",
+   "monthlyDay": 1,
+   "pctOfMcap": 5.75,
+   "verified": true,
+   "note": "very high % of small mcap"
+  },
+  {
+   "sym": "MAV",
+   "name": "Maverick Protocol",
+   "monthlyDay": 1,
+   "pctOfMcap": 1.32,
+   "verified": true
+  },
+  {
+   "sym": "RLS",
+   "name": "Rayls",
+   "monthlyDay": 1,
+   "pctOfMcap": 3.56,
+   "verified": true,
+   "note": "only 20% circulating — 80% still locked"
+  },
+  {
+   "sym": "STRK",
+   "name": "Starknet",
+   "monthlyDay": 15,
+   "note": "Vesting on Starknet L2 (no eth_call path in our stack). Project docs: up to 127M STRK on the 15th monthly, Apr 2025 through Mar 15 2027 (docs.starknet.io).",
+   "verified": true,
+   "events": [
+    {
+     "date": "2026-09-15",
+     "source": "announcement",
+     "detail": "127M STRK monthly on the 15th per Starknet documentation (core contributors + investors), through 2027-03-15."
+    }
+   ]
+  },
+  {
+   "sym": "ARB",
+   "name": "Arbitrum",
+   "monthlyDay": 16,
+   "note": "Team+investor linear vesting, 92.65M ARB monthly on the 16th, runs through 2027. Publicly documented since launch; hundreds of on-chain vesting wallets (bucket C) — contract enumeration deferred, announcement path used.",
+   "verified": true,
+   "events": [
+    {
+     "date": "2026-09-16",
+     "source": "announcement",
+     "detail": "92.65M ARB monthly (team/advisors/investors), 16th of each month per Arbitrum published schedule; Aug 16 2026 event occurred as scheduled (multiple public confirmations)."
+    }
+   ]
+  },
+  {
+   "sym": "OP",
+   "name": "Optimism",
+   "monthlyDay": 30,
+   "note": "L2 monthly unlock"
+  },
+  {
+   "sym": "ZK",
+   "name": "zkSync",
+   "monthlyDay": 17,
+   "note": "L2, huge FDV vs float"
+  },
+  {
+   "sym": "MANTA",
+   "name": "Manta Network",
+   "monthlyDay": 18,
+   "note": "L2, low float high unlock ratio"
+  },
+  {
+   "sym": "TAIKO",
+   "name": "Taiko",
+   "monthlyDay": 5,
+   "note": "L2, thin liquidity"
+  },
+  {
+   "sym": "SCR",
+   "name": "Scroll",
+   "monthlyDay": 22,
+   "note": "L2, post-TGE vesting"
+  },
+  {
+   "sym": "BLAST",
+   "name": "Blast",
+   "monthlyDay": 26,
+   "note": "L2, heavy airdrop+VC overhang"
+  },
+  {
+   "sym": "METIS",
+   "name": "Metis",
+   "monthlyDay": 8,
+   "note": "L2, very low volume vs unlock size"
+  },
+  {
+   "sym": "CYBER",
+   "name": "Cyber",
+   "monthlyDay": 15,
+   "note": "L2/social, small float"
+  },
+  {
+   "sym": "IMX",
+   "name": "Immutable X",
+   "monthlyDay": 7,
+   "note": "L2 gaming"
+  },
+  {
+   "sym": "SUI",
+   "name": "Sui",
+   "monthlyDay": 1,
+   "note": "L1, large monthly emission"
+  },
+  {
+   "sym": "SEI",
+   "name": "Sei",
+   "monthlyDay": 15,
+   "note": "L1, ongoing vesting"
+  },
+  {
+   "sym": "APT",
+   "name": "Aptos",
+   "monthlyDay": 12,
+   "note": "L1, big monthly cliff"
+  },
+  {
+   "sym": "TIA",
+   "name": "Celestia",
+   "monthlyDay": 30,
+   "note": "L1, investor unlocks weigh heavily"
+  },
+  {
+   "sym": "DYM",
+   "name": "Dymension",
+   "monthlyDay": 6,
+   "note": "L1, low volume + high unlock % — top risk"
+  },
+  {
+   "sym": "SAGA",
+   "name": "Saga",
+   "monthlyDay": 8,
+   "note": "L1, thin book"
+  },
+  {
+   "sym": "BERA",
+   "name": "Berachain",
+   "monthlyDay": 6,
+   "note": "new L1, first cliffs"
+  },
+  {
+   "sym": "MOVE",
+   "name": "Movement",
+   "monthlyDay": 9,
+   "note": "new L1, heavy vesting"
+  },
+  {
+   "sym": "INJ",
+   "name": "Injective",
+   "note": "RETIRED: fully unlocked since Jan 2024 (all vesting complete; deflationary buybacks). retired field is a POSITIVE state asserted at boot — re-adding events/monthlyDay from a stale aggregator list fails startup instead of silently reviving the token.",
+   "verified": false,
+   "retired": "fully-unlocked",
+   "retiredAt": "2026-08-21"
+  },
+  {
+   "sym": "S",
+   "name": "Sonic",
+   "monthlyDay": 3,
+   "note": "rebranded L1"
+  },
+  {
+   "sym": "W",
+   "name": "Wormhole",
+   "monthlyDay": 3,
+   "note": "high FDV, big cliffs"
+  },
+  {
+   "sym": "JUP",
+   "name": "Jupiter",
+   "monthlyDay": 31,
+   "note": "large team/airdrop tranches"
+  },
+  {
+   "sym": "ENA",
+   "name": "Ethena",
+   "monthlyDay": 2,
+   "note": "big investor unlocks"
+  },
+  {
+   "sym": "ALT",
+   "name": "AltLayer",
+   "monthlyDay": 25,
+   "note": "low float, high unlock ratio — top risk"
+  },
+  {
+   "sym": "ZRO",
+   "name": "LayerZero",
+   "monthlyDay": 20,
+   "note": "heavy VC vesting"
+  },
+  {
+   "sym": "PYTH",
+   "name": "Pyth Network",
+   "monthlyDay": 20,
+   "note": "large scheduled tranches"
+  }
+ ]
 }

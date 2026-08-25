@@ -1,0 +1,32 @@
+{
+  "note": "FROZEN capture of a reference announcement channel, 13/08/2026 10:46 -> 14/08/2026 08:01 (21h, 24 messages). Permanent acceptance fixture for the v0.23.0 FACT/CALL split: asserts what we PUSH as facts and what we SUPPRESS as noise/equity/duplicate. Frozen (not re-fetched) because a live feed is an environment fact and would make the assertion fail for non-code reasons.",
+  "expect": { "pushedFacts": [8, 11], "sourceMessages": 24 },
+  "messages": [
+    { "at": "10:46", "venue": "bybit", "title": "New listing: NESAUSDT Perpetual Contract, with up to 25x leverage", "want": "PUSH", "as": "PERP" },
+    { "at": "12:01", "venue": "bybit", "title": "New Listing: KII/USDT Spot Trading", "want": "PUSH", "as": "LISTING" },
+    { "at": "13:27", "venue": "kucoin", "title": "KII (KiiChain) Gets Listed on KuCoin — Spot Trading", "want": "ESCALATE", "as": "LISTING" },
+    { "at": "14:36", "venue": "bitget", "title": "Bitget Will List KII (KiiChain) for Spot Trading", "want": "ESCALATE", "as": "LISTING" },
+    { "at": "15:02", "venue": "bitget", "title": "Bitget Will List CYS/USDT Margin Trading Pair", "want": "PUSH", "as": "LISTING" },
+    { "at": "16:20", "venue": "bithumb", "title": "POKT Deposit and Withdrawal Suspension Notice (resumes 18/08 18:00 KST)", "want": "PUSH", "as": "SUSPENSION", "routine": true },
+    { "at": "16:24", "venue": "bithumb", "title": "ALLO Deposit and Withdrawal Suspension Notice (resumes 18/08 18:00 KST)", "want": "PUSH", "as": "SUSPENSION", "routine": true },
+    { "at": "17:10", "venue": "upbit", "title": "Notice of Termination of Trading Support for STORJ, TT, JASMY (effective 2026-09-14)", "want": "PUSH", "as": "DELIST_SCHEDULED" },
+    { "at": "17:12", "venue": "bithumb", "title": "Delisting of STORJ, TT, JASMY — trading support ends 2026-09-14", "want": "ESCALATE", "as": "DELIST_SCHEDULED" },
+    { "at": "18:40", "venue": "gate", "title": "Gate Will List PIPEDOG (PIPEDOG) for Spot Trading", "want": "PUSH", "as": "LISTING" },
+    { "at": "11:38", "venue": "mexc", "title": "utility token ($UTILITY) Found in MEXC New Listing", "want": "PUSH", "as": "LISTING" },
+    { "at": "11:38", "venue": "mexc", "title": "utility token ($UTILITY) Found in MEXC New Listing", "want": "SUPPRESS", "why": "duplicate" },
+
+    { "at": "19:05", "venue": "bitget", "title": "Bitget Will List ANETUSDT Stock Perps, with up to 10x leverage", "want": "SUPPRESS", "why": "equity" },
+    { "at": "19:30", "venue": "binance", "title": "Binance Expands Tokenized Securities Access with bStocks", "want": "SUPPRESS", "why": "equity" },
+    { "at": "20:01", "venue": "bybit", "title": "New listing: LENOVOHKDUSDT TradFi Perpetual Contract, with up to 25x leverage", "want": "SUPPRESS", "why": "equity" },
+    { "at": "20:02", "venue": "bybit", "title": "New listing: NAVERUSDT TradFi Perpetual Contract, with up to 25x leverage", "want": "SUPPRESS", "why": "equity" },
+    { "at": "20:03", "venue": "bybit", "title": "New listing: LGELECTRONICSUSDT TradFi Perpetual Contract, with up to 25x leverage", "want": "SUPPRESS", "why": "equity" },
+    { "at": "20:04", "venue": "bybit", "title": "New listing: HANMIUSDT TradFi Perpetual Contract, with up to 25x leverage", "want": "SUPPRESS", "why": "equity" },
+    { "at": "20:05", "venue": "bybit", "title": "New listing: SAMSUNGEMUSDT TradFi Perpetual Contract, with up to 25x leverage", "want": "SUPPRESS", "why": "equity" },
+    { "at": "20:06", "venue": "bybit", "title": "New listing: ZHONGJIUSDT TradFi Perpetual Contract, with up to 25x leverage", "want": "SUPPRESS", "why": "equity" },
+
+    { "at": "21:15", "venue": "bybit", "title": "Pakistan Exclusive: Independence Trading Tournament — Share a Prize Pool of 50,000 USDT", "want": "SUPPRESS", "why": "promo" },
+    { "at": "22:40", "venue": "bitget", "title": "New Users Exclusive Trading Competition: Win Up to 1,000 USDT", "want": "SUPPRESS", "why": "promo" },
+    { "at": "06:40", "venue": "binance", "title": "Hold RLUSD in Binance Earn and Share 1 Million XRP in Rewards", "want": "SUPPRESS", "why": "promo" },
+    { "at": "08:01", "venue": "binance", "title": "Updates on Tick Size for Multiple USDS-M Perpetual Futures Contracts", "want": "SUPPRESS", "why": "operational" }
+  ]
+}
