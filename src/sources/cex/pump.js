@@ -78,7 +78,7 @@ export function checkPump(exchange, t) {
     if (up && !volSurging) return null;
     const signals = [`Price ${up ? '+' : ''}${movePct.toFixed(1)}% in ${windowMin}m${absMove >= RULES.bigMovePct ? ' (BIG)' : ''}`];
     if (volSurging) signals.push(`Volume surge: $${fmt(windowVol)} in ${windowMin}m (${volRatio.toFixed(1)}x normal)`);
-    if (up) signals.push(`⚠️ Historically these fade — treat as exit/fade candidate, not an entry`);
+    if (up) signals.push(`⚠️ Fade measured on this corpus: 22 of 30 PUMP-HIGH reverted within 24h, median alpha −13.5% (n=30, sub-gate population — provisional)`);
     const severity = (absMove >= RULES.bigMovePct && volSurging) ? 'HIGH'
       : (absMove >= RULES.bigMovePct || volSurging) ? 'MEDIUM' : 'LOW';
     return { source: 'CEX', type: up ? 'PUMP' : 'DUMP', severity, key, dedupeKey: `MOVE:${t.symbol}`, __movePct: movePct,

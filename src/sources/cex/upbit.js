@@ -91,7 +91,7 @@ export async function pollUpbit() {
           title: `UPBIT listed ${label(tk)} — ${quotes.join(', ')} market${quotes.length > 1 ? 's' : ''}`,
           lines: [
             'Now trading on Upbit (Korea) — detected from the live market list.',
-            'Korean listings often reprice a token fast; the first minutes are usually the most violent.',
+            'Korean retail concentration makes the open violent — magnitude, not direction.',
           ],
           url: `https://upbit.com/exchange?code=CRIX.UPBIT.${quotes[0]}-${tk}`,
         })) fired++;
@@ -129,8 +129,8 @@ export async function pollUpbit() {
             : `UPBIT investment warning on ${who}`,
           lines: [
             isList ? 'Announced BEFORE trading opens — this is your lead time.'
-              : isDelist ? '⚠️ Delisting notice — Korean delistings usually dump hard.'
-              : '⚠️ Upbit "investment warning" designation — these typically sell off sharply.',
+              : isDelist ? '⚠️ Delisting notice — trading support ends on Upbit.'
+              : '⚠️ Upbit "investment warning" designation — a formal venue risk flag.',
             title.slice(0, 110),
           ],
           url: 'https://upbit.com/service_center/notice',

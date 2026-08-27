@@ -584,6 +584,74 @@ console.log('28. promotion CONSTRUCTS, never patches (the 4.97% lesson)');
   check('LIVE unlocks.json has no patched promotions', checkTierRoutes().ok === true);
 }
 
+console.log('29. version provenance: one source of truth, no silent drift');
+{
+  // package.json had drifted to 0.3.0 while config.js was 0.24.3, and the push
+  // script's commit message was hardcoded to "v0.9.4 -> v0.17.0" — so every commit
+  // carried the same false label. A history where each entry says the same wrong
+  // thing is worse than no message. Version is now DERIVED at push time; this keeps
+  // the two files from silently diverging again.
+  const pkg = JSON.parse(readFileSync('package.json', 'utf8')).version;
+  const cfg = readFileSync('src/config.js', 'utf8').match(/VERSION = '([^']+)'/)[1];
+  check(`package.json (${pkg}) matches src/config.js (${cfg})`, pkg === cfg);
+  const bat = readFileSync('PUSH-TO-GITHUB.bat', 'utf8');
+  // Inspect the COMMIT LINE only — the file's comments legitimately quote the old
+  // hardcoded string while explaining why it was removed, and a whole-file grep
+  // would flag that explanation as the defect it documents.
+  const commitLine = bat.split(/\r?\n/).find((l) => /git .*commit -m/.test(l)) || '';
+  check('commit message derives the version', /%RADAR_VER%/.test(commitLine));
+  check('commit message hardcodes no version literal', !/v\d+\.\d+\.\d+/.test(commitLine));
+  check('push script still aborts on a staged .env', /ABORTED: \.env was staged/.test(bat));
+}
+
+console.log('30. message prose is linted — direction ban + unsupported-statistics ban');
+{
+  // TWO RULES, ONE MECHANISM, files AUTO-DISCOVERED (not a hand-maintained list —
+  // that is the CRYPTO_EXCEPTIONS defect; a registry would still be a list, but a
+  // directory walk covers a new module the moment its file exists):
+  //
+  // RULE 1 (facts): no DIRECTIONAL claims or imperatives. The 27 Aug EIGEN T-3 said
+  // "fact - no directional call" and "Close now" in the same message. The line is the
+  // project's own measurement: agreement predicts MAGNITUDE not DIRECTION, so
+  // volatility language stays and direction language goes.
+  //
+  // RULE 2 (everything): no FREQUENCY CLAIMS without a sample size. "usually",
+  // "typically", "historically", "often" assert statistics nobody computed — the
+  // original "historically these fade" defect from the first critique, now guarded.
+  // A frequency word is allowed when the same line carries its evidence (n=, N of M,
+  // measured, percentile).
+  //
+  // STATIC over source files, deliberately: silent modules (CASCADE unproduced,
+  // REVIVAL silenced, PUMP/DUMP ladder-disabled) are covered even though nothing
+  // watches their output — an output-based lint would reproduce the exact bug this
+  // fixture exists to prevent.
+  const { readdirSync, statSync } = await import('node:fs');
+  const walk = (dir) => readdirSync(dir).flatMap((f) => {
+    const p2 = dir + '/' + f;
+    return statSync(p2).isDirectory() ? walk(p2) : (p2.endsWith('.js') ? [p2] : []);
+  });
+  const files = [...walk('src/sources'), 'src/core/dispatcher.js', 'src/core/confluence.js', 'src/core/telemetry.js'];
+  check('auto-discovery finds a non-trivial module set', files.length >= 15);
+  const DIRECTION = /(close now|exit here|buy now|sell now|take profit|dump hard|sell off sharply|capitulation bottom|blow-off top|reversal risk|front-run|bleeds into|drift usually)/i;
+  const FREQ = /\b(usually|typically|historically|often|tend to|most of the time)\b/i;
+  const EVIDENCE = /n\s*[=>\u2265]|\b\d+\s*of\s*\d+\b|\bmeasured\b|percentile|\bp99\b/i;
+  const dirHits = [], freqHits = [];
+  for (const f of files) {
+    for (const line of readFileSync(f, 'utf8').split(/\r?\n/)) {
+      const code = line.replace(/^\s*\/\/.*/, '').replace(/\/\/.*$/, '');
+      if (!/['"\u0060]/.test(code)) continue;   // string literals only; comments may
+      if (DIRECTION.test(code)) dirHits.push(f.split('/').pop() + ': ' + code.trim().slice(0, 60));
+      if (FREQ.test(code) && !EVIDENCE.test(code)) freqHits.push(f.split('/').pop() + ': ' + code.trim().slice(0, 60));
+    }
+  }
+  check('no module asserts DIRECTION in message text', dirHits.length === 0, dirHits.slice(0, 3).join(' | '));
+  check('no module asserts FREQUENCY without evidence', freqHits.length === 0, freqHits.slice(0, 3).join(' | '));
+  check('direction guard can fire', DIRECTION.test("lines: ['Close now']"));
+  check('frequency guard can fire', FREQ.test("'these usually fade'") && !EVIDENCE.test("'these usually fade'"));
+  check('frequency WITH evidence passes', !(FREQ.test("'usually fades (measured: 21 of 30, n=30)'") && !EVIDENCE.test("'usually fades (measured: 21 of 30, n=30)'")));
+  check('volatility language still permitted', !DIRECTION.test("'expect wider swings'") && !FREQ.test("'the open is violent'"));
+}
+
 console.log('24. classifiers-wired boot assertion');
 {
   const { checkClassifiersWired } = await import('./src/core/routes.js');

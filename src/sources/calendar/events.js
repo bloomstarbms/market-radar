@@ -47,7 +47,7 @@ export async function pollEvents() {
     const coins = (ev.coins || []).map((c) => (c.symbol || c.name || '').toUpperCase()).filter(Boolean).slice(0, 3).join(', ') || '?';
     const impact = ev.impact != null ? ` · impact ${ev.impact}/10` : '';
     const blurb = type === 'UNLOCK'
-      ? `Token unlock ahead — unlocks add sell-side supply; markets often front-run them${impact}`
+      ? `Token unlock ahead — added supply reaches the market${impact}`
       : type === 'TGE'
         ? `Token generation / first distribution — early volatility cuts both ways${impact}`
         : `Scheduled project milestone (product/protocol event, NOT a token launch)${impact}`;

@@ -26,7 +26,7 @@ export async function pollCpi() {
         source: 'CAL', type: 'CPI', severity: 'MEDIUM', key: `${dateKey}:24h`, cooldownMin: 2880,
         title: `US CPI (${rel.refMonth}) releases tomorrow`,
         lines: [`Release: ${rel.utc.replace('T', ' ').replace(':00Z', ' UTC')} (8:30 AM ET)`,
-          `Expect volatility around the print — crypto often moves with the surprise, not the number`],
+          `Scheduled macro print. Crypto trades as a high-beta liquidity asset on these — magnitude, not direction.`],
       });
     }
     // T-1h warning

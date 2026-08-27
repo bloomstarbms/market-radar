@@ -387,12 +387,12 @@ export async function pollAnnouncements() {
           c.type === 'SUSPENSION'
             ? `${c.which.charAt(0).toUpperCase() + c.which.slice(1)} halted`
               + (c.routine ? ` · scheduled with a stated resumption, but reported because: ${c.interest.join('; ')}`
-                           : ' · ⚠️ OPEN-ENDED: no resumption stated — suspensions often precede delistings, chain halts or incidents')
+                           : ' · ⚠️ OPEN-ENDED: no resumption stated. Possible precursor to a delisting, chain halt or incident — watch for a follow-up notice.')
             : c.type === 'DELIST_SCHEDULED' ? `Scheduled delisting · effective ${c.dateText} — dated forward event; reminders at T-7d and T-1d`
             : c.type === 'UNLOCK' ? 'Token unlock notice — added supply hits the market'
             : c.type === 'TGE' ? 'Token generation / launchpool event — early volatility both ways'
             : c.type === 'PERP' ? 'Perp/futures listing — leverage and a short side open up, so expect wider swings'
-            : isDelist ? '⚠️ Delisting notice — these usually dump hard and fast'
+            : isDelist ? '⚠️ Delisting notice — trading support ends on the stated venue'
             : 'Listing announced — published BEFORE trading opens, so this is your lead time',
           'Fact only — no directional call.',
         ],

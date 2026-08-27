@@ -1106,3 +1106,95 @@ and three verified schedules with five more behind them. Any future
 infrastructure question should be asked in the same order: measure the
 loss, exhaust the free fix, and spend only when the thing being protected
 has earned protection.
+
+## STEP 0 DONE + PROVENANCE FIXES (25 Aug)
+
+PUSHED 2ac5876..d171c2e — repo went v0.17.0-era -> v0.24.3. This was
+DISASTER RECOVERY first, migration prerequisite second: the desktop had
+been a single point of failure for ~40 versions, and what GitHub held was
+a bot from before the delivery layer, the boot gates and the unlock module
+existed. It would have cloned, started fine, and been wrong everywhere.
+FULL-HISTORY SECRET SWEEP (not just HEAD — the bat's guard protects the
+CURRENT push and says nothing about the v0.9.x-era ones): .env NEVER
+committed, data/ NEVER committed, no key-shaped file in any of 95 distinct
+paths across 84 commits. Clean, including the early pushes.
+
+COMMIT MESSAGE WAS LYING BY CONSTRUCTION: hardcoded "v0.9.4 -> v0.17.0" in
+PUSH-TO-GITHUB.bat, so every future commit would carry the same false
+label regardless of contents. Now DERIVED from src/config.js at push time
+(and the push tags v<VERSION>). package.json had ALSO drifted — 0.3.0
+against config.js's 0.24.3 — so deriving from package.json would have
+swapped one lie for another; synced, and fixture 29 now fails if the two
+files diverge or if the bat reverts to a hardcoded message.
+This is the same class as the stale-repo problem itself: a label whose
+wrongness is indistinguishable from rightness until someone reads it.
+MIGRATION TIMING DECIDED (25 Aug): migrate on the 31st or after — NOT
+before. The 27th/30th are the unlock module's first live calendar run;
+migrating into it would change two variables at once and make any failure
+ambiguous between module and platform. Run the T-3 and the emission
+confirmation on the desktop (reliable since sleep-never, 12 Aug), then
+migrate a twice-proven pipeline. Step 0 already closed the urgency
+argument — repo current, backups exist. Steps 1-4 can be done any time;
+the 31st is then just step 5.
+
+## ═══ 27 AUG — T-3 DELIVERED, AND THE FIX PROVEN BY COMPARISON ═══
+
+Both EIGEN messages, same token, four days apart:
+  T-7 (23 Aug, v0.24.1): "scheduled token unlock (~4.97% of market cap)"
+                         "Date verified against the public unlock calendar."
+  T-3 (27 Aug, v0.24.3): "scheduled token unlock"
+                         "Date verified — source: announcement+onchain-backtest."
+Stale aggregator field gone, real provenance stated. 308 estimated-only rows
+held SILENT in the same cycle (up from 168 at T-7). The verified-vs-guess
+ratio is the design working.
+
+## FACTS WERE STILL TALKING THEIR BOOK (v0.24.4)
+
+Reading the milestone message rather than admiring it found the contradiction:
+the T-3 header said "fact · no directional call" and its body said
+"🔔 Close now — the days just before an unlock are where the drift usually
+shows." An IMPERATIVE plus an UNEARNED EDGE CLAIM, in one message.
+Sweep found ELEVEN such lines across SIX fact-emitting modules: "usually dump
+hard and fast", "often marks a local capitulation bottom", "reversal risk",
+"markets often front-run them", "typically sell off sharply".
+WHY IT SURVIVED: the FACT/CALL split (v0.23.0) removed conviction scores and
+tier labels — the STRUCTURED fields — and left the PROSE untouched. I audited
+the modules that were TALKING; unlocks had been silent since the split, so its
+defect was invisible until it spoke. A SILENT MODULE'S DEFECTS ARE INVISIBLE
+is now a third face of the same coin as the write-only accumulators and the
+untested loader.
+THE LINE, drawn by the project's OWN measurement: agreement predicts
+MAGNITUDE, not DIRECTION (36% win rate both sides). Volatility language is
+evidence-backed and stays ("expect wider swings", "first minutes are
+violent"); DIRECTION language is not and is gone.
+ENFORCED ON PROSE by fixture 30 — a lint over string literals in every
+fact-emitting module, with a self-test proving the guard can fire and that
+volatility phrasing still passes. Structured-field gates could never have
+caught this; the defect lived in English.
+
+## v0.24.5 — the lint hardened, and it caught the ORIGINAL defect (27 Aug)
+
+Both drift questions answered structurally:
+  STATIC over source files (not emitted output) — silent modules covered.
+    An output lint would reproduce the exact bug it guards against:
+    CASCADE unproduced, REVIVAL silenced, PUMP/DUMP disabled all have
+    prose nothing watches.
+  AUTO-DISCOVERED file set (directory walk of src/sources + core message
+    builders) — not a hardcoded list, not even a registry. A new module
+    is covered the moment its file exists. The hardcoded list in the
+    first cut was the CRYPTO_EXCEPTIONS defect reproduced inside the
+    guard built to prevent defects.
+SECOND RULE ADDED (all modules, calls included): frequency claims
+("usually/typically/historically/often") REQUIRE evidence on the same
+line (n=, N of M, measured, percentile). Volatility/mechanism language
+stays; unsupported statistics go.
+THE AUTO-DISCOVERY PAID IMMEDIATELY: it found pump.js still carrying
+"⚠️ Historically these fade — treat as exit/fade candidate, not an
+entry" — THE LITERAL PHRASE FROM THE FIRST CRITIQUE of this project,
+alive three weeks into the fixes because pump.js is ladder-disabled
+(silent => invisible) and was never on the hardcoded list. RESOLVED BY
+CITATION, NOT DELETION: the claim was true and had since been measured —
+"Fade measured on this corpus: 22 of 30 PUMP-HIGH reverted within 24h,
+median alpha −13.5% (n=30, sub-gate population — provisional)". The
+oldest open item in the project closed by giving the sentence the
+statistics it always owed.

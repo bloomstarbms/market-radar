@@ -59,9 +59,9 @@ export async function pollCascade() {
       lines: [
         `Open interest collapsed ${oiDrop.toFixed(1)}% — leveraged positions force-closed`,
         longsHit
-          ? `Longs liquidated into the drop — often marks a local capitulation bottom`
-          : `Shorts squeezed out on the way up — often marks a blow-off top`,
-        `Cascades exhaust fast; the reversal often comes right after. Not an entry — a timing marker.`,
+          ? `Longs liquidated into the drop — forced selling, direction from here unmeasured`
+          : `Shorts squeezed out on the way up — forced buying, direction from here unmeasured`,
+        `Fact: liquidation volume and its skew. The exhaustion/reversal READ is a CALL and has not been built or earned (step 7 splits them).`,
         `Mark price: $${p}`,
       ],
       url: `https://www.binance.com/en/futures/${sym}`,

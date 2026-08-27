@@ -79,8 +79,8 @@ export async function pollUnlocks() {
           `${t.name || t.sym}: scheduled token unlock${pct}`,
           t.note ? `Context: ${t.note}` : 'Unlocks add sell-side supply; thin-liquidity tokens absorb it worst.',
           lead === 7
-            ? 'Early warning — price often bleeds into the unlock as holders front-run it.'
-            : '🔔 Close now — the days just before an unlock are where the drift usually shows.',
+            ? 'Added supply reaches the market on this date. No directional claim — the drift around unlocks has not been measured on this corpus.'
+            : 'Emission is imminent. Fact only: what happens next is not something this system has earned an opinion about.',
           confidence,
         ],
         url: `https://cryptorank.io/price/${(t.name || t.sym).toLowerCase().replace(/\s+/g, '-')}/vesting`,

@@ -177,7 +177,7 @@ export async function pollFunding() {
     if (ls) {
       const crowded = ls.longPct >= 70 ? 'long' : ls.shortPct >= 65 ? 'short' : null;
       let posLine = `Positioning: ${ls.longPct.toFixed(0)}% of traders LONG vs ${ls.shortPct.toFixed(0)}% SHORT`;
-      if (crowded) posLine += ` — crowd heavily ${crowded}, reversal risk`;
+      if (crowded) posLine += ` — positioning heavily ${crowded}`;
       if (crowded && shortsPay === (crowded === 'short')) posLine += ' ⚡ matches funding';
       lines.push(posLine);
     }

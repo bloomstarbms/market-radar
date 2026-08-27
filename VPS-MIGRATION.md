@@ -2,11 +2,22 @@
 
 *Paste Part 0 from `REMAINING-WORK.md` first, then this. One session.*
 
-**TIMING (corrected 25 Aug):** cut over TODAY OR TOMORROW (25th/26th), giving a day or
-two of heartbeats before the T-3 fires on the 27th — or WAIT UNTIL AFTER THE 30th.
-The 27th-to-30th window is the one to avoid: it puts a migration in the middle of the
-unlock module's first live calendar run (T-3 on the 27th, emission confirmation on
-the 30th).
+**TIMING — DECIDED 25 Aug: MIGRATE ON THE 31st OR AFTER. Do not migrate before.**
+
+Reasoning (do not relitigate): the 27th and 30th are the unlock module's FIRST LIVE
+CALENDAR RUN. Migrating into that window changes two variables at once — a failure
+afterwards could be the module or the platform, with no way to separate them. Run the
+T-3 and the emission confirmation on the desktop, which has been reliable since
+sleep-never landed on 12 Aug; then migrate a pipeline that has proven itself TWICE,
+so any post-migration failure is unambiguously the migration.
+
+The urgency argument was CLOSED by step 0: the repo is current (v0.24.3, pushed
+25 Aug) and backups exist, so a desktop failure is no longer catastrophic. Waiting
+still lands comfortably before the ARB/STRK T-7s around Sep 8-9, which is the next
+cluster that actually wants the uptime.
+
+PROVISION WHENEVER — an idle box costs about a dollar a week, and having it ready
+(steps 1-4 done, smoke test green) means the 31st is just step 5.
 
 **AGENT CANNOT SSH.** The assistant's shell is sandboxed with allowlisted network
 access — it can read the DESKTOP filesystem and run desktop commands, but cannot reach
