@@ -1,5 +1,5 @@
 <!-- PREMISE
-Written against: v0.26.1
+Written against: v0.26.2
 Reviewed: 2026-08-29
 Assumes:
 - Unlock coverage is Ethereum/EVM only; L1 gap ACCEPTED (a) + announcement path (c).
@@ -7,16 +7,17 @@ Assumes:
 - Candidate population comes from tokens KNOWN to have schedules, not gate-passers.
 - ADV immature until ~2026-09-07: pressure_vs_book is ORDINAL only, bands provisional.
 - PUMP/DUMP ladder-retired; facts push, calls carry the apparatus.
-KNOWN-STALE INSIDE PART 0 (which is pasted every session — fix on next edit, do
-not obey as written): it says "at v0.16.3" (live is v0.26.1) and "storage is
-node:sqlite ... %LOCALAPPDATA%\alpha-radar" (live storage is JSON under data/,
-and the sqlite migration was never done). Everything else in Part 0 holds.
+Part 0's version string and storage lines were CORRECTED 2026-08-29 (they had
+read v0.16.3 / node:sqlite). A marker was not enough: Part 0 is pasted verbatim
+every session, which is exactly where a warning gets skimmed. Known-false facts
+in the most-pasted document get fixed, not flagged. Part 0's remaining figures
+(alert volume, multipliers, n counts) are v0.17-era SNAPSHOTS — read as history.
 Falsified premises are struck through or marked CORRECTED in place — a section
 without such a mark is still believed. Check this block before executing anything
 below it: documents get obeyed, code gets exercised.
 -->
 
-# Alpha Radar — Prompts for Remaining Work
+# Market Radar — Prompts for Remaining Work
 
 One prompt per session. **Paste Part 0 first, every time**, then the single step prompt you're working on. Part 0 is the standing context that stops a fresh agent from re-litigating decisions already made or reintroducing bugs already fixed.
 
@@ -32,18 +33,25 @@ Work them in order. Step 8 is the highest-value item remaining and everything be
 *Paste this at the top of every session.*
 
 ```
-You are working on Alpha Radar, a crypto alert system at v0.16.3. Read
-NEXT-SESSION.md and regression-fixtures.js before writing any code.
+You are working on Market Radar, a crypto alert system. The live version is
+whatever src/config.js VERSION says — never trust a version written in prose,
+including this document's (it drifted from v0.16.3 to v0.26.x unnoticed). Read
+REMAINING-WORK-NOTES.md (bottom-up: it is append-only and the latest entries
+are current state) and test-delivery.js before writing any code.
 
 ## Hard constraints — do not violate
 
 - $0/month. No paid API. If a step appears to need one, it has a free
   path — find it or ask. DefiLlama emissions is now paywalled (HTTP 402);
   do not reach for it.
-- Zero-dependency Node 22+. Storage is node:sqlite, hot state is an
-  in-process Map, event bus is node:events. No Docker, no Redis, no broker.
-- Database lives in %LOCALAPPDATA%\alpha-radar\ — never on a OneDrive-synced
-  path. Backups are closed-file snapshots via VACUUM INTO.
+- Zero-dependency Node 22+. Storage is JSON FILES under data/ (outcomes.json,
+  state.json); hot state is an in-process Map. The node:sqlite migration was
+  planned and never done — do not "migrate" a database that does not exist.
+  No Docker, no Redis, no broker.
+- data/ lives inside the repo dir on a OneDrive-synced path (accepted: the
+  sync is also the offsite copy). Backups are whole-file JSON snapshots
+  written daily to data/backups/, restore-verified by restore-drill.js.
+- NEVER commit .env or data/ to git.
 - Config in JSON, hot-reloadable. Zero magic numbers in code.
 
 ## Current state
@@ -105,7 +113,8 @@ NEXT-SESSION.md and regression-fixtures.js before writing any code.
 - Replayed against bot.log with before/after push counts reported
 - Monotonicity property test passing across all suppression parameters
 - Suppressed candidates still recorded with reason
-- Any new permanent fixture added to regression-fixtures.js
+- Any new permanent fixture added to test-delivery.js (regression-fixtures.js
+  was the old name and no longer exists)
 - Funnel counts printed with each pass
 - Prediction pre-registered before measurement, and stated falsification
   lines honoured when the number comes in outside them
@@ -381,7 +390,7 @@ outperforming B-tier, the tiers are decorative and the scorer is wrong.
 
 - HYPER, MANTRA and VIC from bot.log each collapse to ONE composite alert
   instead of two unlinked ones. These are your fixtures — add them to
-  regression-fixtures.js.
+  test-delivery.js.
 - Zero single-module pushes in the replay
 - Monotonicity holds with conjunction parameters included
 - Push count reported before and after

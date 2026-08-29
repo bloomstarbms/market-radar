@@ -1718,3 +1718,32 @@ section 5, the bucket-D announcement path, survives and was vindicated);
 REMAINING-WORK.md carries the corrected bucket priority and the candidate-index
 rule; VPS-MIGRATION.md unchanged in substance (still valid, migration on/after
 31 Aug); NOTES marked append-only, read bottom-up for current state.
+
+## 2026-08-29 (final) — Part 0 corrected in place; brief files not reachable
+
+**Part 0 fixed, not flagged.** Reviewer's argument accepted: a KNOWN-STALE marker
+depends on the reading session noticing it, and Part 0 is the one block pasted
+VERBATIM into every session — precisely where a warning gets skimmed. Corrected:
+"Alpha Radar at v0.16.3" -> "Market Radar at v0.26.1"; "Storage is node:sqlite /
+%LOCALAPPDATA%\alpha-radar / VACUUM INTO" -> JSON files under data/, whole-file
+daily snapshots to data/backups/, restore-verified by restore-drill.js, with an
+explicit "the sqlite migration was planned and never done — do not migrate a
+database that does not exist" (the exact failure mode the reviewer predicted: a
+future session helpfully migrating a nonexistent DB). Also pointed the reading
+instruction at files that exist (REMAINING-WORK-NOTES.md bottom-up,
+test-delivery.js) instead of regression-fixtures.js. Part 0's remaining v0.17-era
+figures are now labelled SNAPSHOTS. Larger rewrite still deferred.
+RULE: known-false facts in the most-pasted document get FIXED, not marked.
+
+**Brief files: NOT REACHABLE from this session, so not copied.** Searched the
+mounted outputs folder (holds only a 2 Jul market-radar snapshot), the Desktop,
+and uploads: none of UNLOCK-EXPANSION.md, FACTS-ENGINE-ROADMAP.md,
+FIX-SYMBOL-CLASSIFIER.md, FACTS-AND-CALLS.md, SHIP-v0.20.0.md are present. Each
+session mounts only its OWN outputs directory; earlier sessions' folders are
+outside the connected paths and the file tools refuse them by design.
+OPERATOR ACTION (worth doing — these shaped shipped architecture): copy the
+worth-keeping briefs from the Cowork outputs folders into the repo, e.g. a
+docs/briefs/ subdir. They inherit fixture 36 automatically, so each will need a
+PREMISE header (version written against + assumptions) or the suite fails —
+which is the intended forcing function: importing a document means stating what
+it assumed. Spent ones can be let go.
