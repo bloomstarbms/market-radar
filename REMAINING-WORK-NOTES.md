@@ -1646,3 +1646,42 @@ higher-yield question is whether to scan a DIFFERENT universe — top-200 by
 mcap rather than gate-passers — where professional custody vesting actually
 lives, i.e. the EIGEN/ENA/ZRO/LINK/UNI population the first 12-token pass
 already sampled at 5/5 custody.
+
+## 2026-08-29 (post-scan) — two corrections the scan forces
+
+**1. THE BUCKET PRIORITY IN REMAINING-WORK.md WAS WRONG — CORRECTED IN PLACE.**
+That document ranked A (OZ VestingWallet) as the clean prize and D
+(multisig/custody) as "NOTHING TO READ". The scan refutes it structurally:
+bucket A releases CONTINUOUSLY, so it emits no dated event; WLD's three
+contract-enforced VestingWallets have made zero release calls. Bucket D
+batches monthly, and a batch IS the event — all five verified rows are D.
+For a date-alerting system D > A. Taxonomy kept, implied priority discarded.
+A dated ⛔ correction block now sits above the ordering so a future session
+cannot follow the dead plan (expired-filter class: the justification died
+while the document still read as authoritative — third instance in this
+project, and the first one caught in a PROMPT rather than in code).
+
+**2. CANDIDATE PROVENANCE ≠ DATE PROVENANCE — the rule I over-generalised.**
+"Aggregator dates never qualify as verified" is about the provenance of the
+DATE. I generalised it to "no aggregators at all", and that is what aimed
+this scan at the wrong universe: 156 gate-passers, mostly MEXC microcaps and
+tokenised equities, 0 promotions. The gate never selected for schedules —
+the original 12 were tokens ALREADY KNOWN to have schedules that also passed
+the gate. Prior knowledge was doing the selecting all along.
+  ILLEGITIMATE: shipping an aggregator's date as verified. Unchanged.
+  LEGITIMATE:   using an aggregator's list of tokens-with-upcoming-unlocks
+                as a CANDIDATE INDEX — where to point discovery. Dates still
+                established independently (contract read / observed cadence /
+                project announcement), and every row still needs a forward
+                falsifier. Discipline intact; population problem solved.
+
+**NEXT SESSION'S QUEUE (decided, not deferred):** rebuild scan-queue.json from
+a candidate index of tokens with KNOWN upcoming unlocks (CryptoRank's free
+unlock calendar list = names only, never dates; CRYPTORANK_API_KEY already in
+.env), intersected with nothing — the gate is not a filter for this purpose.
+Fall back to top-200-by-mcap if the list is paywalled. Then: discover →
+cadence → promote with falsifier + stage. Expect a materially higher hit rate
+than 0/30 because the population is selected for having something to find;
+pre-register that expectation with a falsification line before running.
+Do NOT widen the selector battery — this scan showed the limit was population,
+not readability.

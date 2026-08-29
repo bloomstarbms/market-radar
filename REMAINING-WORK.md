@@ -107,19 +107,63 @@ Order: EIGEN first (only verified numerator), then STRK and ARB
 
 ## Cheap triage pass FIRST — before any 30-minute integration
 
+> ⛔ **CORRECTED 2026-08-29 BY MEASUREMENT — READ THIS BEFORE THE ORDERING
+> BELOW.** The bucket ranking in this section is written as if A were the
+> prize and D the dead end. **The 156-token scan refuted that, and the
+> refutation is structural, not statistical:**
+>
+> - **Bucket A produces NO DATED EVENT.** OZ VestingWallet releases
+>   *continuously* — the beneficiary may call `release()` at any moment and
+>   the curve is smooth. WLD (the scan's only A-READABLE: three sequential
+>   VestingWallets, 72.5% of supply, genuinely contract-enforced) has made
+>   **zero** release calls. There is no date to alert on. A clean parse is
+>   not an alertable schedule.
+> - **Bucket D is the BEST bucket for this system.** Custody treasuries move
+>   in monthly batches, and a batch IS a dated event. Every verified row this
+>   project has (EIGEN, ENA, ZRO, ARB, STRK) is bucket D.
+> - So "automate A and B first — that's the scaling move" is **wrong for a
+>   date-alerting system**, however right it would be for a
+>   supply-curve-modelling one. Cadence detection over bucket D custody is
+>   the scaling move; that is what shipped.
+>
+> Keep the A–D taxonomy — it classifies correctly. Discard the implied
+> priority. (Expired-filter class: a plan whose justification died while the
+> document still read as authoritative.)
+
 For each token, classify the vesting arrangement:
-  A. OpenZeppelin VestingWallet / TokenVesting  → clean read, ~15 min
-  B. Sablier / LlamaPay stream                  → subgraph read, ~15 min
+  A. OpenZeppelin VestingWallet / TokenVesting  → clean read, NO dated event
+  B. Sablier / LlamaPay stream                  → subgraph read, continuous
   C. Custom project contract                    → bespoke, 30+ min
-  D. Multisig-held, off-chain schedule          → NOTHING TO READ
+  D. Multisig-held, off-chain schedule          → THE ALERTABLE ONE:
+     announced date via events[].source:'announcement', and/or an observed
+     monthly emission cadence via detect-cadence.js (behavioural evidence,
+     which by this project's standard is stronger than a contract read
+     because it verifies behaviour rather than intent)
 
-Bucket D tokens get status `unverifiable` and permanent silence, unless a
-project-announced date exists in docs, governance forum or blog — that is
-a legitimate `verified` path via events[].source: 'announcement', and it is
-minutes of reading rather than half an hour of integration.
+Every bucket-D row still needs a forward falsifier — cadence spec where
+emissions are observable, `reviewBy` dead-man's switch where they are not.
 
-Expect roughly half to land in bucket D. Discover that in an hour of
-triage, not three tokens into hand-integration.
+## CANDIDATE PROVENANCE ≠ DATE PROVENANCE (recorded 2026-08-29)
+
+The standing rule is **"aggregator dates never qualify as verified."** That
+rule is about the **provenance of the DATE**. Generalising it into "no
+aggregators at all" is what sent the 29 Aug scan at the wrong universe —
+156 gate-passing symbols that turned out to be mostly microcaps and
+tokenised equities, yielding zero promotions.
+
+  - ILLEGITIMATE: shipping an aggregator's date as `verified`. Unchanged.
+  - LEGITIMATE: using an aggregator's *list of tokens with upcoming
+    unlocks* as a CANDIDATE INDEX — where to point discovery. The date is
+    then established independently by contract read, observed cadence, or
+    project announcement, exactly as now.
+
+The original 12 were never "gate-passers that happened to have schedules" —
+they were **tokens known to have schedules** that also passed the gate. The
+gate was never doing the selecting; prior knowledge of a schedule was. An
+aggregator index reproduces that selection deliberately instead of by
+accident. Top-200-by-mcap is the no-third-party alternative and works, but
+it includes many fully-distributed tokens; the index is targeted at exactly
+the population that has something to find.
 
 ## Read protocol — all five points, non-negotiable
 
