@@ -1,3 +1,21 @@
+<!-- PREMISE
+Written against: v0.26.1
+Reviewed: 2026-08-29
+Assumes:
+- Unlock coverage is Ethereum/EVM only; L1 gap ACCEPTED (a) + announcement path (c).
+- Bucket D is the ALERTABLE bucket; bucket A emits no dated event (corrected below).
+- Candidate population comes from tokens KNOWN to have schedules, not gate-passers.
+- ADV immature until ~2026-09-07: pressure_vs_book is ORDINAL only, bands provisional.
+- PUMP/DUMP ladder-retired; facts push, calls carry the apparatus.
+KNOWN-STALE INSIDE PART 0 (which is pasted every session — fix on next edit, do
+not obey as written): it says "at v0.16.3" (live is v0.26.1) and "storage is
+node:sqlite ... %LOCALAPPDATA%\alpha-radar" (live storage is JSON under data/,
+and the sqlite migration was never done). Everything else in Part 0 holds.
+Falsified premises are struck through or marked CORRECTED in place — a section
+without such a mark is still believed. Check this block before executing anything
+below it: documents get obeyed, code gets exercised.
+-->
+
 # Alpha Radar — Prompts for Remaining Work
 
 One prompt per session. **Paste Part 0 first, every time**, then the single step prompt you're working on. Part 0 is the standing context that stops a fresh agent from re-litigating decisions already made or reintroducing bugs already fixed.

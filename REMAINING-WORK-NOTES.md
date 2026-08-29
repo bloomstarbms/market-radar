@@ -1,3 +1,13 @@
+<!-- PREMISE
+Written against: v0.18.3 (header) — body is an APPEND-ONLY LOG through v0.26.0.
+Reviewed: 2026-08-29
+Assumes:
+- Entries are dated and never rewritten; a later entry supersedes an earlier one.
+  Read bottom-up for current state, top-down for how it was reached.
+- The population caveat below still holds: executable depth medians sit BELOW the
+  $25k gate, so every multiplier is measured on a population thinner than the gate.
+-->
+
 # READ THIS FIRST — POPULATION CAVEAT (top-level, v0.18.3)
 
 Both cohort medians of executable depth sit BELOW the $25k gate ($8k single,
@@ -1685,3 +1695,26 @@ than 0/30 because the population is selected for having something to find;
 pre-register that expectation with a falsification line before running.
 Do NOT widen the selector battery — this scan showed the limit was population,
 not readability.
+
+## 2026-08-29 (v0.26.1) — PREMISE headers: the countermeasure for "documents get obeyed"
+
+Reviewer: the doc set is now large enough that expired premises are a standing
+hazard, and the countermeasure is the rule already applied to code — record WHY
+next to WHAT. Every .md now opens with a machine-checked PREMISE block:
+version-written-against, review date, and the assumptions it depends on.
+Fixture 36 auto-discovers *.md (never a hardcoded list — that is the
+CRYPTO_EXCEPTIONS defect, and the point is a NEW document is covered the moment
+it exists) and asserts: block present · version parses · at least one non-empty
+assumption. Both guards carry self-tests proving they can fail.
+
+Honest correction to the brief: UNLOCK-EXPANSION.md and FACTS-ENGINE-ROADMAP.md
+do not exist as files — they were session briefs pasted into chat, so their
+premises were never on disk to expire. The real doc set is five files, now all
+headed. This is itself the argument for the mechanism: a plan that lives only in
+a chat transcript cannot be audited at all.
+
+Header verdicts recorded: NEXT-SESSION.md marked mostly EXECUTED/SUPERSEDED (its
+section 5, the bucket-D announcement path, survives and was vindicated);
+REMAINING-WORK.md carries the corrected bucket priority and the candidate-index
+rule; VPS-MIGRATION.md unchanged in substance (still valid, migration on/after
+31 Aug); NOTES marked append-only, read bottom-up for current state.

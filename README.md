@@ -1,3 +1,12 @@
+<!-- PREMISE
+Written against: v0.26.1
+Reviewed: 2026-08-29
+Assumes:
+- Describes SHIPPED behaviour only; anything aspirational belongs in REMAINING-WORK.md.
+- FACTS push immediately (no score/budget/direction); CALLS carry the full apparatus.
+- Unlock coverage is Ethereum/EVM only — absence of a row is not "no unlocks".
+-->
+
 # Market Radar
 
 Unified crypto alert platform delivered by one Telegram bot:

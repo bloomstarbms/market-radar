@@ -836,6 +836,35 @@ console.log('35. stage tiering — tier BEFORE bulk promotion, not after');
   check('coverage reports stages', /FULL:1/.test(cov.line) && /STANDARD:1/.test(cov.line));
 }
 
+console.log('36. every prompt document declares its premises (documents get obeyed)');
+{
+  // Code gets exercised; documents just keep reading as authoritative after their
+  // assumptions expire. Three expired-filter instances so far, the last one in a
+  // PROMPT (REMAINING-WORK.md ranked bucket A as the prize after the scan refuted
+  // it). Countermeasure = the rule already applied to code: RECORD WHY NEXT TO WHAT.
+  // Auto-discovered, never a hardcoded list — a hardcoded list is the CRYPTO_EXCEPTIONS
+  // defect, and the point is that a NEW document is covered the moment it exists.
+  const { readdirSync: rds } = await import('node:fs');
+  const docs = rds('.').filter((f) => f.endsWith('.md'));
+  check('doc discovery finds the document set', docs.length >= 4);
+  const missing = [], undated = [], noAssumptions = [];
+  for (const f of docs) {
+    const head = readFileSync(f, 'utf8').slice(0, 1600);
+    const m = head.match(/<!--\s*PREMISE([\s\S]*?)-->/);
+    if (!m) { missing.push(f); continue; }
+    if (!/Written against:\s*v?\d+\.\d+\.\d+/.test(m[1])) undated.push(f);
+    // "Assumes:" must be followed by at least one real bullet — an empty block is a
+    // header that looks like a safeguard while asserting nothing.
+    if (!/Assumes:\s*\n\s*-\s*\S/.test(m[1])) noAssumptions.push(f);
+  }
+  check('every .md declares a PREMISE block', missing.length === 0, missing.join(', '));
+  check('every PREMISE names the version it was written against', undated.length === 0, undated.join(', '));
+  check('every PREMISE lists at least one assumption', noAssumptions.length === 0, noAssumptions.join(', '));
+  // Self-tests: the checks must be capable of failing.
+  check('premise check can fail', !/<!--\s*PREMISE[\s\S]*?-->/.test('# Doc\n\nno header here'));
+  check('empty-assumptions check can fail', !/Assumes:\s*\n\s*-\s*\S/.test('Written against: v1.0.0\nAssumes:\n'));
+}
+
 console.error = origErr;
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

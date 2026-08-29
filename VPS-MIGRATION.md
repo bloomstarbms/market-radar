@@ -1,3 +1,15 @@
+<!-- PREMISE
+Written against: v0.24.5
+Reviewed: 2026-08-29
+Assumes:
+- Bot runs on the desktop; migration happens ON OR AFTER 31 Aug (never mid-window).
+- The agent CANNOT SSH — steps 1-4 are operator-executed, step 5 needs a second reader.
+- Entry point src/index.js, JSON storage, no RADAR_TRANSPORT.
+- VPS is optional on uptime grounds (88.1% clean-era coverage + stage/event
+  redundancy); the case for it is independence and streaming, not availability.
+- start-bot-on-boot.vbs belongs to a DIFFERENT project — never delete it.
+-->
+
 # VPS Migration — Cutover Prompt
 
 *Paste Part 0 from `REMAINING-WORK.md` first, then this. One session.*

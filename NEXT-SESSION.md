@@ -1,3 +1,15 @@
+<!-- PREMISE
+Written against: v0.23.4
+Reviewed: 2026-08-29
+Assumes:
+- Step 6 (vesting reads for the 12 gate-passing tokens) is PENDING — EXECUTED 21 Aug,
+  so sections 0-4 below are HISTORY, not instructions.
+- The 12-token universe is the right population — SUPERSEDED 29 Aug (candidate index
+  of tokens with known schedules; see REMAINING-WORK.md "CANDIDATE PROVENANCE").
+- Section 5 (bucket-D announcement path) SURVIVES and was vindicated by the scan.
+STATUS: mostly EXECUTED. Do not run as a session prompt; read as background.
+-->
+
 # Next session
 
 ## 0. FIRST: restore drill on tonight's backup (before push, before EIGEN)
