@@ -21,7 +21,9 @@ const KEY = (() => {
   try { return readFileSync('.env', 'utf8').match(/ETHERSCAN_API_KEY=(\S+)/)?.[1] ?? ''; } catch { return ''; }
 })();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const jget = async (url) => { try { const r = await fetch(url, { headers: { accept: 'application/json' } }); return await r.json(); } catch { return null; } };
+// 15s abort: one stalled connection must not eat a whole scan slice (the runtime
+// kills any invocation at ~170s; an un-timed-out fetch turns that into lost work).
+const jget = async (url) => { try { const r = await fetch(url, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(15000) }); return await r.json(); } catch { return null; } };
 
 const SEL = {  // OZ VestingWallet + TokenTimelock view selectors
   start: '0xbe9a6555', duration: '0x0fb5a6b4', beneficiary: '0x38af3eed',
@@ -109,7 +111,10 @@ async function classifyContract(addr, name) {
   return { bucket: 'C', why: implName ? 'custom: ' + implName : (name ? 'custom: ' + name : 'custom, unverified') };
 }
 
-export async function discover(sym) {
+// opts.addr: pre-resolved address from an AUTHORITATIVE source (bulk scan resolves
+// via CoinGecko mcap-rank, recorded in data/resolution-map.json) — bypasses the
+// flagged DexScreener fallback. opts.addrSource labels the provenance in the report.
+export async function discover(sym, opts = {}) {
   const out = { sym, chain: 'ethereum', at: new Date().toISOString().slice(0, 16), contracts: [], note: 'Ethereum-only v1 — non-EVM vesting invisible to this pass.' };
   if (NON_NATIVE[sym]) {
     out.verdict = 'NON-NATIVE';
@@ -117,14 +122,18 @@ export async function discover(sym) {
     out.note = `Vesting lives on ${NON_NATIVE[sym]}; the Ethereum ERC-20 (if any) is a bridged representation whose escrow holder is NOT locked supply. v1 cannot read this token — do not mistake this for NO-LOCKED-SUPPLY.`;
     return out;
   }
-  let addr = KNOWN_TOKENS[sym] ?? null;
+  let addr = KNOWN_TOKENS[sym] ?? opts.addr ?? null;
+  if (KNOWN_TOKENS[sym]) out.addressSource = 'authoritative map';
+  else if (opts.addr) out.addressSource = opts.addrSource ?? 'caller-resolved';
   if (!addr) { addr = await resolveToken(sym); if (addr) out.resolutionWarning = 'address resolved by DEX search, not authoritative — verify before acting (EIGEN validation run resolved to a symbol-squatter this way)'; }
-  else out.addressSource = 'authoritative map';
   if (!addr) { out.verdict = 'UNRESOLVED'; out.note += ' No canonical Ethereum ERC-20 with >$500k DEX liquidity found.'; return out; }
   out.token = addr;
   const info = await jget(`https://eth.blockscout.com/api/v2/tokens/${addr}`);
   const dec = Number(info?.decimals ?? 18);
   const supply = Number(info?.total_supply ?? 0) / 10 ** dec;
+  // "We did not look" must never read as "nothing there" (windowObserved class): a
+  // failed/empty info fetch would make THRESH=0 and cascade into a false verdict.
+  if (!info || !(supply > 0)) { out.verdict = 'FETCH-FAILED'; out.note += ' Token info fetch failed or zero supply — RETRYABLE, not a vesting verdict.'; return out; }
   out.totalSupply = supply;
   const THRESH = supply * 0.003; // 0.3% of supply
   let next = '';
@@ -163,10 +172,13 @@ export async function discover(sym) {
   return out;
 }
 
-// ---- CLI
-const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
-const useWatchlist = process.argv.includes('--watchlist');
-(async () => {
+// ---- CLI (guarded: importing this module must not execute the CLI — the bulk
+// orchestrator imports discover() and an unguarded IIFE would exit(1) on its argv)
+import { pathToFileURL } from 'node:url';
+const IS_CLI = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+const args = IS_CLI ? process.argv.slice(2).filter((a) => !a.startsWith('--')) : [];
+const useWatchlist = IS_CLI && process.argv.includes('--watchlist');
+if (IS_CLI) (async () => {
   let syms = args.map((s) => s.toUpperCase());
   if (useWatchlist) {
     const j = JSON.parse(readFileSync('unlocks.json', 'utf8'));

@@ -9,7 +9,7 @@
 // "Verify the fields, not just the date" — enforced by shape, not vigilance.
 
 // Fields a VERIFIED row may carry. Everything else from the estimated era is dropped.
-export const VERIFIED_ROW_FIELDS = ['sym', 'name', 'monthlyDay', 'date', 'verified', 'note', 'events', 'retired', 'retiredAt', 'cadence', 'enforcement', 'reviewBy'];
+export const VERIFIED_ROW_FIELDS = ['sym', 'name', 'monthlyDay', 'date', 'verified', 'note', 'events', 'retired', 'retiredAt', 'cadence', 'enforcement', 'reviewBy', 'stage'];
 // Estimated-era fields that must NEVER appear on a verified row (boot-asserted).
 export const ESTIMATED_ONLY_FIELDS = ['pctOfMcap'];
 
@@ -76,7 +76,8 @@ export function forwardFalsifierProblems(t) {
 
 // Pure. oldRow supplies IDENTITY only (sym, name); everything else must be provided
 // explicitly by the promoter, because explicit is what "verified" means.
-export function promoteRow(oldRow, { events, monthlyDay = null, date = null, note = '', cadence = null, enforcement = null, reviewBy = null }) {
+export function promoteRow(oldRow, { events, monthlyDay = null, date = null, note = '', cadence = null, enforcement = null, reviewBy = null, stage = null }) {
+  if (stage && !['FULL', 'STANDARD', 'LOGGED'].includes(stage)) throw new Error(`promoteRow: unknown stage '${stage}'`);
   if (!oldRow?.sym) throw new Error('promoteRow: old row has no sym');
   if (oldRow.retired) throw new Error(`promoteRow: ${oldRow.sym} is RETIRED (${oldRow.retired}) — a retired token is not promoted, it is re-opened deliberately`);
   if (!Array.isArray(events) || !events.length) throw new Error('promoteRow: a verified row requires events[] with provenance');
@@ -94,6 +95,7 @@ export function promoteRow(oldRow, { events, monthlyDay = null, date = null, not
   if (cadence) row.cadence = cadence;
   if (enforcement) row.enforcement = enforcement;
   if (reviewBy) row.reviewBy = reviewBy;
+  if (stage) row.stage = stage;
   const ff = forwardFalsifierProblems(row);
   if (ff.length) throw new Error(`promoteRow: ${ff.join('; ')}`);
   return row; // constructed — nothing from the estimated era survives except identity

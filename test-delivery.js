@@ -804,6 +804,38 @@ console.log('34. enforcement, not provenance label, decides the falsifier (the E
   check('LIVE EIGEN carries a cadence spec (most-verified is no longer least-falsified)', !!eigen?.cadence?.wallet && eigen.cadence.monthEnd === true);
 }
 
+console.log('35. stage tiering — tier BEFORE bulk promotion, not after');
+{
+  const { STAGES, leadsFor, lastMonthlyDate } = await import('./src/sources/calendar/unlocks.js');
+  check('FULL emits four stages incl. post-event', JSON.stringify(STAGES.FULL) === '[14,3,0,-3]');
+  check('LOGGED emits nothing (tracked, never pushed)', STAGES.LOGGED.length === 0);
+  check('unstaged rows default STANDARD (existing five unchanged in kind)', JSON.stringify(leadsFor({})) === JSON.stringify(STAGES.STANDARD));
+  check('unknown stage falls back to STANDARD, not silence', JSON.stringify(leadsFor({ stage: 'TYPO' })) === JSON.stringify(STAGES.STANDARD));
+  // T+3 needs a BACKWARD-looking date: the forward-only helper made negative leads
+  // structurally dead code (found while wiring, would have shipped silently).
+  const prev = lastMonthlyDate(30, new Date('2026-09-02T12:00:00Z'));
+  check('lastMonthlyDate finds the just-passed occurrence', prev.toISOString().slice(0, 10) === '2026-08-30');
+  const feb = lastMonthlyDate(30, new Date('2026-03-01T12:00:00Z'));
+  check('lastMonthlyDate clamps short months', feb.toISOString().slice(0, 10) === '2026-02-28');
+  const { promoteRow } = await import('./src/core/unlock-promote.js');
+  let bad = false; try { promoteRow({ sym: 'X', name: 'X' }, { events: [{ date: '2026-09-01', source: 's', detail: 'd' }], reviewBy: '2026-12-01', stage: 'MEGA' }); } catch { bad = true; }
+  check('promoteRow refuses unknown stage', bad);
+  check('promoteRow carries a valid stage', promoteRow({ sym: 'X', name: 'X' }, { events: [{ date: '2026-09-01', source: 's', detail: 'd' }], reviewBy: '2026-12-01', stage: 'LOGGED' }).stage === 'LOGGED');
+
+  // Coverage line: absence of a row must never read as "no unlocks" (the scan found
+  // 55 of 156 symbols vest off-Ethereum — structurally invisible, not unlocked).
+  const { unlockCoverage } = await import('./src/sources/calendar/unlocks.js');
+  const cov = unlockCoverage([
+    { sym: 'A', events: [{}], cadence: { wallet: '0x' }, stage: 'FULL' },
+    { sym: 'B', events: [{}], reviewBy: '2026-12-01', stage: 'STANDARD' },
+    { sym: 'C' }, { sym: 'D', retired: 'fully-unlocked' },
+  ]);
+  check('coverage counts verified/estimated/retired', cov.verified === 2 && cov.estimated === 1 && cov.retired === 1);
+  check('coverage splits falsifier kinds', cov.cadence === 1 && cov.reviewBy === 1);
+  check('coverage states the chain limit so absence is not read as no-unlocks', /Ethereum\/EVM only/.test(cov.line));
+  check('coverage reports stages', /FULL:1/.test(cov.line) && /STANDARD:1/.test(cov.line));
+}
+
 console.error = origErr;
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

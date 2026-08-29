@@ -23,17 +23,21 @@
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const jget = async (url) => { try { const r = await fetch(url, { headers: { accept: 'application/json' } }); return await r.json(); } catch { return null; } };
+// 15s abort — a stalled connection must not eat a scan slice (same fix as discovery).
+const jget = async (url) => { try { const r = await fetch(url, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(15000) }); return await r.json(); } catch { return null; } };
 
 // PAGINATION IS THE FAILURE MODE HERE, not a tuning knob: EIGEN's monthly emission
 // is a BATCH of dozens of transfers, so 4 pages (200 transfers) covered only 3 months
 // and the validation gate returned INSUFFICIENT on the known metronome. Depth must be
 // driven by DATE SPAN (>= 14 months), not page count.
-async function outflowsByDay(addr, tokenSym, maxPages = 30) {
+// deadlineTs (optional): stop paginating when past it — a busy wallet must yield a
+// truncated-but-labelled result inside a bounded slice, not eat the whole run.
+export async function outflowsByDay(addr, tokenSym, maxPages = 30, deadlineTs = null) {
   const byDay = {};
   let next = '', oldest = null;
   const cutoff = new Date(Date.now() - 14 * 30.44 * 86400e3).toISOString().slice(0, 10);
   for (let p = 0; p < maxPages; p++) {
+    if (deadlineTs && Date.now() > deadlineTs) break;
     const j = await jget(`https://eth.blockscout.com/api/v2/addresses/${addr}/token-transfers?filter=from${next}`);
     for (const t of (j?.items || [])) {
       const d = (t.timestamp || '').slice(0, 10);
@@ -120,8 +124,11 @@ export function detectCadence(byDay, { minMonths = 4, minAmount = 0 } = {}) {
   };
 }
 
-// ---- CLI
-(async () => {
+// ---- CLI (guarded: bulk-scan imports detectCadence/outflowsByDay; an unguarded
+// IIFE would run this CLI against the importer's argv)
+import { pathToFileURL } from 'node:url';
+const IS_CLI = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (IS_CLI) (async () => {
   const args = process.argv.slice(2);
   const topIdx = args.indexOf('--top');
   const topN = topIdx >= 0 ? Number(args[topIdx + 1]) : 10;

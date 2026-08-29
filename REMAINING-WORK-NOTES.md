@@ -1540,3 +1540,109 @@ decision (restore-drill shape). cadenceStatus reviewBy rows now show days remain
 ⚠️ at T-14, 🚨 at T-3. +4 fixtures, 251 PASS. Restarted; v0.25.2 live — warning path
 active well before ZRO's T-14 (Sep 8). PUSH-TO-GITHUB.bat still pending (one tag,
 whole day).
+
+## 2026-08-29 — BULK SCAN PRE-REGISTRATION (written before the scan ran)
+
+UNIVERSE RULE (recorded, deterministic): base symbols (quote suffix stripped)
+with >=3 unsuppressed gate-passing outcome rows, taxonomy EXCLUDE dropped (4
+leveraged), minus already-scanned (12) and unlocks.json rows = QUEUE 156
+(data/scan-queue.json). The historical "135" was an Aug 21 count; corpus grew.
+Queue visibly contains memecoins, majors (BTC/ETH/SOL), and xStock bases —
+resolution is expected to shed those, and their verdicts are triage noise,
+not signal.
+
+PREDICTIONS + FALSIFICATION LINES:
+ 1. RESOLUTION: 55–85 of 156 resolve to a canonical Ethereum ERC-20 via the
+    CoinGecko top-mcap rule. <40 ⇒ the resolution layer itself is broken/too
+    strict — diagnose resolution before concluding anything about vesting.
+ 2. LOCKED SUPPLY: 20–40% of resolved tokens show a non-skip contract holding
+    >=0.3% supply. <10% ⇒ discovery mis-tuned for mid-caps (NOT "ecosystem
+    unreadable"); >60% ⇒ classifier matching non-vesting contracts.
+ 3. CADENCE: 15–40% of locked-supply tokens yield a detectable consecutive-
+    month cadence. If DeFi-infra cadence yield is near ZERO ⇒ the detector is
+    narrower than EIGEN/ENA suggested (brief's line, adopted).
+ 4. PROMOTIONS this session: 3–8.
+ 5. CHAIN SPLIT (brief's priors, adopted to beat or falsify): DeFi-infra good
+    yield (ERC-20, Ethereum custody) · L2 ~half reachable · L1 near-zero
+    (native-chain vesting, Ethereum tooling structurally blind — ONDO finding
+    generalised). L1 yield materially >0 ⇒ chain assumption WRONG — stop and
+    understand before trusting any L1 result.
+
+## 2026-08-29 — BULK SCAN RESULTS: 156/156 scanned, ZERO promotions, 3 of 5
+## falsification lines fired. The measurement is the deliverable.
+
+SCAN COMPLETE: 156 queued, 156 done, 0 outstanding errors. Two passes
+(bulk-scan.js discovery → cadence-pass.js) both checkpointed per token.
+
+PRE-REGISTERED vs ACTUAL — honoured, not rationalised:
+ 1. RESOLUTION 55–85 predicted → **39**. Below the <40 line ⇒ the line's own
+    instruction is to DIAGNOSE RESOLUTION before concluding anything about
+    vesting. Diagnosis: the resolver is NOT broken — 63 UNRESOLVED-LOWCAP are
+    genuine sub-top-2000 microcaps, and 54 NON-NATIVE are correctly classified
+    (BSC 20, own-chain 15, Solana 6, **Robinhood 5 = xStock equities**, Base 4).
+    The low count is QUEUE COMPOSITION, not resolver failure. THE REAL FINDING:
+    the gate-passing universe is dominated by MEXC-listed microcaps and
+    tokenised equities — it is NOT the universe where unlock alerts matter.
+    Selecting the scan queue from gate-passers was itself the mis-step.
+ 2. LOCKED SUPPLY 20–40% predicted → **97% (38/39)**. Above the >60% line ⇒
+    "classifier matching non-vesting contracts", and that reading is correct:
+    GROVE 94.3%, CAP 93.1%, RIF 90% held is UNDISTRIBUTED TREASURY on a
+    microcap, not vesting. The 0.3%-threshold + skip-classes do not separate
+    "contract holds supply" from "contract vests supply" at the low end.
+ 3. CADENCE 15–40% of locked → **0 of 30**. Families: INSUFFICIENT 15,
+    NO-OUTFLOWS 8, IRREGULAR 7. Combined with #2 the honest reading is NOT
+    "detector too narrow" alone — most of this population never had a vesting
+    schedule to detect.
+ 4. PROMOTIONS 3–8 predicted → **0**. Stated plainly.
+ 5. CHAIN SPLIT: L1 near-zero CONFIRMED. **DeFi-infra "good yield" FALSIFIED**
+    — BAL, LRC, DODO, OGN, SKL, SPELL, EUL, GTC, SYN all tested, zero cadence.
+    The cadence method works on large-cap professionally-custodied treasuries
+    (EIGEN, ENA) and does not generalise downward.
+
+NOTABLE FINDS (logged, not chased — coverage-session rule):
+ - **WLD is the only A-READABLE**: three sequential OZ VestingWallets
+   (2026-07-24→2029, 2029→2032, 2032→2038, 1096d each, same GnosisSafe
+   beneficiary), 72.5% of supply, genuinely CONTRACT-ENFORCED — the first row
+   that could ever claim enforcement:'contract'. NOT PROMOTED, and the reason
+   is an inversion worth keeping: **OZ VestingWallet releases CONTINUOUSLY,
+   so there is no dated event to alert on.** Zero release calls to date. For a
+   date-alerting system, bucket A is WORSE than bucket D: custody batches
+   produce dated events, contracts produce a smooth curve. "A-READABLE is the
+   gold standard" was backwards for this use case.
+ - B-STREAM x2: GTC (Hedgeys), TREE (Sablier V2 Lockup Dynamic) — the first
+   live stream contracts the battery has seen; both sub-1% of supply.
+ - Tool defects fixed as BLOCKERS only: unguarded CLI IIFEs (importing either
+   tool ran its CLI), no fetch timeout (one stalled connection ate a whole
+   slice), no per-token deadline (a monster family livelocked the pass),
+   FETCH-FAILED frozen into the checkpoint as if settled (retryable ≠ done).
+ - Logged NOT fixed: 0.3% threshold does not distinguish treasury from
+   vesting; Blockscout ~7s/page under load makes truncation a real
+   false-negative risk on busy wallets; taxonomy passes xStock BASES
+   (SAMSUNG, SONY, BRKB, EBAY, GEV) that the equity classifier catches only
+   in announcement text.
+
+PART 5 — L1 DECISION (recorded, not drifted past): **(a) + (c)**.
+ (a) ACCEPT that unlock coverage is an Ethereum/EVM feature — now stated in
+     the module's own coverage line, so absence never reads as "no unlocks".
+ (c) ANNOUNCEMENT PATH for individually high-pressure L1s only, manual, with
+     reviewBy switches (the STRK pattern, already proven).
+ (b) per-chain readers REJECTED for now: this scan found no evidence the L1
+     pile contains alertable schedules we would otherwise miss — 15 own-chain
+     symbols are mostly microcaps. Revisit only if a top-20 L1 by pressure
+     needs it.
+
+STAGE TIERING LIVE (before any bulk promotion, as ordered): STAGES
+FULL[14,3,0,-3] / STANDARD[3,0] / LOGGED[]. Assigned: EIGEN+ENA FULL
+(cadence-verified, largest observed emissions), ARB/STRK/ZRO STANDARD.
+**Deliberate behaviour change**: the old fixed [7,3] is gone — STANDARD rows
+lose T-7 and gain T-0; FULL rows get T-14/T-3/T-0/T+3. T+3 required a new
+backward-looking date helper (lastMonthlyDate) — negative leads were
+structurally dead code as first wired, caught by fixture, never shipped.
+Bands PROVISIONAL until ADV matures (~Sep 7).
+
+NEXT SESSION'S DECISION IS NOW DATA-BACKED: do NOT widen the selector battery
+for this universe (the population lacks schedules, not readability). The
+higher-yield question is whether to scan a DIFFERENT universe — top-200 by
+mcap rather than gate-passers — where professional custody vesting actually
+lives, i.e. the EIGEN/ENA/ZRO/LINK/UNI population the first 12-token pass
+already sampled at 5/5 custody.

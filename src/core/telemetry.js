@@ -15,6 +15,7 @@ import { getState, save } from './store.js';
 import { formatPulse, feedWasLooking } from './pulse.js';
 import { unclassifiedStats, excludedStats } from './unclassified.js';
 import { cadenceStatus } from '../sources/calendar/cadence-watch.js';
+import { unlockCoverage } from '../sources/calendar/unlocks.js';
 
 const DIGEST_HOUR = Number(process.env.DIGEST_HOUR_UTC ?? 18);
 
@@ -260,6 +261,7 @@ export function buildHeartbeat(now = Date.now(), deps = {}) {
       })(),
       // Behavioural rows carry their falsifier; this line is the falsifier's own
       // pulse — a cadence watch that stops confirming must be visible, not assumed.
+      (deps.coverage ?? unlockCoverage()).line,
       (deps.cadence ?? cadenceStatus()).line,
       (deps.digest ?? digestStatus(getState(), now, deps.rows ?? null)).line,
       ...(deps.accumulators ?? accumulatorStatus(now, { rows: deps.rows ?? undefined })).lines,

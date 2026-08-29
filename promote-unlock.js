@@ -68,6 +68,7 @@ const row = promoteRow(j.tokens[idx], {
   cadence,
   enforcement: args.enforcement ?? null,
   reviewBy: args.reviewBy ?? null,
+  stage: args.stage ?? null,
 });
 const dropped = Object.keys(j.tokens[idx]).filter((k) => !(k in row));
 j.tokens[idx] = row;

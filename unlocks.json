@@ -29,7 +29,8 @@
     "meanAmount": 7822556,
     "monthsObserved": 11,
     "graceDays": 3
-   }
+   },
+   "stage": "FULL"
   },
   {
    "sym": "ZETA",
@@ -75,7 +76,8 @@
    ],
    "note": "Vesting on Starknet L2 (no eth_call path in our stack): up to 127M STRK on the 15th monthly through Mar 2027 per docs.starknet.io. Enforcement unverifiable from here — reviewBy dead-man's switch; re-attest by the date or the row demotes itself.",
    "monthlyDay": 15,
-   "reviewBy": "2026-11-30"
+   "reviewBy": "2026-11-30",
+   "stage": "STANDARD"
   },
   {
    "sym": "ARB",
@@ -90,7 +92,8 @@
    ],
    "note": "Team+investor linear vesting, 92.65M ARB monthly on the 16th, through 2027. Announcement path; hundreds of on-chain vesting wallets (bucket C) not enumerated by us, so NOT claimed contract-enforced — reviewBy dead-man's switch instead. Re-attest by the date or the row demotes itself.",
    "monthlyDay": 16,
-   "reviewBy": "2026-11-30"
+   "reviewBy": "2026-11-30",
+   "stage": "STANDARD"
   },
   {
    "sym": "OP",
@@ -239,7 +242,8 @@
     "meanAmount": 12069436,
     "monthsObserved": 13,
     "roll": "nextBusinessDay"
-   }
+   },
+   "stage": "FULL"
   },
   {
    "sym": "ALT",
@@ -261,7 +265,8 @@
    "note": "Bucket D: 27-contract custody family (BitGo WalletSimple + GnosisSafes), NO observable emission cadence on Ethereum (omnichain token — cadence spec would false-demote by construction). Schedule rests on the Foundation's published rule alone. STRUCTURAL TRIGGER (was prose): reviewBy 2026-09-22 — if the Sep 20 unlock shows no market-visible event, do not re-promote; the row demotes itself.",
    "monthlyDay": 20,
    "date": "2026-09-20",
-   "reviewBy": "2026-09-22"
+   "reviewBy": "2026-09-22",
+   "stage": "STANDARD"
   },
   {
    "sym": "PYTH",

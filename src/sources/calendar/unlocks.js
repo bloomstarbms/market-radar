@@ -12,7 +12,13 @@ import { dispatch } from '../../core/dispatcher.js';
 import { loadWatchState, activeDemotions } from './cadence-watch.js';
 
 const FILE = join(ROOT, 'unlocks.json');
-const LEAD_DAYS = [7, 3];          // ping windows
+// STAGE TIERING (coverage-session Part 3): at 25+ tracked tokens, un-tiered monthly
+// unlocks emit up to 3 messages/day on top of everything else. Tier BEFORE bulk
+// promotion. Negative lead = days AFTER the event (T+3 post-check). LOGGED rows are
+// tracked, heartbeat-visible, never pushed. Stage assignments are PROVISIONAL until
+// ADV matures (~Sep 7) — the row's note says so.
+export const STAGES = { FULL: [14, 3, 0, -3], STANDARD: [3, 0], LOGGED: [] };
+export const leadsFor = (row) => STAGES[row?.stage ?? 'STANDARD'] ?? STAGES.STANDARD;
 const CHECK_EVERY = 6 * 3600e3;    // re-evaluate every 6h
 let lastPoll = 0;
 let estimatedSkipped = 0;
@@ -25,6 +31,19 @@ function loadSchedule() {
   catch (e) { console.error('[unlocks] bad unlocks.json:', e.message); return null; }
 }
 
+// Most recent PAST occurrence — negative leads (T+3) look backward, and the
+// forward-only helper would otherwise make post-event stages structurally dead code.
+export function lastMonthlyDate(day, from = new Date()) {
+  const today = new Date(from).setUTCHours(0, 0, 0, 0);
+  for (let i = 0; i >= -2; i--) {
+    const d = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + i, 1));
+    const lastDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+    const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), Math.min(day, lastDay)));
+    if (target.getTime() <= today) return target;
+  }
+  return null;
+}
+
 // Next occurrence of a monthly cliff (handles short months: day 31 -> last day)
 function nextMonthlyDate(day, from = new Date()) {
   for (let i = 0; i < 3; i++) {
@@ -34,6 +53,28 @@ function nextMonthlyDate(day, from = new Date()) {
     if (target.getTime() >= from.setUTCHours(0, 0, 0, 0)) return target;
   }
   return null;
+}
+
+// COVERAGE LINE — what the module knows and, crucially, what it CANNOT know. The
+// bulk scan (29 Aug) established that unlock coverage is an Ethereum/EVM feature:
+// 55 of 156 scanned symbols vest on their own chains, invisible from here. Absence
+// of an unlock row must never read as "this token has no unlocks".
+export function unlockCoverage(tokens = null) {
+  if (!tokens) { const s = loadSchedule(); tokens = s?.tokens ?? []; }
+  const verified = tokens.filter((t) => !t.retired && t.events?.length);
+  const stages = {};
+  for (const t of verified) stages[t.stage ?? 'STANDARD'] = (stages[t.stage ?? 'STANDARD'] || 0) + 1;
+  const c = {
+    tracked: tokens.length,
+    verified: verified.length,
+    estimated: tokens.filter((t) => !t.retired && !t.events?.length).length,
+    retired: tokens.filter((t) => t.retired).length,
+    cadence: verified.filter((t) => t.cadence).length,
+    reviewBy: verified.filter((t) => t.reviewBy && !t.cadence).length,
+    stages,
+  };
+  c.line = `Unlock coverage: ${c.tracked} tracked · ${c.verified} verified (${c.cadence} cadence-watched · ${c.reviewBy} review-dated) · ${c.estimated} estimated (silent) · ${c.retired} retired · stages ${Object.entries(stages).map(([k, v]) => k + ':' + v).join(' ')} · Ethereum/EVM only — tokens vesting on their own chains are out of scope, not unlocked`;
+  return c;
 }
 
 export async function pollUnlocks() {
@@ -60,12 +101,14 @@ export async function pollUnlocks() {
     if (t.retired) continue; // positive state, asserted at boot — never alert
     if (!Array.isArray(t.events) || !t.events.length) { estimatedSkipped++; continue; }
     const when = t.date ? new Date(t.date + 'T00:00:00Z') : (t.monthlyDay ? nextMonthlyDate(t.monthlyDay, new Date()) : null);
-    if (!when) continue;
-    const daysOut = Math.round((when - now) / 86400e3);
+    const prev = t.date ? new Date(t.date + 'T00:00:00Z') : (t.monthlyDay ? lastMonthlyDate(t.monthlyDay, new Date()) : null);
 
-    for (const lead of LEAD_DAYS) {
+    for (const lead of leadsFor(t)) {
+      const target = lead >= 0 ? when : prev; // negative leads look BACKWARD
+      if (!target) continue;
+      const daysOut = Math.round((target - now) / 86400e3);
       if (daysOut !== lead) continue;
-      const dateKey = when.toISOString().slice(0, 10);
+      const dateKey = target.toISOString().slice(0, 10);
       const pct = t.pctOfMcap ? ` (~${t.pctOfMcap}% of market cap)` : '';
       // Provenance stated precisely: an events[]-backed date says HOW it was verified
       // (contract read / announcement / on-chain backtest), not a generic calendar
@@ -83,16 +126,21 @@ export async function pollUnlocks() {
         : t.verified
         ? 'Date verified against the public unlock calendar.'
         : '⚠️ Recurring-schedule estimate — confirm the exact date on cryptorank.io/token-unlock.';
+      const stageLine = lead === 0 ? `${t.sym} unlock today — ${dateKey}`
+        : lead < 0 ? `${t.sym} unlock T+${-lead} — event was ${dateKey}`
+        : `${t.sym} unlock in ${lead} days — ${dateKey}`;
       if (await dispatch({
         source: 'CAL', type: 'UNLOCK',
-        severity: lead === 3 ? 'HIGH' : 'MEDIUM',
+        severity: lead === 3 || lead === 0 ? 'HIGH' : lead < 0 ? 'LOW' : 'MEDIUM',
         key: `${t.sym}:${dateKey}:${lead}`, cooldownMin: 2 * 24 * 60,
-        title: `${t.sym} unlock in ${lead} days — ${dateKey}`,
+        title: stageLine,
         lines: [
           `${t.name || t.sym}: scheduled token unlock${pct}`,
           t.note ? `Context: ${t.note}` : 'Unlocks add sell-side supply; thin-liquidity tokens absorb it worst.',
-          lead === 7
+          lead >= 7
             ? 'Added supply reaches the market on this date. No directional claim — the drift around unlocks has not been measured on this corpus.'
+            : lead < 0
+            ? 'Post-event check: emission was scheduled on the stated date. Fact only — no read on what it did.'
             : 'Emission is imminent. Fact only: what happens next is not something this system has earned an opinion about.',
           confidence,
         ],
