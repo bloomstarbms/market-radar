@@ -9,6 +9,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { config, ROOT } from '../../config.js';
 import { dispatch } from '../../core/dispatcher.js';
+import { loadWatchState, activeDemotions } from './cadence-watch.js';
 
 const FILE = join(ROOT, 'unlocks.json');
 const LEAD_DAYS = [7, 3];          // ping windows
@@ -43,7 +44,13 @@ export async function pollUnlocks() {
 
   const now = new Date();
   let fired = 0;
+  // Cadence overlay: a behavioural row whose watch window passed empty is demoted by
+  // OBSERVATION, recorded in bot-owned data/ — unlocks.json keeps its single human
+  // writer. A demotion is superseded only by a re-promotion with newer evidence.
+  const demoted = activeDemotions(sched.tokens, loadWatchState());
+  let cadenceDemoted = 0;
   for (const t of sched.tokens) {
+    if (demoted[t.sym]) { cadenceDemoted++; estimatedSkipped++; continue; } // alerts as nothing until re-verified
     // THREE-STATE DISCIPLINE (spec §4.2): only a VERIFIED DATE may alert — a date
     // read from the vesting contract or a project announcement, stored in
     // t.events[]. `monthlyDay` recurrences and pct-only rows are ESTIMATED:
@@ -65,8 +72,14 @@ export async function pollUnlocks() {
       // claim. The first live push carried 'verified against the public unlock
       // calendar' on a date that had actually replayed ten times on-chain — underselling
       // the strongest evidence in the system.
+      // Provenance CLASS matters, not just source: a contract read is a commitment
+      // (enforced on-chain); a cadence read is a habit (custody can change it at
+      // will). Both verify, but they fail differently — the message says which one
+      // it is resting on instead of letting "verified" imply the stronger class.
       const confidence = (Array.isArray(t.events) && t.events.length)
-        ? `Date verified — source: ${t.events[0].source}.`
+        ? (t.events[0].source === 'onchain-cadence' && t.cadence
+          ? `Date verified — schedule inferred from ${t.cadence.monthsObserved} months of observed emissions (behavioural, not contractually enforced; auto-demotes if the pattern breaks).`
+          : `Date verified — source: ${t.events[0].source}.`)
         : t.verified
         ? 'Date verified against the public unlock calendar.'
         : '⚠️ Recurring-schedule estimate — confirm the exact date on cryptorank.io/token-unlock.';
@@ -87,5 +100,5 @@ export async function pollUnlocks() {
       })) fired++;
     }
   }
-  if (config.debug || fired) console.log(`[unlocks] ${sched.tokens.length} tracked${fired ? ` · ${fired} reminders sent · ${estimatedSkipped} estimated-only (silent, pending contract reads)` : ''}`);
+  if (config.debug || fired) console.log(`[unlocks] ${sched.tokens.length} tracked${fired ? ` · ${fired} reminders sent · ${estimatedSkipped} estimated-only (silent, pending contract reads)` : ''}${cadenceDemoted ? ` · ${cadenceDemoted} cadence-demoted (silent until re-verified)` : ''}`);
 }

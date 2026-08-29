@@ -1,0 +1,20 @@
+=== startup inspection 27/08/2026 14:37:18.28 === 
+ 
+--- start-bot-on-boot.vbs (provenance unknown, 25/08 05:52) --- 
+' Launches the bot minimised when Windows starts.
+' A copy of this file lives in the Startup folder.
+' To stop the bot starting automatically, delete the copy in:
+'   Start Menu > Programs > Startup
+Set shell = CreateObject("WScript.Shell")
+shell.Run """C:\Users\bloom\Desktop\infoxchange-bot\run-bot-forever.bat""", 7, False
+ 
+--- market-radar.vbs (ours, 17/07) --- 
+Set shell = CreateObject("WScript.Shell") 
+shell.Run """C:\Users\bloom\OneDrive\Desktop\market-radar\run-hidden.vbs""", 0, False 
+ 
+--- last boot time (has the machine rebooted since 25/08 05:52?) --- 
+
+Thursday, August 13, 2026 3:05:52 AM
+
+
+DONE 

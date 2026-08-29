@@ -1,21 +1,35 @@
 {
  "comment": "Token unlock watchlist. Two entry types: 'monthlyDay' = recurring cliff on that day each month (most vesting contracts release monthly); 'date' = one-off YYYY-MM-DD. Bot pings 7 days and 3 days before. verified:true = confirmed against cryptorank.io/token-unlock on 2026-08-01; others are recurring-schedule estimates — check the date on cryptorank before acting.",
  "source": "https://cryptorank.io/token-unlock (free public page)",
- "lastReviewed": "2026-08-21 (step 6 session: EIGEN backtested on-chain; ARB/STRK announcement-verified; INJ retired)",
+ "lastReviewed": "2026-08-28 (promoted ZRO via promote-unlock.js)",
  "tokens": [
   {
    "sym": "EIGEN",
    "name": "EigenCloud",
-   "monthlyDay": 30,
    "verified": true,
-   "note": "Custody-held (BitGo WalletSimple x21, 484M family). Announced 1yr-lock-then-monthly schedule BACKTESTED on-chain: 10 consecutive month-end distributions Oct 30 2025 - Jul 30 2026, ~9.6M EIGEN/mo aggregate (largest wallet 7.95M/mo on the 30th). Largest wallet (176.7M) mostly dormant = later tranches.",
    "events": [
+    {
+     "date": "2026-08-28",
+     "source": "onchain-cadence",
+     "detail": "detect-cadence.js: 11 consecutive MONTH-END distributions Sep 2025-Jul 2026 from custody 0x34BcF805A5..., mean 7.82M EIGEN/mo, cv low; second metronome 0x3De6b6b1 1.69M/mo same day (family ~9.6M). Forward falsifier: window empty => auto-demote."
+    },
     {
      "date": "2026-08-30",
      "source": "announcement+onchain-backtest",
      "detail": "Monthly custody distribution, ~9.5M EIGEN observed last cycle. Backtest: eth wallets 0x3De6b6b1/0x34BcF805 outbound transfers, monthly on the 30th (28th/29th short months) since 2025-10-30."
     }
-   ]
+   ],
+   "note": "Custody-held (BitGo WalletSimple x21, 484M family) — behavioural: announcement described the schedule, custody habit enforces nothing. cadence-watch auto-demotes if a month-end window passes empty. Largest wallet (176.7M) mostly dormant = later tranches.",
+   "monthlyDay": 30,
+   "date": "2026-08-28",
+   "cadence": {
+    "wallet": "0x34BcF805A503D5151c05CD349699a8aD1767a026",
+    "expectDay": 30,
+    "monthEnd": true,
+    "meanAmount": 7822556,
+    "monthsObserved": 11,
+    "graceDays": 3
+   }
   },
   {
    "sym": "ZETA",
@@ -51,8 +65,6 @@
   {
    "sym": "STRK",
    "name": "Starknet",
-   "monthlyDay": 15,
-   "note": "Vesting on Starknet L2 (no eth_call path in our stack). Project docs: up to 127M STRK on the 15th monthly, Apr 2025 through Mar 15 2027 (docs.starknet.io).",
    "verified": true,
    "events": [
     {
@@ -60,13 +72,14 @@
      "source": "announcement",
      "detail": "127M STRK monthly on the 15th per Starknet documentation (core contributors + investors), through 2027-03-15."
     }
-   ]
+   ],
+   "note": "Vesting on Starknet L2 (no eth_call path in our stack): up to 127M STRK on the 15th monthly through Mar 2027 per docs.starknet.io. Enforcement unverifiable from here — reviewBy dead-man's switch; re-attest by the date or the row demotes itself.",
+   "monthlyDay": 15,
+   "reviewBy": "2026-11-30"
   },
   {
    "sym": "ARB",
    "name": "Arbitrum",
-   "monthlyDay": 16,
-   "note": "Team+investor linear vesting, 92.65M ARB monthly on the 16th, runs through 2027. Publicly documented since launch; hundreds of on-chain vesting wallets (bucket C) — contract enumeration deferred, announcement path used.",
    "verified": true,
    "events": [
     {
@@ -74,7 +87,10 @@
      "source": "announcement",
      "detail": "92.65M ARB monthly (team/advisors/investors), 16th of each month per Arbitrum published schedule; Aug 16 2026 event occurred as scheduled (multiple public confirmations)."
     }
-   ]
+   ],
+   "note": "Team+investor linear vesting, 92.65M ARB monthly on the 16th, through 2027. Announcement path; hundreds of on-chain vesting wallets (bucket C) not enumerated by us, so NOT claimed contract-enforced — reviewBy dead-man's switch instead. Re-attest by the date or the row demotes itself.",
+   "monthlyDay": 16,
+   "reviewBy": "2026-11-30"
   },
   {
    "sym": "OP",
@@ -207,8 +223,23 @@
   {
    "sym": "ENA",
    "name": "Ethena",
-   "monthlyDay": 2,
-   "note": "big investor unlocks"
+   "verified": true,
+   "events": [
+    {
+     "date": "2026-08-28",
+     "source": "onchain-cadence",
+     "detail": "13 consecutive monthly distributions from custody 0x54B8c65f0635fD91C8729Dd3269C630d9AED54e5 (Aug 2025-Aug 2026), mean 12.07M ENA, cv 0.26; emits on the 6th, rolls to Monday when the 6th is a weekend (observed 3/3 weekend cases)"
+    }
+   ],
+   "note": "Behavioural verification (habit, not commitment): cadence-watch auto-demotes if a monthly window passes with no qualifying outflow. Source wallet is an active ops treasury; largest holder 0x2146 is irregular — this row covers the metronomic tranche only.",
+   "monthlyDay": 6,
+   "cadence": {
+    "wallet": "0x54B8c65f0635fD91C8729Dd3269C630d9AED54e5",
+    "expectDay": 6,
+    "meanAmount": 12069436,
+    "monthsObserved": 13,
+    "roll": "nextBusinessDay"
+   }
   },
   {
    "sym": "ALT",
@@ -219,8 +250,18 @@
   {
    "sym": "ZRO",
    "name": "LayerZero",
+   "verified": true,
+   "events": [
+    {
+     "date": "2026-09-20",
+     "source": "announcement",
+     "detail": "Monthly on the 20th, derived from the LayerZero Foundation's published rule (info.layerzero.foundation 'Introducing ZRO': TGE 2024-06-20, 1-year lock, then monthly over 2 years; fully vested 2027-05-20). Day follows from the project-published rule, not aggregators."
+    }
+   ],
+   "note": "Bucket D: 27-contract custody family (BitGo WalletSimple + GnosisSafes), NO observable emission cadence on Ethereum (omnichain token — cadence spec would false-demote by construction). Schedule rests on the Foundation's published rule alone. STRUCTURAL TRIGGER (was prose): reviewBy 2026-09-22 — if the Sep 20 unlock shows no market-visible event, do not re-promote; the row demotes itself.",
    "monthlyDay": 20,
-   "note": "heavy VC vesting"
+   "date": "2026-09-20",
+   "reviewBy": "2026-09-22"
   },
   {
    "sym": "PYTH",

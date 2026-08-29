@@ -15,6 +15,16 @@ export function pulseAges() {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// ABSENCE OF OBSERVATION ISN'T OBSERVATION OF ABSENCE — the named class behind the
+// cadence-watch windowObserved() gate, generalized. A zero count ("no unclassified
+// shapes", "no exclusions", "no unlock outflow") is only evidence when the feed that
+// would have produced nonzero was actually looking. Every "nothing happened" signal
+// needs an "and we were looking" companion; this is that companion for pulse-tracked
+// feeds. Pure when ages are injected.
+export function feedWasLooking(nameRx, maxAgeSec = 6 * 3600, ages = pulseAges()) {
+  return ages.some((a) => nameRx.test(a.name) && a.ageSec <= maxAgeSec);
+}
+
 export function formatPulse() {
   const ages = pulseAges();
   if (!ages.length) return 'no collector has succeeded yet this boot';

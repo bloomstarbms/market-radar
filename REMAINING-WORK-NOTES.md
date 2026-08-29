@@ -1198,3 +1198,345 @@ CITATION, NOT DELETION: the claim was true and had since been measured —
 median alpha −13.5% (n=30, sub-gate population — provisional)". The
 oldest open item in the project closed by giving the sentence the
 statistics it always owed.
+
+## 27 AUG (later) — push provenance live; SECOND autostart entry discovered
+
+PUSH-TO-GITHUB.bat needed two repairs before the derived commit worked —
+both were BATCH QUOTING failures that killed the parser silently (result
+file contained only the header). First the nested-PowerShell attempt, then
+delims=' colliding with the apostrophe-quoted command. Lesson recorded:
+cmd.exe CANNOT BE TESTED from the agent sandbox, so clever batch is
+untestable batch — the fix was to stop being clever (node emits the
+version to a temp file, set /p reads it). Verified live: commit 517719b
+"v0.24.5", tagged, pushed. History tells the truth from here.
+
+STARTUP FOLDER HAS TWO BOT LAUNCHERS: market-radar.vbs (ours, 17/07) AND
+start-bot-on-boot.vbs (25/08 05:52 — NOT created by the agent, NOT in the
+repo; provenance unknown, presumably the operator). Currently exactly one
+cmd+node pair is running (verified via CHECK-STATUS), so no live double
+instance — but if both scripts start run-hidden.bat, the NEXT REBOOT runs
+two loops: getUpdates 409 fight + state.json races on one machine.
+Cutover checklist updated: step 5's check is now "Startup folder EMPTY of
+bot entries", not "no market-radar.vbs". ASK THE OPERATOR what
+start-bot-on-boot.vbs is before deleting it.
+STARTUP MYSTERY RESOLVED (27 Aug): start-bot-on-boot.vbs launches
+Desktop\infoxchange-bot\run-bot-forever.bat — a DIFFERENT project of the
+operator's, not a market-radar duplicate. No getUpdates/state hazard.
+Machine last booted 13 Aug, so the file has never executed. The hazard
+FLIPPED: the decommission rule "Startup empty of bot entries" would have
+deleted the OTHER project's launcher. Corrected to "no MARKET-RADAR
+launcher remains" — scope removal rules precisely; an over-broad cleanup
+breaks a neighbour. (Also confirmed: 14 days uptime, consistent with
+sleep-never working — the machine sleeps, it does not reboot.)
+
+## THE SCHEDULED RE-MEASURE, RUN ON TIME (27 Aug) — the $5 gate, answered
+
+Nearly skipped the gate built to gate this exact decision — the migration
+was scheduled without the measurement that was scheduled to justify it.
+Run before the 30th as directed.
+
+CLEAN-ERA RESULT (rows since 13 Aug, sleep-never config, 13 full days):
+  overall hour-coverage 88.1% · worst hours 77% (08:00, 10:00)
+  vs the mixed-era profile's ~50% coin flip: the free fix took expected
+  FULL-stage misses from ~14 of 28 to ~3 of 28.
+PROXY CAVEAT, stated: row density varies 1.2-9.4/hr by day, so hour-
+coverage UNDER-counts uptime on quiet days. True availability is somewhat
+above 88%.
+BUT THE HEADLINE INCIDENT IS REAL, not proxy noise: Aug 23 04:32 ->
+Aug 24 06:15, ~26 HOURS DARK, corroborated by the run-hidden restart
+marker at 06:15:56. Cause almost certainly UNPLUGGED -> battery -> sleep
+(sleep-never is AC-only; wake timers are enabled on DC but nothing
+scheduled fired in that window). The T-7 survived by four hours of luck:
+it fired ~00:00, the machine died ~04:32. Had the emission or T-3 fallen
+in that window, the module's first calendar run would have carried a miss.
+
+VERDICT, honestly framed: the desktop is NOT a coin flip anymore and NOT
+99% either. The free fix solved the systematic problem (S0 idle naps);
+what remains is the HUMAN one — a laptop is sometimes a laptop. ~12%
+expected stage-miss risk, concentrated in exactly the windows nobody
+plans. The VPS is now OPTIONAL on uptime grounds alone: it buys the last
+~12%, freedom from the machine's other uses (a second bot now shares it),
+and the streaming option. The 25 Aug principle stands re-ordered as
+applied: loss measured, free fix exhausted AND VERIFIED, spend now a
+choice rather than a necessity. DECISION IS THE OPERATOR'S; the 31st
+window remains open either way.
+
+## UPTIME RESIDUAL CLOSED FURTHER + TWO REFRAMES (27 Aug, Session A pt3 preamble)
+
+DC SLEEP-NEVER SET (was AC-only — the exact hole the Aug 23-24 26h outage
+fell through). Expected: 88.1% clean-era coverage into the mid-90s, free.
+Cannot fix: lid-close, battery exhaustion, true shutdown.
+
+STAGE-vs-EVENT REFRAME (operator's): "3 of 28 stages at risk" OVERSTATES
+the loss. Each unlock event emits FOUR stages; a missed T-3 still leaves
+T-0 and T+3, macro's T+5m/T+30m both cover a print. The honest residual is
+"occasionally one fewer reminder on an event you are still told about" —
+which moves the VPS case almost entirely OFF uptime and onto the two real
+grounds: independence from a machine that also runs the infoxchange bot,
+and streaming later. The post-30th decision is made on THOSE grounds.
+
+NEW SAFEGUARD-CLASS VARIANT, named: A FILTER WHOSE JUSTIFICATION HAS
+EXPIRED STILL RUNS. The 12-token unlock list came from gate-passing ∩
+has-schedule, built when unlocks were going to be TRADE SIGNALS. The
+FACT/CALL split made the gate an annotation — tradeability stopped being
+the constraint — and nothing announced that the list no longer matched
+its own rationale. It did not break; it quietly kept enforcing a dead
+premise. Same shape as the contingent bypass; same countermeasure: RECORD
+WHY A FILTER EXISTS NEXT TO THE FILTER, so an architectural change trips
+over the stale premise instead of inheriting it. The real constraint for
+unlock coverage is VERIFICATION COST, which is what discovery automation
+attacks.
+
+## SESSION A PART 2 — five promotion attempts, ONE qualified (27 Aug)
+
+ZRO PROMOTED (verified count now 4: EIGEN, ARB, STRK, ZRO): monthly on the
+20th, derived from the LayerZero FOUNDATION'S OWN published rule (TGE
+2024-06-20 + 1yr lock + monthly over 2yrs => 20th; fully vested
+2027-05-20) — the day follows from the project source arithmetically, not
+from aggregators. Bucket-D backtest ATTEMPTED and honestly recorded as
+non-confirming, non-contradicting: the three top GnosisSafes show
+irregular ops movements, no monthly cadence — the emission path was not
+located. Demote-trigger written into the note: no market-visible event on
+Sep 20 => back to estimated.
+
+FOUR STAY ESTIMATED, reasons recorded:
+  OP  — the docs page that carried the unlock chart was reorganised away;
+        no project source reachable in minutes. Retry later.
+  SUI — official schedule EXISTS (sui.io/token-schedule + circulation
+        API) but publishes monthly AMOUNTS, not the day; aggregators
+        split (1st vs 3rd); foundation reserves adjustments. PATH: the
+        API's month-step observed at the boundary would pin the day
+        empirically — an automation candidate.
+  SEI — aggregator-tier only (15th monthly per trackers). No project src.
+  ENA — PROBED (the brief's requirement): the 1.19B contract is an EIP-
+        1167 clone of an UNVERIFIED implementation, OZ selectors null,
+        irregular small outflows => bucket D custody, no readable
+        schedule, no project-published calendar found. Estimated.
+Aggregator dates did not ship. One of five is what the standard costs;
+the alternative was four guessed days feeding T-3s that mistime.
+
+## PART 3 PRE-REGISTRATION (before discovery runs — falsification lines stated)
+
+Universe: 135 distinct gate-passing symbols. Discovery v1 is ETHEREUM-ONLY
+(Blockscout+Etherscan); non-EVM chains (Sui/Sei/Aptos/Solana/Cosmos) are
+out of v1 scope and stated as such in every report it emits.
+PREDICTIONS:
+  1. 50-70 of 135 resolve to a canonical Ethereum ERC-20 (>$500k DEX
+     liquidity guard against symbol-squatters).
+  2. Of resolvable tokens, 15-30% return bucket A/B readable vesting.
+     FALSIFICATION: <10% => the selector battery is too narrow (per the
+     brief), not "the ecosystem is unreadable". >50% => the classifier is
+     too loose and is matching non-vesting contracts.
+  3. Bucket D (custody/safes) will be the LARGEST bucket among tokens
+     that have locked supply at all — modern launches custody their
+     vesting (EIGEN pattern).
+  4. Validation: EIGEN reproduces bucket D/custody with the 0xa7198f48
+     WalletFactory family; INJ yields a retirement proposal; ENA
+     reproduces bucket D (unverified clones).
+
+## DISCOVERY BUILT, VALIDATED, FIRST BATCH RUN (27 Aug) — pre-registration honoured
+
+discover-vesting.js automates the EIGEN sequence: holders -> contracts ->
+1167-clone impl lookup -> selector battery -> bucket. Ethereum-only v1,
+read-only, report to data/vesting-discovery.json.
+
+VALIDATION CAUGHT THREE REAL DEFECTS before any new token was trusted:
+ 1. DexScreener symbol resolution sent EIGEN to a SYMBOL-SQUATTER (a fake
+    EIGEN with >$500k liq). Fix: authoritative KNOWN_TOKENS map for known
+    tokens; search-resolution is a flagged fallback only. (AAVE later
+    failed to resolve at all — the fallback is weak both ways.)
+ 2. BRIDGED TOKENS show their escrow as a 50% holder (INJ). Fix:
+    NON_NATIVE map -> honest verdict "vesting lives on <chain>; v1 cannot
+    read this token — do NOT mistake for NO-LOCKED-SUPPLY". My
+    pre-registration #4 was WRONG on mechanism: INJ's retirement cannot
+    be machine-proposed from Ethereum; it came from public docs.
+ 3. Pools/staking/OFT-bridges polluted verdicts -> skip classes added.
+
+RESULTS (12 tokens through v2):
+  D-CUSTODY: EIGEN, ENA, ZRO, LINK, UNI — prediction #3 (custody
+    dominates) STRONGLY confirmed. Bonus: ZRO's custody family fully
+    enumerated (27 contracts, GnosisSafes + BitGo WalletSimple clones —
+    the same BitGo pattern as EIGEN); LINK shows the known 30M-chunk
+    Chainlink safes.
+  NON-NATIVE: INJ (honest).
+  NO-LOCKED-SUPPLY + retirement proposal: CRV, DEXE, PENDLE, ONDO.
+    ONDO is the live caveat-in-action: it HAS locked supply per its
+    published schedule — held in EOAs or below-threshold contracts, so
+    invisible here. The proposal text's warning ("absence of readable
+    locks is not proof of full unlock") is not boilerplate; ONDO is the
+    example. NEVER auto-retire from this signal alone.
+  A/B READABLE: ZERO of 12 — BELOW the pre-registered 10% line.
+    Stated interpretation applies: the selector battery is too narrow
+    (no live Sablier/stream probe validated, no custom-vesting selector
+    set) AND the sample skewed to majors where custody dominates. Next
+    battery expansion: Sablier stream lookup validated against a known
+    Sablier token, plus common custom selectors (cliff(),
+    getVestingSchedule(), vestingSchedules(address)). Do not conclude
+    "the ecosystem is unreadable" until the wider battery has run over
+    the mid-cap range where OZ-shaped vesting actually lives.
+
+QUEUE (next sitting): battery expansion -> full 135-symbol sweep ->
+generic reader for whichever bucket surfaces -> stage tiering BEFORE bulk
+addition. Stage tiering is not yet needed: verified count is 4 and daily
+unlock-fact volume is ~0.3/day.
+
+## 2026-08-28 — Zero-A/B diagnostic answered; cadence detection built; ENA promoted
+
+**Three-way diagnostic (asked before widening the battery):**
+1. Wrong chain? NO — 10 of 12 scanned were Ethereum-native ERC-20s (INJ correctly
+   excluded as NON-NATIVE, AAVE failed resolution). The falsification line fired on a
+   sample that DID test the claim.
+2. D-by-nature? YES — every scanned token that has locked supply at all came back
+   custody (EIGEN, ZRO, LINK, UNI, ENA: BitGo WalletSimple / GnosisSafe / EOA sets).
+   Zero OZ-shaped vesting among large caps. D dominates by nature at this size.
+3. Narrow battery? Untested for mid-caps, but irrelevant to the zero: the scanned
+   set's locked supply was all custody. Battery widening DEFERRED, not refuted.
+
+**Conclusion → built `detect-cadence.js`** (the bucket-D backtest as a discovery
+method): family wallets from data/vesting-discovery.json → Blockscout outbound
+transfers (date-span-driven pagination, >=14mo) → dominant-class cadence detection
+(MONTH-END or FIXED-DAY, >=4 consecutive months, cv<1.0, off-schedule moves reported
+not fatal) → data/cadence-report.json. Never promotes; a human confirms.
+
+**Validation defects caught by the EIGEN gate (the tool's real curriculum):**
+- Pagination is a failure mode, not a knob: 4 pages = 3 months of a batched emitter
+  → INSUFFICIENT on the known metronome. Depth must be date-span-driven.
+- Largest-per-month clustering broke on ONE off-schedule treasury move (Nov 19 8.53M
+  outsized Nov 30) → dominant-CLASS detection; ad-hoc moves become an offSchedule
+  honesty line.
+- FIXED-DAY tolerance-center reported day "7" for a wallet that NEVER emitted on the
+  7th (ENA: 6th, weekend→Monday) → modal observed day.
+
+**Results:**
+- EIGEN: reproduced hand-derived schedule AND resolved it finer — TWO metronomes,
+  0x34BcF805 7.82M/mo + 0x3De6b6b1 1.69M/mo, both MONTH-END day 30 x11mo (≈9.6M
+  family total, matching the manual sum). No Aug emission yet — Aug 30 watch stands.
+- ZRO: 14-wallet family scan, NO cadence anywhere (most lockups dormant, actives
+  irregular). Manual top-3 non-confirmation now confirmed at family scale. Caveat:
+  Ethereum outflows only (ZRO is omnichain). Sep 20 demote trigger now the sole leg;
+  cadence rescan is its on-chain arm.
+- LINK: top custody wallets fully dormant (NO-OUTFLOWS). UNI: irregular (governance
+  treasury, no metronome).
+- **ENA: PROMOTED (5th verified token).** 0x54B8c65f06: 13 consecutive months,
+  ~12.07M/mo, cv 0.26, day 6 with weekend→Monday roll (3/3 observed). Old estimated
+  row said day 2 — behaviour says 6. Caveats in row note (busy ops wallet, 23
+  off-schedule moves, largest holder irregular — metronomic tranche only). DEMOTE
+  TRIGGER: no ~12M emission Sep 4–9 → rescan and demote.
+
+**Verified:** EIGEN, STRK, ARB, ENA, ZRO. Suite ALL GREEN.
+**Watches:** Aug 30 EIGEN (~9.5M, closes first calendar loop) · Sep 4–9 ENA demote
+window · Sep 20 ZRO demote trigger · ARB/STRK T-7s ~Sep 8–9.
+**Deferred with reasons:** battery widening (mid-caps only, after cadence method
+proves out on watches) · OP/SUI/SEI cadence scans (non-Ethereum-native, need chain
+support in outflow reader first).
+**Operator action:** run PUSH-TO-GITHUB.bat (new tool + unlocks.json change; DR rule).
+Bot hot-reloads unlocks.json within 1h — no restart needed for the ENA row.
+
+## 2026-08-28 (later) — v0.25.0: the demote trigger runs itself; provenance class named
+
+Reviewer: a prose demote-trigger is memory-dependent (the quarantine-lapse shape,
+fourth recurrence prevented rather than fixed this time), and cadence provenance is
+INDUCTIVE — a contract is a commitment, a metronome is a habit; they fail differently
+and the message must say which one it rests on.
+
+**Shipped (v0.25.0):**
+- `src/sources/calendar/cadence-watch.js`: after each expected emission window
+  (expectDay + weekend roll, or monthEnd clamp; grace 3d) closes, reads the custody
+  wallet's actual outflows. Qualifying (>=50% of mean) -> CONFIRM stamped; empty ->
+  row DEMOTED automatically + operator DM ("coverage change, not a market event").
+  Demotions are an OVERLAY in data/cadence-watch.json — unlocks.json keeps its single
+  human writer; re-promotion with newer evidence supersedes. Previous-month windows
+  checked too (restart straddling a close must not skip it forever).
+- Enforced BY SHAPE at both ends: promoteRow refuses onchain-cadence events without a
+  machine-checkable `cadence` spec, and verifiedRowProblems re-asserts it at boot.
+  Behavioural verification cannot exist without its automatic falsifier.
+- Message provenance class: cadence-verified rows now say "schedule inferred from N
+  months of observed emissions (behavioural, not contractually enforced; auto-demotes
+  if the pattern breaks)" instead of letting "verified" imply contract grade.
+- Heartbeat line `Cadence watch: ...` — the falsifier's own pulse (demoted rows 🚨,
+  stale confirms ⚠️, per the lapse-indistinguishable-from-success rule).
+- ENA re-promoted with the spec (wallet 0x54B8c65f0635... — first promotion carried a
+  FABRICATED address tail, second time that defect appeared today; always copy
+  addresses from the report, never from memory).
+
+**Defect during bootstrap (fixture-pinned):** first pollCadence run FALSELY DEMOTED
+ENA — a 3-page fetch of the busy ops wallet never reached the Aug window, and
+truncated data was indistinguishable from an empty window. Fixed: date-span-driven
+pagination + `windowObserved()` evidence gate ("we did not look" must never demote).
+Same pagination lesson as detect-cadence.js, same day, different fetcher — page caps
+on busy wallets are a defect class, not a tuning choice. Re-run: ENA Aug window
+CONFIRMED (Aug 6, 13.32M). Suite: +19 fixtures (section 31), ALL GREEN. Version gate
+caught the config/package drift on the bump (built for exactly that).
+
+**First real windows:** ENA Sep 7 (6th is a Sunday), auto-checked ~Sep 11. EIGEN Aug 30
+remains announcement-provenance — candidate for a cadence spec after the Aug 30
+emission confirms (would give it the auto-falsifier too).
+**Operator actions:** FORCE-RESTART (bot must load v0.25.0 for the watch to run) then
+PUSH-TO-GITHUB.bat.
+
+## 2026-08-28 (later still) — address provenance by construction; absence-class sweep; v0.25.0 LIVE
+
+- `resolveWalletRef()` (unlock-promote.js): promotion wallet args are now REFERENCES
+  resolved against addresses discovery/cadence tools actually wrote (103 currently).
+  Prefix resolves if unique; ambiguity refuses; a fabricated address — including
+  today's actual fabrication, now a fixture — cannot be promoted. EIP-55 rejected as
+  the fix (lowercase fabrications pass checksum); provenance-by-construction is it.
+- Named class: ABSENCE OF OBSERVATION ISN'T OBSERVATION OF ABSENCE (windowObserved()
+  is the prototype). Swept the "nothing happened" signals:
+  * unclassified/excluded zero lines now carry `feedWasLooking()` companions — zero
+    with no live text feed says "not looking, not clean" instead of reading clean.
+  * accumulator STALLED now distinguishes "rows flowing, recorder problem" from
+    "zero rows 48h — check collectors, not accumulators".
+  * already covered: collector pulse ages, backup NONE FOUND, digest pool line.
+- Suite +12 fixtures (sections 32–33), ALL GREEN.
+- FORCE-RESTART executed via Run dialog (history-click pattern; typing still blocked
+  at click tier — dropdown + zoom-verify before OK). Log confirms: "Market Radar
+  v0.25.0 starting", no boot refusals, cadence watch state intact (ENA Aug CONFIRM).
+- Operator: PUSH-TO-GITHUB.bat still pending for today's work (v0.25.0 tag).
+
+Next calendar points: EIGEN Aug 30 (~9.5M, first calendar-loop close; then consider
+cadence spec for EIGEN too) · ENA window Sep 4–9, auto-checked ~Sep 11 · ZRO Sep 20.
+
+## 2026-08-28 (final) — v0.25.1: enforcement decides the falsifier, not the label
+
+Reviewer: EIGEN was the most-verified-sounding token with the least ongoing
+falsification — 'announcement+onchain-backtest' verified the PAST; custody enforces
+nothing forward. Rule generalized past the provenance string:
+
+**Any schedule not contract-enforced carries an automatic falsifier** (boot-refused
+otherwise, `forwardFalsifierProblems()`):
+- cadence spec — where emissions are observable (reviewBy is refused as a downgrade
+  on cadence-discovered rows);
+- reviewBy dead-man's switch — where they are not: past the date without deliberate
+  re-promotion, the row demotes via the overlay + operator DM. No network needed —
+  the calendar is the evidence.
+- enforcement:'contract' may be declared only for genuinely on-chain-enforced rows
+  (none currently qualify — we have read no vesting contract end-to-end).
+
+**Rows updated (all via promote-unlock.js; addEvent/keepEvents added for attaching
+falsifiers without fabricating provenance):**
+- EIGEN: cadence spec (0x34BcF805A503..., monthEnd day 30, mean 7.82M, 11mo; wallet
+  resolved from report by prefix — resolver's first production use). onchain-cadence
+  event PREPENDED, announcement event retained as history. The Aug 30 emission is now
+  the first LIVE auto-check (window Aug 29–Sep 2, evaluated ~Sep 3).
+- ZRO: reviewBy 2026-09-22 — the Sep 20 prose trigger is now structural. No cadence
+  spec on purpose: omnichain, no Ethereum emission path; a spec would false-demote
+  by construction.
+- ARB / STRK: reviewBy 2026-11-30 (announcement path, enforcement unverified by us;
+  quarterly re-attestation or self-demotion).
+
+Suite: +12 fixtures (section 34) incl. live-file assertion; two section-28 fixtures
+updated to the new constructibility rule. ALL GREEN. v0.25.1 restarted via Run dialog
+(pre-filled from last use, zoom-verified), boot clean.
+
+**Standing:** verified = EIGEN·STRK·ARB·ENA·ZRO — every one now carries a live
+falsifier. Watches: EIGEN Aug 30 (auto ~Sep 3) · ENA Sep 4–9 (auto ~Sep 11) · ZRO
+Sep 22 dead-man · ARB/STRK T-7s ~Sep 8–9, reviewBy Nov 30.
+**Operator:** PUSH-TO-GITHUB.bat (v0.25.1 tag) covers today's three sessions.
+
+## 2026-08-28 (v0.25.2) — the dead-man's switch warns before it bites
+Reviewer: a switch that fires without warning makes demotion a discovery, not a
+decision (restore-drill shape). cadenceStatus reviewBy rows now show days remaining,
+⚠️ at T-14, 🚨 at T-3. +4 fixtures, 251 PASS. Restarted; v0.25.2 live — warning path
+active well before ZRO's T-14 (Sep 8). PUSH-TO-GITHUB.bat still pending (one tag,
+whole day).

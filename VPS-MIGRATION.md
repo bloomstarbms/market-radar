@@ -171,7 +171,13 @@ and FIGHT over Telegram getUpdates (409s). Order is absolute:
 
   1. DESKTOP: stop the bot (kill node + the run-hidden loop).
   2. DESKTOP: run UNINSTALL-AUTOSTART.bat NOW — a reboot must not be able
-     to resurrect it. Verify Startup folder has no market-radar.vbs.
+     to resurrect it. Verify market-radar.vbs is GONE from the Startup
+     folder. DO NOT touch start-bot-on-boot.vbs — inspected 27 Aug, it
+     launches a DIFFERENT project (Desktop\infoxchange-bot\
+     run-bot-forever.bat) and is none of this migration's business.
+     Deleting it would break the operator's other bot. The check is
+     "no MARKET-RADAR launcher remains", scoped precisely — an
+     over-broad 'empty the folder' rule is how you break a neighbour.
   3. DESKTOP: final copy — freshest state wins:
        scp -r data/ .env unlocks.json watchlist.json user@vps:~/market-radar/
   4. VPS: prove the data survived BEFORE trusting it:

@@ -13,7 +13,7 @@ if (existsSync(envPath)) {
   }
 }
 
-export const VERSION = '0.24.5';
+export const VERSION = '0.25.2';
 
 export const config = {
   minSeverity: ['LOW','MEDIUM','HIGH'].includes((process.env.ALERT_MIN_SEVERITY || 'LOW').toUpperCase())

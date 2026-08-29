@@ -572,14 +572,16 @@ console.log('28. promotion CONSTRUCTS, never patches (the 4.97% lesson)');
 {
   const { promoteRow, verifiedRowProblems } = await import('./src/core/unlock-promote.js');
   const estimatedEra = { sym: 'ZRO', name: 'LayerZero', monthlyDay: 20, pctOfMcap: 4.4, verified: false, note: 'old aggregator note' };
-  const row = promoteRow(estimatedEra, { monthlyDay: 20, note: 'new', events: [{ date: '2026-09-20', source: 'announcement', detail: 'x' }] });
+  // reviewBy required since the enforcement rule (section 34) — announcement rows are
+  // not contract-enforced and must carry a forward falsifier to be constructible.
+  const row = promoteRow(estimatedEra, { monthlyDay: 20, note: 'new', reviewBy: '2026-12-31', events: [{ date: '2026-09-20', source: 'announcement', detail: 'x' }] });
   check('estimated-era fields do NOT survive promotion', !('pctOfMcap' in row));
   check('identity survives, provenance is explicit', row.sym === 'ZRO' && row.verified === true && row.events[0].source === 'announcement');
   check('promotion without provenance refuses', (() => { try { promoteRow(estimatedEra, { events: [] }); return false; } catch { return true; } })());
   check('a retired token refuses promotion', (() => { try { promoteRow({ sym: 'INJ', retired: 'fully-unlocked' }, { events: [{ date: '2026-09-01', source: 'x', detail: 'y' }] }); return false; } catch { return true; } })());
   // Boot assertion: patched-not-constructed rows fail.
   check('verified row carrying pctOfMcap FAILS boot',
-    verifiedRowProblems([{ sym: 'EIGEN', events: [{ date: '2026-08-30', source: 's' }], pctOfMcap: 4.97 }]).length === 1);
+    verifiedRowProblems([{ sym: 'EIGEN', events: [{ date: '2026-08-30', source: 's' }], reviewBy: '2026-12-31', pctOfMcap: 4.97 }]).length === 1);
   check('constructed row passes', verifiedRowProblems([row]).length === 0);
   check('LIVE unlocks.json has no patched promotions', checkTierRoutes().ok === true);
 }
@@ -669,6 +671,138 @@ const { isEquityText } = await import('./src/core/taxonomy.js');
 check('taxonomy catches TradFi', isEquityText('New listing: SAMSUNGEMUSDT TradFi Perpetual Contract, with up to 25x leverage'));
 check('taxonomy catches xStock', isEquityText('TSLAUSDT xStock now available'));
 check('plain crypto title passes', !isEquityText('New listing: NEWCOINUSDT Perpetual Contract, with up to 25x leverage'));
+
+console.log('31. cadence watch — behavioural verification carries its own falsifier');
+{
+  // A prose demote-trigger is memory-dependent (the quarantine-lapse shape, fixed four
+  // times in this project). These fixtures pin the AUTOMATIC version: window computed,
+  // outflows injected, demotion decided and superseded — all pure, no live files.
+  const { expectedEmissionDate, cadenceDecision, activeDemotions, cadenceStatus } =
+    await import('./src/sources/calendar/cadence-watch.js');
+  const { promoteRow, cadenceSpecProblems, verifiedRowProblems } = await import('./src/core/unlock-promote.js');
+  const spec = { wallet: '0x54B8c65f0635fD91C8729Dd3269C630d9AED54e5', expectDay: 6, meanAmount: 12069436, monthsObserved: 13, roll: 'nextBusinessDay' };
+
+  // Window arithmetic: the ENA-observed weekend roll (2026-06-06 is a Saturday).
+  check('weekday 6th stays put', expectedEmissionDate(spec, 2026, 7).toISOString().slice(0, 10) === '2026-07-06');
+  check('Saturday 6th rolls to Monday 8th', expectedEmissionDate(spec, 2026, 6).toISOString().slice(0, 10) === '2026-06-08');
+  const me = { wallet: spec.wallet, monthEnd: true, expectDay: 30, meanAmount: 9.6e6, monthsObserved: 11 };
+  check('month-end day 30 clamps in February', expectedEmissionDate(me, 2026, 2).toISOString().slice(0, 10) === '2026-02-28');
+
+  // Decision states.
+  const inWindow = new Date('2026-09-08T12:00:00Z'); // expected Sep 7 (6th=Sunday), grace to Sep 10
+  const afterWindow = new Date('2026-09-11T12:00:00Z');
+  check('open window is PENDING — absence of evidence is not yet evidence', cadenceDecision(spec, 2026, 9, inWindow, {}).action === 'PENDING');
+  check('qualifying outflow after window closes CONFIRMS', cadenceDecision(spec, 2026, 9, afterWindow, { '2026-09-07': 13e6 }).action === 'CONFIRM');
+  check('sub-threshold outflow (49% of mean) does not confirm', cadenceDecision(spec, 2026, 9, afterWindow, { '2026-09-07': spec.meanAmount * 0.49 }).action === 'DEMOTE');
+  check('empty window DEMOTES — the falsification test runs itself', cadenceDecision(spec, 2026, 9, afterWindow, {}).action === 'DEMOTE');
+  check('outflow OUTSIDE the window does not rescue it', cadenceDecision(spec, 2026, 9, afterWindow, { '2026-09-20': 13e6 }).action === 'DEMOTE');
+
+  // The first bootstrap run falsely demoted ENA off a 3-page fetch that never reached
+  // the window — truncated data looked identical to an empty window. Pinned: only a
+  // fetch that COVERED the window is evidence at all.
+  const { windowObserved } = await import('./src/sources/calendar/cadence-watch.js');
+  check('truncated fetch is not evidence — never demote on it', !windowObserved({ byDay: {}, covered: false }));
+  check('failed fetch is not evidence either', !windowObserved(null));
+  check('covered fetch IS evidence', windowObserved({ byDay: {}, covered: true }));
+
+  // Demotion overlay + supersession by newer evidence.
+  const toks = [{ sym: 'ENA', cadence: spec, events: [{ date: '2026-08-28', source: 'onchain-cadence' }] }];
+  const demSt = { demotions: { ENA: { at: '2026-09-11T02:00', month: '2026-09' } } };
+  check('a standing demotion suppresses the row', 'ENA' in activeDemotions(toks, demSt));
+  const rePromoted = [{ sym: 'ENA', cadence: spec, events: [{ date: '2026-09-15', source: 'onchain-cadence' }] }];
+  check('re-promotion with NEWER evidence supersedes the demotion', !('ENA' in activeDemotions(rePromoted, demSt)));
+
+  // Promotion refuses behavioural provenance without its falsifier — enforced by shape.
+  let threw = false;
+  try { promoteRow({ sym: 'X', name: 'X' }, { events: [{ date: '2026-08-28', source: 'onchain-cadence', detail: 'd' }] }); } catch { threw = true; }
+  check('promoteRow refuses onchain-cadence without a cadence spec', threw);
+  check('promoteRow accepts onchain-cadence WITH a spec', !!promoteRow({ sym: 'X', name: 'X' }, { events: [{ date: '2026-08-28', source: 'onchain-cadence', detail: 'd' }], cadence: spec }).cadence);
+  check('boot re-asserts the same rule', verifiedRowProblems([{ sym: 'Y', events: [{ date: '2026-08-28', source: 'onchain-cadence' }] }]).length > 0);
+  check('spec validator rejects a truncated wallet', cadenceSpecProblems({ ...spec, wallet: '0x54B8c65f06' }).length > 0);
+
+  // The watch's own pulse: demoted rows scream, confirmed rows show their month.
+  const stConf = { months: { ENA: { '2026-09': { action: 'CONFIRM' } } }, demotions: {} };
+  check('heartbeat line shows last confirmed month', cadenceStatus(toks, stConf, new Date('2026-09-12')).line.includes('ok 2026-09'));
+  check('heartbeat line marks a demoted row loudly', cadenceStatus(toks, demSt, new Date('2026-09-12')).line.includes('🚨 demoted'));
+}
+
+console.log('32. addresses are resolved from reports, never typed (provenance-by-construction)');
+{
+  // Two fabricated address tails reached commands in one day. Rule -> shape: a wallet
+  // reference resolves against tool-written report addresses or it does not exist.
+  const { resolveWalletRef } = await import('./src/core/unlock-promote.js');
+  const known = ['0x54B8c65f0635fD91C8729Dd3269C630d9AED54e5', '0x54B8000000000000000000000000000000000000', '0x34BcF805A503D5151c05CD349699a8aD1767a026'];
+  check('unique prefix resolves to the report address', resolveWalletRef('0x54B8c6', known) === known[0]);
+  check('full report address resolves to itself', resolveWalletRef(known[2], known) === known[2]);
+  let e1 = null; try { resolveWalletRef('0x54B8c65f06D720de548A93aB2A2f2FE3097cc5C7', known); } catch (e) { e1 = e.message; }
+  check('the fabricated address from today is REFUSED (plausible ≠ provenanced)', /matches no address/.test(e1 || ''));
+  let e2 = null; try { resolveWalletRef('0x54B8', known); } catch (e) { e2 = e.message; }
+  check('ambiguous prefix refuses instead of guessing', /ambiguous/.test(e2 || ''));
+  let e3 = null; try { resolveWalletRef('EIGEN', known); } catch (e) { e3 = e.message; }
+  check('non-address input refuses', e3 !== null);
+}
+
+console.log('33. absence of observation is not observation of absence (named class, swept)');
+{
+  // windowObserved() was the prototype; these pin the companions: every "nothing
+  // happened" zero must say whether anyone was looking.
+  const { feedWasLooking } = await import('./src/core/pulse.js');
+  check('fresh text feed counts as looking', feedWasLooking(/^(?!dex:|funding$|macro$).+/, 6 * 3600, [{ name: 'binance', ageSec: 300 }]));
+  check('only dex/funding/macro alive = text feeds NOT looking', !feedWasLooking(/^(?!dex:|funding$|macro$).+/, 6 * 3600, [{ name: 'dex:1', ageSec: 60 }, { name: 'funding', ageSec: 60 }, { name: 'macro', ageSec: 60 }]));
+  check('a stale text feed is not looking either', !feedWasLooking(/^(?!dex:|funding$|macro$).+/, 6 * 3600, [{ name: 'binance', ageSec: 7 * 3600 }]));
+
+  const { buildHeartbeat, accumulatorStatus } = await import('./src/core/telemetry.js');
+  const base = { startedAt: Date.now(), rows: [], pulse: 'x', digest: { line: 'd' }, accumulators: { lines: [] }, cadence: { line: 'c' }, unclassified: { shapes: 0, recurring: 0, seen24h: 0 }, excluded: { total: 0, leveraged: 0, equity: 0, seen24h: 0, overdue: false } };
+  const dark = buildHeartbeat(Date.now(), { ...base, feedLooking: false }).lines.join('\n');
+  const lit = buildHeartbeat(Date.now(), { ...base, feedLooking: true }).lines.join('\n');
+  check('zero unclassified + no live feed = loud, not clean', dark.includes('not looking, not clean'));
+  check('zero unclassified + live feed = calm zero', !lit.includes('not looking, not clean'));
+
+  const now = Date.now();
+  const flowing = accumulatorStatus(now, { rows: [{ ts: now - 3600e3, mfe: 1 }], st: {}, backup: { newestAgeH: 1, count: 1, stale: false, drillAgeD: 1, drillMark: '' } });
+  check('stall with rows flowing names the recorder', flowing.lines[0].includes('recorder problem'));
+  const quiet = accumulatorStatus(now, { rows: [], st: {}, backup: { newestAgeH: 1, count: 1, stale: false, drillAgeD: 1, drillMark: '' } });
+  check('zero rows 48h points at collectors, not accumulators', quiet.lines[0].includes('check collectors') && !quiet.lines[0].includes('recorder problem'));
+}
+
+console.log('34. enforcement, not provenance label, decides the falsifier (the EIGEN asymmetry)');
+{
+  // 'announcement+onchain-backtest' SOUNDED stronger than 'onchain-cadence' while
+  // carrying zero forward falsification — the label described discovery, custody
+  // enforces nothing. Rule: any non-contract schedule carries a cadence spec
+  // (observable emissions) or a reviewBy dead-man's switch (unobservable, e.g.
+  // omnichain ZRO where a cadence spec would false-demote by construction).
+  const { forwardFalsifierProblems } = await import('./src/core/unlock-promote.js');
+  const { activeDemotions: aD, cadenceStatus: cS } = await import('./src/sources/calendar/cadence-watch.js');
+  const spec = { wallet: '0x34BcF805A503D5151c05CD349699a8aD1767a026', monthEnd: true, expectDay: 30, meanAmount: 7.8e6, monthsObserved: 11 };
+  const ann = [{ date: '2026-09-16', source: 'announcement' }];
+  check('declared contract enforcement needs nothing further', forwardFalsifierProblems({ enforcement: 'contract', events: ann }).length === 0);
+  check('behavioural row with NEITHER falsifier fails (however strong the label)', forwardFalsifierProblems({ events: [{ date: '2026-08-30', source: 'announcement+onchain-backtest' }] }).length > 0);
+  check('cadence spec satisfies it', forwardFalsifierProblems({ events: ann, cadence: spec }).length === 0);
+  check('reviewBy dead-man-switch satisfies it', forwardFalsifierProblems({ events: ann, reviewBy: '2026-11-30' }).length === 0);
+  check('unparseable reviewBy fails', forwardFalsifierProblems({ events: ann, reviewBy: 'soon' }).length > 0);
+  check('cadence-DISCOVERED row cannot downgrade to reviewBy', forwardFalsifierProblems({ events: [{ date: '2026-08-28', source: 'onchain-cadence' }], reviewBy: '2026-11-30' }).length > 0);
+
+  // Expired review = overlay demotion, superseded only by re-promotion.
+  const zro = [{ sym: 'ZRO', reviewBy: '2026-09-22', events: [{ date: '2026-09-20', source: 'announcement' }] }];
+  const expired = { months: {}, demotions: { ZRO: { at: '2026-09-23T02:00', type: 'review-expired', reviewBy: '2026-09-22' } } };
+  check('expired review suppresses the row', 'ZRO' in aD(zro, expired));
+  const reattested = [{ sym: 'ZRO', reviewBy: '2026-12-22', events: [{ date: '2026-09-24', source: 'announcement' }] }];
+  check('re-promotion after re-attestation supersedes', !('ZRO' in aD(reattested, expired)));
+  check('status line shows the dead-man switch', cS(zro, { months: {}, demotions: {} }, new Date('2026-09-01')).line.includes('ZRO review by 2026-09-22'));
+  // Warn before it bites — demotion should be a decision, not a discovery.
+  const at = (d) => cS(zro, { months: {}, demotions: {} }, new Date(d)).line;
+  check('far out: days shown, no mark', at('2026-09-01T00:00:00Z').includes('(21d)') && !at('2026-09-01T00:00:00Z').includes('⚠️'));
+  check('T-14 escalates to ⚠️', at('2026-09-10T00:00:00Z').includes('⚠️ review approaching'));
+  check('T-3 escalates to 🚨', at('2026-09-20T00:00:00Z').includes('🚨 re-attest now'));
+
+  // The LIVE file obeys the rule — every verified row carries its falsifier.
+  const { verifiedRowProblems: vrp } = await import('./src/core/unlock-promote.js');
+  const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
+  check('LIVE unlocks.json: no verified row lacks a forward falsifier', vrp(live).length === 0);
+  const eigen = live.find((t) => t.sym === 'EIGEN');
+  check('LIVE EIGEN carries a cadence spec (most-verified is no longer least-falsified)', !!eigen?.cadence?.wallet && eigen.cadence.monthEnd === true);
+}
 
 console.error = origErr;
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);

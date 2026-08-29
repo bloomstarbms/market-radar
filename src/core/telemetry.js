@@ -12,8 +12,9 @@ import { formatAlert, dispatchBugCount, messageCounts } from './dispatcher.js';
 import { dropStats } from './budget.js';
 import { allOutcomes } from './outcomes.js';
 import { getState, save } from './store.js';
-import { formatPulse } from './pulse.js';
+import { formatPulse, feedWasLooking } from './pulse.js';
 import { unclassifiedStats, excludedStats } from './unclassified.js';
+import { cadenceStatus } from '../sources/calendar/cadence-watch.js';
 
 const DIGEST_HOUR = Number(process.env.DIGEST_HOUR_UTC ?? 18);
 
@@ -165,13 +166,18 @@ export function accumulatorStatus(now = Date.now(), deps = {}) {
   for (const s of Object.values(st.adv || {})) advCells += Object.keys(s || {}).length;
   // STALLED = nothing in 48h. Anything genuinely intermittent (rugcal fires only on
   // blocked DEX candidates) would otherwise cry wolf, so 48h is the bar.
-  const stalled = Object.entries(acc).filter(([, [, d48]]) => d48 === 0).map(([k]) => k);
+  // COMPANION (absence-of-observation class): a zero accumulator with ZERO rows in
+  // 48h is a quiet funnel, not a broken recorder — the two need different responses
+  // (investigate collectors vs investigate the accumulator), so the line says which.
+  const rows48 = rows.filter((r) => r.ts >= since(48)).length;
+  const stalled = rows48 > 0 ? Object.entries(acc).filter(([, [, d48]]) => d48 === 0).map(([k]) => k) : [];
   const b = deps.backup ?? backupStatus(now);
   return {
-    acc, advCells, stalled, backup: b,
+    acc, advCells, stalled, rows48, backup: b,
     lines: [
       `Accumulators (24h): floored +${acc.floored[0]} · mfe/mae +${acc.mfe[0]} · mult +${acc.mult[0]} · rugcal +${acc.rugcal[0]} · adv ${advCells} cells`
-        + (stalled.length ? ` · 🚨 STALLED 48h: ${stalled.join(', ')}` : ''),
+        + (stalled.length ? ` · 🚨 STALLED 48h: ${stalled.join(', ')} (${rows48} rows flowing — recorder problem, not a quiet market)` : '')
+        + (rows48 === 0 ? ' · ⚠️ zero rows 48h — nothing to accumulate; check collectors, not accumulators' : ''),
       `Backup: ${b.newestAgeH === null ? '🚨 NONE FOUND' : `newest ${b.newestAgeH.toFixed(1)}h ago`} · ${b.count} retained`
         + (b.stale ? ' · 🚨 OVER 26h — daily snapshot did not run' : '')
         + ` · restore-verified ${b.drillAgeD === null ? '🚨 never recorded' : `${b.drillMark ? b.drillMark + ' ' : ''}${b.drillAgeD.toFixed(0)}d ago${b.drillAgeD >= 30 ? ' — re-run node restore-drill.js' : ''}`}`,
@@ -233,17 +239,28 @@ export function buildHeartbeat(now = Date.now(), deps = {}) {
       `Suppressed: ${supLine}`,
       `Internal errors: ${bugs}${bugs ? ' 🚨 check the log' : ''}`,
       `Collectors (age of last success): ${deps.pulse ?? formatPulse()}`,
+      // "Nothing happened" is only evidence with an "and we were looking" companion
+      // (absence of observation isn't observation of absence — the windowObserved()
+      // class). A zero here with no live text feed is a broken logger wearing a
+      // clean bill of health. Text feeds = everything except dex/funding/macro.
       (() => {
         const u = deps.unclassified ?? unclassifiedStats(now);
+        const looking = deps.feedLooking ?? feedWasLooking(/^(?!dex:|funding$|macro$).+/);
         return `Unclassified announcements: ${u.shapes} shapes · ${u.recurring} recurring · ${u.seen24h} seen 24h`
-          + (u.recurring >= 5 ? ' · ⚠️ review: node review-unclassified.js' : '');
+          + (u.recurring >= 5 ? ' · ⚠️ review: node review-unclassified.js' : '')
+          + (u.seen24h === 0 && !looking ? ' · 🚨 zero with NO live text feed — not looking, not clean' : '');
       })(),
       (() => {
         // EXCLUDE is a silent drop; without this line a wrong exclusion is invisible.
         const x = deps.excluded ?? excludedStats(now);
+        const looking = deps.feedLooking ?? feedWasLooking(/^(?!dex:|funding$|macro$).+/);
         return `Excluded symbols: ${x.total} (${x.leveraged} leveraged · ${x.equity} xStock) · ${x.seen24h} in 24h`
-          + (x.overdue ? ` · ${x.mark} ${x.xstockSinceReview} xStock unreviewed ${x.reviewAgeD === null ? '(never reviewed)' : `for ${x.reviewAgeD.toFixed(0)}d`} — run node review-exclusions.js` : '');
+          + (x.overdue ? ` · ${x.mark} ${x.xstockSinceReview} xStock unreviewed ${x.reviewAgeD === null ? '(never reviewed)' : `for ${x.reviewAgeD.toFixed(0)}d`} — run node review-exclusions.js` : '')
+          + (x.seen24h === 0 && !looking ? ' · 🚨 zero with NO live text feed — not looking, not clean' : '');
       })(),
+      // Behavioural rows carry their falsifier; this line is the falsifier's own
+      // pulse — a cadence watch that stops confirming must be visible, not assumed.
+      (deps.cadence ?? cadenceStatus()).line,
       (deps.digest ?? digestStatus(getState(), now, deps.rows ?? null)).line,
       ...(deps.accumulators ?? accumulatorStatus(now, { rows: deps.rows ?? undefined })).lines,
       'Reading: healthy funnel + no pushes = correctly quiet. Empty funnel, a stale collector, an unsent non-empty digest pool, a stalled accumulator or a missing backup = broken — investigate.',
