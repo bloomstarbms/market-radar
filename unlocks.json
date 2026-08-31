@@ -1,7 +1,7 @@
 {
  "comment": "Token unlock watchlist. Two entry types: 'monthlyDay' = recurring cliff on that day each month (most vesting contracts release monthly); 'date' = one-off YYYY-MM-DD. Bot pings 7 days and 3 days before. verified:true = confirmed against cryptorank.io/token-unlock on 2026-08-01; others are recurring-schedule estimates — check the date on cryptorank before acting.",
  "source": "https://cryptorank.io/token-unlock (free public page)",
- "lastReviewed": "2026-08-28 (promoted ZRO via promote-unlock.js)",
+ "lastReviewed": "2026-08-31 (promoted EIGEN via promote-unlock.js)",
  "tokens": [
   {
    "sym": "EIGEN",
@@ -19,14 +19,23 @@
      "detail": "Monthly custody distribution, ~9.5M EIGEN observed last cycle. Backtest: eth wallets 0x3De6b6b1/0x34BcF805 outbound transfers, monthly on the 30th (28th/29th short months) since 2025-10-30."
     }
    ],
-   "note": "Custody-held (BitGo WalletSimple x21, 484M family) — behavioural: announcement described the schedule, custody habit enforces nothing. cadence-watch auto-demotes if a month-end window passes empty. Largest wallet (176.7M) mostly dormant = later tranches.",
+   "note": "Custody-held (BitGo WalletSimple x21, 484M family) — behavioural: the announcement described the schedule, custody enforces nothing. TWO metronomes watched (0x34BcF805 ~7.82M/mo + 0x3De6b6b1 ~1.69M/mo, family ~9.5M): every wallet must emit AND the family total must land within 25%, because a message claiming the family figure while checking one wallet could not see the other stopping. Largest wallet (176.7M) mostly dormant = later tranches.",
    "monthlyDay": 30,
-   "date": "2026-08-28",
    "cadence": {
-    "wallet": "0x34BcF805A503D5151c05CD349699a8aD1767a026",
+    "wallets": [
+     {
+      "addr": "0x34BcF805A503D5151c05CD349699a8aD1767a026",
+      "meanAmount": 7822556
+     },
+     {
+      "addr": "0x3De6b6b121282CBe2F46d24f0023e7D59bB6c24e",
+      "meanAmount": 1692519
+     }
+    ],
+    "familyMean": 9515075,
+    "tolerance": 0.25,
     "expectDay": 30,
     "monthEnd": true,
-    "meanAmount": 7822556,
     "monthsObserved": 11,
     "graceDays": 3
    },

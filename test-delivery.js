@@ -801,7 +801,11 @@ console.log('34. enforcement, not provenance label, decides the falsifier (the E
   const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
   check('LIVE unlocks.json: no verified row lacks a forward falsifier', vrp(live).length === 0);
   const eigen = live.find((t) => t.sym === 'EIGEN');
-  check('LIVE EIGEN carries a cadence spec (most-verified is no longer least-falsified)', !!eigen?.cadence?.wallet && eigen.cadence.monthEnd === true);
+  // Shape-agnostic: single-wallet OR family (§39). Asserting `.wallet` specifically
+  // made this fixture fail the moment EIGEN widened to a family spec — a test that
+  // pins an implementation detail blocks the improvement it should be guarding.
+  check('LIVE EIGEN carries a cadence spec (most-verified is no longer least-falsified)',
+    (!!eigen?.cadence?.wallet || eigen?.cadence?.wallets?.length > 0) && eigen.cadence.monthEnd === true);
 }
 
 console.log('35. stage tiering — tier BEFORE bulk promotion, not after');
@@ -873,6 +877,47 @@ console.log('36. every prompt document declares its premises (documents get obey
   // Self-tests: the checks must be capable of failing.
   check('premise check can fail', !/<!--\s*PREMISE[\s\S]*?-->/.test('# Doc\n\nno header here'));
   check('empty-assumptions check can fail', !/Assumes:\s*\n\s*-\s*\S/.test('Written against: v1.0.0\nAssumes:\n'));
+}
+
+console.log('39. the falsifier covers what the MESSAGE claims (family, not one wallet)');
+{
+  // The spec watched ONE metronome while the alert asserted the FAMILY figure. If
+  // the second wallet stopped, the first would still clear its 50% bar and the row
+  // would stay verified while real distribution fell ~15%: an alert claiming a
+  // number nothing checks. Family specs require every wallet to emit AND the total
+  // to land inside a band.
+  const { cadenceDecision } = await import('./src/sources/calendar/cadence-watch.js');
+  const { cadenceSpecProblems } = await import('./src/core/unlock-promote.js');
+  const A = '0x34BcF805A503D5151c05CD349699a8aD1767a026', B = '0x3De6b6b121282CBe2F46d24f0023e7D59bB6c24e';
+  const spec = { wallets: [{ addr: A, meanAmount: 7822556 }, { addr: B, meanAmount: 1692519 }],
+    familyMean: 9515075, tolerance: 0.25, monthEnd: true, expectDay: 30, monthsObserved: 11 };
+  const after = new Date('2026-09-03T06:00:00Z');
+  // The real August emission.
+  const real = { [A]: { '2026-08-30': 7920090 }, [B]: { '2026-08-30': 1364336 } };
+  const ok = cadenceDecision(spec, 2026, 8, after, real);
+  check('both metronomes emitting = CONFIRM', ok.action === 'CONFIRM' && ok.familyTotal === 9284426);
+  // THE SCENARIO THAT MOTIVATED THIS: second wallet silent, first perfectly normal.
+  const oneStopped = { [A]: { '2026-08-30': 7920090 }, [B]: {} };
+  const p = cadenceDecision(spec, 2026, 8, after, oneStopped);
+  check('one wallet silent = PARTIAL, not a clean CONFIRM', p.action === 'PARTIAL');
+  check('PARTIAL names the silent wallet', /0x3De6b6b1/.test((p.silent || []).join(',')));
+  check('the OLD single-wallet spec would have missed it', cadenceDecision({ wallet: A, meanAmount: 7822556, monthEnd: true, expectDay: 30 }, 2026, 8, after, oneStopped[A]).action === 'CONFIRM');
+  // Family-wide shortfall that no single wallet reveals (both emit, both above their
+  // own 50% floor, total below the band).
+  const thin = { [A]: { '2026-08-30': 4200000 }, [B]: { '2026-08-30': 900000 } };
+  const s = cadenceDecision(spec, 2026, 8, after, thin);
+  check('family shortfall with all wallets participating = PARTIAL', s.action === 'PARTIAL' && /below the/.test(s.reason));
+  check('nobody emits = DEMOTE, not PARTIAL', cadenceDecision(spec, 2026, 8, after, { [A]: {}, [B]: {} }).action === 'DEMOTE');
+  check('this month within band is not flagged (3.3% light passes)', ok.action === 'CONFIRM');
+  check('open window still PENDING for a family spec', cadenceDecision(spec, 2026, 8, new Date('2026-08-31T06:00:00Z'), real).action === 'PENDING');
+  // Spec validation.
+  check('family spec validates', cadenceSpecProblems(spec).length === 0);
+  check('family spec rejects a truncated member address', cadenceSpecProblems({ ...spec, wallets: [{ addr: '0x34Bc', meanAmount: 1 }] }).length > 0);
+  check('family spec rejects a member with no mean', cadenceSpecProblems({ ...spec, wallets: [{ addr: A }] }).length > 0);
+  check('legacy single-wallet spec still validates', cadenceSpecProblems({ wallet: A, meanAmount: 7822556, monthEnd: true, expectDay: 30, monthsObserved: 11 }).length === 0);
+  // The LIVE row must be the family spec — the claim and the check must match.
+  const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens.find((t) => t.sym === 'EIGEN');
+  check('LIVE EIGEN watches both metronomes', live.cadence.wallets?.length === 2 && live.cadence.familyMean > 9e6);
 }
 
 console.log('38. the ladder never gates a FACT (the negative the citations exposed)');

@@ -23,10 +23,24 @@ export const ESTIMATED_ONLY_FIELDS = ['pctOfMcap'];
 export function cadenceSpecProblems(spec) {
   if (!spec || typeof spec !== 'object') return ['missing cadence spec'];
   const p = [];
-  if (!/^0x[0-9a-fA-F]{40}$/.test(spec.wallet || '')) p.push('cadence.wallet must be a full address');
+  // A FAMILY spec (wallets[]) exists so the falsifier covers what the message
+  // claims: watching one wallet while asserting a family total leaves a silent
+  // wallet undetectable. Single-wallet specs remain valid when the claim is
+  // single-wallet too.
+  if (Array.isArray(spec.wallets)) {
+    if (!spec.wallets.length) p.push('cadence.wallets is empty');
+    for (const w of spec.wallets) {
+      if (!/^0x[0-9a-fA-F]{40}$/.test(w?.addr || '')) p.push(`cadence.wallets[].addr must be a full address (got '${w?.addr}')`);
+      if (!(w?.meanAmount > 0)) p.push(`cadence.wallets[${w?.addr?.slice(0, 10)}].meanAmount required`);
+    }
+    if (spec.tolerance !== undefined && !(spec.tolerance > 0 && spec.tolerance < 1)) p.push('cadence.tolerance must be between 0 and 1');
+  } else if (!/^0x[0-9a-fA-F]{40}$/.test(spec.wallet || '')) {
+    p.push('cadence needs wallet (full address) or wallets[]');
+  } else if (!(spec.meanAmount > 0)) {
+    p.push('cadence.meanAmount required (qualifying threshold = 50% of it)');
+  }
   if (!spec.monthEnd && !(Number.isInteger(spec.expectDay) && spec.expectDay >= 1 && spec.expectDay <= 28))
     p.push('cadence needs expectDay 1-28 or monthEnd:true');
-  if (!(spec.meanAmount > 0)) p.push('cadence.meanAmount required (qualifying threshold = 50% of it)');
   if (!(spec.monthsObserved >= 4)) p.push('cadence.monthsObserved >= 4 required — it is the evidence the message cites');
   return p;
 }

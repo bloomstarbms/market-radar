@@ -44,7 +44,25 @@ const eventDate = args.date ?? null;
 // onchain-cadence promotions must carry the machine-checkable spec that lets
 // cadence-watch.js demote them automatically — promoteRow refuses them without it:
 //   wallet=0x... expectDay=6 meanAmount=12069436 monthsObserved=13 [roll=nextBusinessDay] [monthEnd=1] [graceDays=3]
-const cadence = args.wallet ? {
+// FAMILY spec: wallets=0xaaa:7822556,0xbbb:1364336 (ref:mean pairs, refs resolved
+// against report files exactly like single wallets). Use this whenever the message
+// claims a family total — the falsifier must cover what the alert asserts.
+const famSpec = args.wallets ? {
+  wallets: args.wallets.split(',').map((pair) => {
+    const [ref, mean] = pair.split(':');
+    return { addr: resolveWalletRef(ref, reportAddresses()), meanAmount: Number(mean) };
+  }),
+  ...(args.familyMean ? { familyMean: Number(args.familyMean) } : {}),
+  ...(args.tolerance ? { tolerance: Number(args.tolerance) } : {}),
+} : null;
+const cadence = famSpec ? {
+  ...famSpec,
+  ...(args.expectDay ? { expectDay: Number(args.expectDay) } : {}),
+  ...(args.monthEnd ? { monthEnd: true, expectDay: Number(args.expectDay ?? 31) } : {}),
+  monthsObserved: Number(args.monthsObserved),
+  ...(args.roll ? { roll: args.roll } : {}),
+  ...(args.graceDays ? { graceDays: Number(args.graceDays) } : {}),
+} : args.wallet ? {
   wallet: resolveWalletRef(args.wallet, reportAddresses()),
   ...(args.expectDay ? { expectDay: Number(args.expectDay) } : {}),
   ...(args.monthEnd ? { monthEnd: true, expectDay: Number(args.expectDay ?? 31) } : {}),

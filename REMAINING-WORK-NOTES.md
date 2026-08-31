@@ -1859,3 +1859,48 @@ cited, 1 newly-declared UNENFORCED (per-fact delivery accounting — fixture 1
 covers the broadcast layer, but nothing asserts messageCounts() cannot over-count
 a partially-delivered batch). The mechanism keeps producing work, which is the
 correct behaviour for it.
+
+## 2026-08-31 — EIGEN's 11th landed; falsifier widened to match the CLAIM (v0.27.0)
+
+**THE LOOP CLOSED.** Aug 30 emission: 0x34BcF805 7,920,090 (spec mean 7,822,556 —
+within 1.3%) + 0x3De6b6b1 1,364,336 = **9,284,426 family**. Eleventh consecutive
+month-end. The watch correctly reads PENDING today (window Aug 29–Sep 2; "we did
+not look yet" is not a verdict) and CONFIRMs on a Sep 3 clock — verified by
+dry-running the pure decision against real data, which writes nothing.
+
+**GAP FOUND BY THE NUMBERS, NOT BY A FAILURE.** The spec watched ONE wallet while
+the message claimed the FAMILY figure (~9.6M). Per-wallet 50%-of-mean cannot see
+a 15% family shortfall: if 0x3De6b6b1 stopped entirely, the primary would still
+clear its bar, the row would stay verified, and the alert would keep asserting a
+number nothing checks. Chose to WIDEN THE SPEC rather than narrow the message —
+narrowing to 7.9M would understate the supply actually hitting the market, which
+is its own accuracy failure.
+
+Family specs (`cadence.wallets[{addr, meanAmount}]`, `familyMean`, `tolerance`):
+  CONFIRM  every wallet emits >=50% of its own mean AND family total within ±25%
+  PARTIAL  some wallet silent, OR all emit but the family total falls below the
+           band — demotes, because the claim just went unverified even though the
+           schedule did not stop. Distinct message and reason from DEMOTE.
+  DEMOTE   nobody emitted.
+Any uncovered fetch aborts the whole family decision — a partial VIEW of a family
+would read as a silent WALLET (the windowObserved class, applied at family scale).
+Single-wallet specs still validate: the shape is right when the claim is
+single-wallet too.
+
+EIGEN re-promoted with both metronomes (familyMean 9,515,075, tolerance 0.25,
+stage FULL); note now states exactly what is checked and why.
+
+Fixture 39 (13 checks) pins it, including the load-bearing one:
+**"the OLD single-wallet spec would have missed it"** — same silent-wallet data,
+old spec returns CONFIRM. The regression is demonstrated, not asserted.
+
+Also fixed: fixture 34 asserted `cadence.wallet` specifically and failed the
+moment EIGEN widened — a test pinning an implementation detail blocked the
+improvement it was meant to guard. Now shape-agnostic.
+
+GENERALISABLE: **a falsifier must cover the claim the MESSAGE makes, not the
+claim that was convenient to check.** Verifying a component while asserting an
+aggregate is a gap that stays invisible while the component behaves.
+
+VPS window is OPEN (calendar loop closed cleanly; migration was gated on "on or
+after the 31st"). Steps 1-4 operator-side, stop at 5 and paste drill output.

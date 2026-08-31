@@ -48,22 +48,59 @@ export function expectedEmissionDate(spec, year, month /* 1-based */) {
   return d;
 }
 
-// PURE decision for one row-month. outflowsByDay: {'YYYY-MM-DD': tokens} for the
-// custody wallet. Window = expected-1d .. expected+graceDays (default 3); qualifying =
-// any window day moving >= 50% of the observed mean. Injected everything — hermetic.
-export function cadenceDecision(spec, year, month, now, outflowsByDay) {
+// PURE decision for one row-month. Window = expected-1d .. expected+graceDays (3).
+//
+// VERIFY WHAT THE MESSAGE CLAIMS. The first spec watched ONE wallet while the alert
+// asserted the FAMILY figure (~9.6M/mo for EIGEN, of which the watched metronome is
+// 7.8M). If the second wallet stopped entirely, the primary would still clear its
+// 50%-of-mean bar and the row would stay verified while actual distribution fell
+// ~15% — an alert claiming a number nothing checks. So a family claim requires
+// family verification: EVERY listed wallet must participate, and the family total
+// must land inside a tolerance band. Per-wallet 50% catches a stopped wallet;
+// the band catches a family-wide shortfall no single wallet reveals.
+//
+// spec.wallets: [{addr, meanAmount}] (family) — or legacy spec.wallet + meanAmount.
+// outflows: {'YYYY-MM-DD': n} for a single-wallet spec, or {addr: {day: n}} for a
+// family. Injected entirely — hermetic.
+export function cadenceDecision(spec, year, month, now, outflows) {
   const expected = expectedEmissionDate(spec, year, month);
   const grace = spec.graceDays ?? 3;
   const start = new Date(expected.getTime() - 86400e3);
   const end = new Date(expected.getTime() + grace * 86400e3);
   if (now.getTime() <= end.getTime()) return { action: 'PENDING', windowEnd: end.toISOString().slice(0, 10) };
   const sKey = start.toISOString().slice(0, 10), eKey = end.toISOString().slice(0, 10);
-  let bestDay = null, bestAmt = 0;
-  for (const [d, v] of Object.entries(outflowsByDay || {})) {
-    if (d >= sKey && d <= eKey && v > bestAmt) { bestDay = d; bestAmt = v; }
+  const window = `${sKey}..${eKey}`;
+  const peakIn = (byDay) => {
+    let day = null, amt = 0;
+    for (const [d, v] of Object.entries(byDay || {})) if (d >= sKey && d <= eKey && v > amt) { day = d; amt = v; }
+    return { day, amt };
+  };
+
+  const fam = Array.isArray(spec.wallets) && spec.wallets.length;
+  if (!fam) {
+    const { day, amt } = peakIn(outflows);
+    if (amt >= spec.meanAmount * 0.5) return { action: 'CONFIRM', date: day, amount: Math.round(amt) };
+    return { action: 'DEMOTE', window, largestSeen: Math.round(amt) };
   }
-  if (bestAmt >= spec.meanAmount * 0.5) return { action: 'CONFIRM', date: bestDay, amount: Math.round(bestAmt) };
-  return { action: 'DEMOTE', window: `${sKey}..${eKey}`, largestSeen: Math.round(bestAmt) };
+
+  const per = spec.wallets.map((w) => {
+    const { day, amt } = peakIn((outflows || {})[w.addr]);
+    return { addr: w.addr, day, amt, expected: w.meanAmount, ok: amt >= w.meanAmount * 0.5 };
+  });
+  const total = per.reduce((s, p) => s + p.amt, 0);
+  const familyMean = spec.familyMean ?? spec.wallets.reduce((s, w) => s + w.meanAmount, 0);
+  const band = spec.tolerance ?? 0.25;          // family total must be within ±25%
+  const silent = per.filter((p) => !p.ok).map((p) => p.addr.slice(0, 10));
+  const shortfall = total < familyMean * (1 - band);
+  const detail = { window, familyTotal: Math.round(total), familyMean: Math.round(familyMean),
+    perWallet: per.map((p) => ({ addr: p.addr.slice(0, 10), amt: Math.round(p.amt), ok: p.ok })) };
+  if (silent.length === per.length) return { action: 'DEMOTE', ...detail, reason: 'no wallet in the family emitted' };
+  // PARTIAL: the schedule did not stop, but the FAMILY FIGURE THE MESSAGE CLAIMS is
+  // no longer supported. Treated as a demotion (the claim fails) with its own reason,
+  // because staying verified would keep asserting a number that just went unverified.
+  if (silent.length) return { action: 'PARTIAL', ...detail, silent, reason: `wallet(s) ${silent.join(', ')} did not emit` };
+  if (shortfall) return { action: 'PARTIAL', ...detail, reason: `family total ${Math.round(total).toLocaleString()} is below the ${Math.round(familyMean * (1 - band)).toLocaleString()} floor` };
+  return { action: 'CONFIRM', date: per.map((p) => p.day).sort()[0], amount: Math.round(total), familyTotal: Math.round(total), perWallet: detail.perWallet };
 }
 
 // Evidence gate: a demotion may only be decided on a fetch that actually REACHED the
@@ -168,21 +205,37 @@ export async function pollCadence(loadTokens) {
       if (pending.action === 'PENDING') continue; // window still open — no fetch, no record
       if (promotedAt && mKey < promotedAt.slice(0, 7)) continue; // window pre-dates the promotion
       const windowStart = new Date(expectedEmissionDate(t.cadence, y, m).getTime() - 86400e3).toISOString().slice(0, 10);
-      const fetched = await fetchOutflows(t.cadence.wallet, t.sym, windowStart);
-      if (!windowObserved(fetched)) continue; // "we did not look" must never demote — retry next poll
-      const dec = cadenceDecision(t.cadence, y, m, now, fetched.byDay);
+      // Family specs need every wallet fetched; ANY uncovered fetch aborts the whole
+      // decision — a partial view of a family would read as a silent wallet.
+      const addrs = Array.isArray(t.cadence.wallets) ? t.cadence.wallets.map((w) => w.addr) : [t.cadence.wallet];
+      const byAddr = {};
+      let allCovered = true;
+      for (const a of addrs) {
+        const f = await fetchOutflows(a, t.sym, windowStart);
+        if (!windowObserved(f)) { allCovered = false; break; }
+        byAddr[a] = f.byDay;
+      }
+      if (!allCovered) continue; // "we did not look" must never demote — retry next poll
+      const dec = cadenceDecision(t.cadence, y, m, now, Array.isArray(t.cadence.wallets) ? byAddr : byAddr[addrs[0]]);
       st.months[t.sym][mKey] = { ...dec, at: now.toISOString().slice(0, 16) };
-      if (dec.action === 'DEMOTE') st.demotions[t.sym] = { at: now.toISOString().slice(0, 16), month: mKey, window: dec.window };
+      // PARTIAL demotes too: the family figure the message claims went unverified,
+      // and a row that keeps asserting an unverified number is the defect.
+      if (dec.action === 'DEMOTE' || dec.action === 'PARTIAL') {
+        st.demotions[t.sym] = { at: now.toISOString().slice(0, 16), month: mKey, window: dec.window, kind: dec.action };
+      }
       dirty = true;
     }
     const cur = st.months[t.sym][mKey];
-    if (cur.action === 'DEMOTE' && !cur.notified) {
+    if ((cur.action === 'DEMOTE' || cur.action === 'PARTIAL') && !cur.notified) {
+      const evidence = cur.action === 'PARTIAL'
+        ? `${cur.reason}. Family total ${cur.familyTotal.toLocaleString()} vs ${cur.familyMean.toLocaleString()} expected (${cur.perWallet.map((p) => `${p.addr} ${p.amt.toLocaleString()}${p.ok ? '' : ' ✗'}`).join(' · ')}).`
+        : `The ${cur.window} window showed no qualifying outflow${cur.largestSeen !== undefined ? ` (largest seen: ${cur.largestSeen.toLocaleString()})` : ` (${cur.reason})`}.`;
       const ids = await broadcast(formatAlert({
         source: 'SYS', type: 'CADENCE', severity: 'MEDIUM',
-        title: `${t.sym} unlock row auto-demoted — cadence window passed empty`,
+        title: `${t.sym} unlock row auto-demoted — ${cur.action === 'PARTIAL' ? 'family emission no longer matches the claim' : 'cadence window passed empty'}`,
         lines: [
-          `Coverage change, not a market event: the ${t.sym} schedule was inferred from observed custody emissions, and the ${cur.window} window showed no qualifying outflow (largest seen: ${cur.largestSeen.toLocaleString()}, threshold ${Math.round(t.cadence.meanAmount * 0.5).toLocaleString()}).`,
-          `Behavioural verification is a habit, not a commitment — the pattern broke, so the row no longer alerts as verified.`,
+          `Coverage change, not a market event: the ${t.sym} schedule was inferred from observed custody emissions. ${evidence}`,
+          `Behavioural verification is a habit, not a commitment — the row no longer alerts as verified.`,
           `Operator: rerun node detect-cadence.js ${t.sym}; re-promote only on fresh evidence.`,
         ],
       }), { toChannel: false });
