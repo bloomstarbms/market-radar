@@ -2019,3 +2019,41 @@ So: ONE observation at +10.3%, not +20%, and one point is not a trend. EIGEN's s
 on 3 Sep is the second (family ratio: 9,284,426 / 9,515,075 = 0.976, i.e. −2.4%).
 Fixture 42 (13 checks) covers run-length, threshold breaks, sign flips, downward
 drift, and the no-demotion guarantee.
+
+## 2026-08-31 (v0.27.4) — DRIFT DETECTOR BACKTESTED: 24 real windows, 0 false positives
+
+The detector's first LIVE signal is ~November, so it would have sat unexercised
+outside its own fixtures for two months — the untested-premise shape (CASCADE's
+lesson). EIGEN has 11 historical windows and ENA 13: backtested today, incrementally
+(at each month the detector sees only data up to that month — what it WOULD have
+said, not hindsight). backtest-drift.js.
+
+PRE-REGISTERED: no fire on EIGEN (metronome by construction); possible fire on ENA
+(cv 0.26, noisier). If it fired on EIGEN, the threshold was too tight.
+
+RESULT — fired 0 of 24, and the reason matters:
+  EIGEN  range 0.885..1.123, mean |dev| 5.6%. Tight, as expected.
+  ENA    range 0.531..1.659, mean |dev| 18.7% — WILD, yet no fire, because the
+         deviations alternate sign (+3,+66,+9,−15,+7,+15,−12,+6,+5,−34,−14,+10).
+         The detector wants SUSTAINED ONE-SIDED change, and ENA is noisy, not
+         drifting. That distinction is the whole design working.
+  NEAR-MISS worth recording: EIGEN Dec–Feb ran −7%, −8%, −11% — three consecutive
+         negatives, then recovered to ~0.99. Only the third breached 10%, so the run
+         broke and no drift was claimed. A 5% threshold WOULD have fired on this
+         transient. Evidence the 10% bar is not too tight, and now a fixture.
+
+"NEVER FIRES ON HISTORY" IS ONLY GOOD NEWS IF IT CAN FIRE, so the other half:
+injected permanent step changes, months-to-detect —
+  EIGEN  −50%/−35%/−25%/−15%: 3mo · −8%: NEVER · +15%/+25%/+50%: 3mo
+  ENA    same, except +steps detect in 2mo (its last real window is already +10.3%,
+         so one fewer same-side reading is needed — correct behaviour, not a bug).
+So: blind below ~10% by design, catches any real step change within 2–3 windows.
+That is calibrated, not dead.
+
+Fixture 43 FREEZES the 24 real ratios and the latency bounds, so changing the
+threshold shows its cost instead of silently re-calibrating — the same standard the
+detector enforces on the schedules it watches.
+
+DATA CAVEAT: ENA's first window (2025-08, ratio 0.531) is a partial first month —
+the schedule was ramping. Left in rather than trimmed; it makes the series harsher,
+not kinder.

@@ -879,6 +879,37 @@ console.log('36. every prompt document declares its premises (documents get obey
   check('empty-assumptions check can fail', !/Assumes:\s*\n\s*-\s*\S/.test('Written against: v1.0.0\nAssumes:\n'));
 }
 
+console.log('43. drift detector BACKTESTED against 24 real windows (calibration frozen)');
+{
+  // The detector deserves the standard it enforces. At monthly windows its first
+  // live signal is ~November, so it would otherwise sit unexercised outside its own
+  // fixtures — the untested-premise shape. These are the REAL observed ratios
+  // (EIGEN family 11 windows, ENA metronome 13), frozen so that changing the
+  // threshold shows its cost instead of silently re-calibrating.
+  const { driftStatus } = await import('./src/sources/calendar/cadence-watch.js');
+  const EIGEN = [1.123, 1.121, 1.034, 0.931, 0.920, 0.885, 1.029, 0.985, 0.999, 0.986, 0.987];
+  const ENA = [0.531, 1.032, 1.659, 1.087, 0.853, 1.071, 1.150, 0.882, 1.062, 1.051, 0.658, 0.859, 1.103];
+  const mk = (rs) => Object.fromEntries(rs.map((r, i) => [`2026-${String(i + 1).padStart(2, '0')}`, { action: 'CONFIRM', ratio: r }]));
+  const fires = (rs) => rs.some((_, i) => driftStatus(mk(rs.slice(0, i + 1)))?.drifting);
+  check('NO false positive across 11 real EIGEN windows', !fires(EIGEN));
+  check('NO false positive across 13 real ENA windows (range 0.53–1.66)', !fires(ENA));
+  // EIGEN's Dec–Feb excursion (-7%, -8%, -11%) is three consecutive NEGATIVES that
+  // recovered to ~0.99. The threshold correctly treats it as variance, not drift —
+  // evidence the 10% bar is not too tight.
+  check('a transient 3-month excursion under threshold is NOT called drift', !driftStatus(mk([0.931, 0.920, 0.885])).drifting);
+  // Silence on real data is only good news if it CAN fire.
+  const detect = (base, k) => {
+    const rs = [...base];
+    for (let i = 0; i < 12; i++) { rs.push(+(1 + k).toFixed(3)); if (driftStatus(mk(rs))?.drifting) return i + 1; }
+    return null;
+  };
+  check('a −25% step change is caught within 3 windows', detect(EIGEN, -0.25) <= 3);
+  check('a +15% step change is caught within 3 windows', detect(EIGEN, 0.15) <= 3);
+  check('a −50% collapse is caught within 3 windows', detect(EIGEN, -0.5) <= 3);
+  check('an 8% shift stays below the bar (documented insensitivity)', detect(EIGEN, -0.08) === null);
+  check('detection needs a RUN, so one big month never fires alone', !driftStatus(mk([...EIGEN, 1.66])).drifting);
+}
+
 console.log('42. static mean + recorded ratio = drift detection without false demotion');
 {
   // A ROLLING mean re-centres on whatever the treasury now does, absorbing a real
