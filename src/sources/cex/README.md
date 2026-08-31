@@ -1,3 +1,15 @@
+<!-- PREMISE
+Written against: v0.26.3
+Reviewed: 2026-08-29
+Assumes:
+- Module-local doc: describes the files in this directory only.
+- PUMP and DUMP are LADDER-RETIRED (measured, disabled — 22 of 30 PUMP-HIGH
+  reverted within 24h, n=30). This README describes machinery that is still
+  present and instrumented but does NOT push. Do not read it as live behaviour.
+- The live fact-emitting modules in this directory are listings, announcements
+  and funding, not pump.
+-->
+
 # CEX pump detector
 
 Monitors USDT spot pairs on Binance, MEXC, and Bybit via public APIs (no keys).

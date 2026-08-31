@@ -1747,3 +1747,40 @@ docs/briefs/ subdir. They inherit fixture 36 automatically, so each will need a
 PREMISE header (version written against + assumptions) or the suite fails —
 which is the intended forcing function: importing a document means stating what
 it assumed. Spent ones can be let go.
+
+## 2026-08-29 (v0.26.3) — brief import staged; fixture 36 scope corrected
+
+**MY OWN CLAIM WAS WRONG AND THE FIX IS SHIPPED.** I told the operator imported
+briefs would "inherit fixture 36 automatically". They would not have: the check
+read `readdirSync('.')` — TOP LEVEL ONLY — so anything in docs/briefs/ would have
+escaped it silently. A guard whose coverage is narrower than its advertised scope
+is worse than none, because the advertisement is what gets trusted. Now a
+recursive walk (skipping node_modules/.git/data/fixtures/backups).
+
+The wider walk immediately caught a real omission: `src/sources/cex/README.md`,
+undiscovered by the top-level check, described the PUMP detector as if live. It
+is LADDER-RETIRED (22 of 30 PUMP-HIGH reverted in 24h, n=30). Now headed with
+that status — a module doc that reads as live behaviour for retired machinery is
+the documents-get-obeyed problem in miniature.
+
+**docs/briefs/ created and staged.** The brief files still are NOT reachable from
+this session (uploads empty; each session mounts only its own outputs). So
+docs/briefs/README.md now carries the OPERATOR IMPORT STEP plus the exact PREMISE
+header to paste on each of the eight briefs, written from the operator's own
+status table — which is the part a future session could not reconstruct:
+  FACTS-AND-CALLS.md         v0.22.x  EXECUTED, STILL GOVERNING (import first)
+  FACTS-ENGINE-ROADMAP.md    v0.24.3  PARTLY STALE (import second — holds the
+                                      current priority ordering; its step-10
+                                      plan superseded by the bulk scan)
+  ALPHA_RADAR_BUILD_SPEC.md  pre-0.11 HISTORICAL (§11 superseded; §8 anti-pattern
+                                      list is why it is worth keeping)
+  FIX-SYMBOL-CLASSIFIER.md   v0.23.3  EXECUTED as v0.23.4 (its ticker-list
+                                      assumption was incomplete — GMX)
+  UNLOCK-EXPANSION.md        v0.24.5  PARTLY REFUTED (bucket A/B priority)
+  UNLOCK-BULK-SCAN.md        v0.25.2  EXECUTED (priors beaten three ways)
+  FIX-DELIVERY-AND-TIERING /
+  SHIP-v0.20.0.md            v0.19.3  EXECUTED, SPENT
+Vocabulary fixed so status means the same thing across the set. Standing rule
+written into that README: **briefs are historical record, never instructions** —
+Executed describes what was done, Refuted is kept so the refutation stays
+traceable, and neither is a plan. Plans live in REMAINING-WORK.md.

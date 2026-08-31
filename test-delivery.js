@@ -844,8 +844,18 @@ console.log('36. every prompt document declares its premises (documents get obey
   // it). Countermeasure = the rule already applied to code: RECORD WHY NEXT TO WHAT.
   // Auto-discovered, never a hardcoded list — a hardcoded list is the CRYPTO_EXCEPTIONS
   // defect, and the point is that a NEW document is covered the moment it exists.
-  const { readdirSync: rds } = await import('node:fs');
-  const docs = rds('.').filter((f) => f.endsWith('.md'));
+  // RECURSIVE. First cut read the top level only — which would have let imported
+  // briefs in docs/briefs/ escape the requirement, after I had told the operator
+  // they would "inherit this check automatically". A guard whose coverage is
+  // narrower than its advertised scope is worse than no guard.
+  const { readdirSync: rds, statSync: st } = await import('node:fs');
+  const SKIP = new Set(['node_modules', '.git', 'data', 'fixtures', 'backups']);
+  const walkDocs = (dir) => rds(dir).flatMap((f) => {
+    if (SKIP.has(f)) return [];
+    const p = dir === '.' ? f : `${dir}/${f}`;
+    try { return st(p).isDirectory() ? walkDocs(p) : (f.endsWith('.md') ? [p] : []); } catch { return []; }
+  });
+  const docs = walkDocs('.');
   check('doc discovery finds the document set', docs.length >= 4);
   const missing = [], undated = [], noAssumptions = [];
   for (const f of docs) {
