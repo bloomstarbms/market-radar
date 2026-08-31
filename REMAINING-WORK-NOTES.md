@@ -1816,3 +1816,46 @@ TRANSFER STILL BLOCKED: the brief files remain unreachable from the agent sessio
 (uploads empty across four checks; chat-card downloads land in the operator's
 folder, not the sandbox mount). Headers are staged in docs/briefs/README.md and
 apply unchanged whenever the copy happens.
+
+## 2026-08-29 (v0.26.5) — DESCRIPTIVE gets a testable definition: cite a fixture per claim
+
+"A descriptive document is closer to an invariant than to prose" — invariants can
+be tested, so DESCRIPTIVE now MEANS: every claim names the fixture that fails if
+code and document diverge. Not "accurate today" — checked.
+
+Shipped: docs/briefs/CLAIMS-FACTS-AND-CALLS.md (12 claims of the FACT/CALL
+architecture, each carrying `[fixture: <exact suite section title>]`), plus
+fixture 37 which enforces the bar on ANY doc whose PREMISE says DESCRIPTIVE:
+  - a "## Claims" section must exist;
+  - every claim line carries a citation or an explicit [UNENFORCED: reason];
+  - EVERY CITED SECTION TITLE MUST REALLY EXIST in test-delivery.js — a renamed
+    or fabricated fixture leaves a dangling reference that still READS as proof,
+    which is the safeguard-whose-lapse-looks-like-success shape again;
+  - at least one UNENFORCED claim is expected, not penalised.
+Both guards self-test.
+
+**Writing the citations found a real hole, which is the point of the exercise.**
+Eleven of twelve claims cite live fixtures. One does not:
+  "Multipliers and the ladder apply to CALLS only; the ladder never gates a fact."
+No fixture asserts that NEGATIVE. The fact path returns before ladder evaluation,
+so it holds BY CONSTRUCTION today — but a refactor could route a fact through
+evaluateLadder() and nothing would object. Marked [UNENFORCED] with exactly that
+reasoning rather than quietly cited to a nearby-looking test. This is the
+distinction the mechanism exists to expose: "we believe this" vs "we check this".
+NEXT: write that assertion (a fact whose type is ladder-DISABLED must still admit
+and push) and convert the marker to a citation.
+
+GENERALISABLE: a doc claim is either backed by a test or it is a promise nothing
+keeps. Any document asserting how the system behaves can be held to this bar; the
+ones that cannot meet it are not descriptive, only accurate so far.
+
+UPDATE (same session): the UNENFORCED claim is now ENFORCED. Fixture 38 asserts
+the negative directly — LISTING/FUNDING/UNLOCK facts admit and carry no
+tier/score with `withLadder({...ALL DISABLED})` injected — plus a CONTROL that
+the SAME disabled ladder still suppresses a PUMP call. Without the control the
+fixture could have passed because the injection never took effect, which is the
+"asserts environment while appearing to assert logic" class. 14 claims now: 13
+cited, 1 newly-declared UNENFORCED (per-fact delivery accounting — fixture 1
+covers the broadcast layer, but nothing asserts messageCounts() cannot over-count
+a partially-delivered batch). The mechanism keeps producing work, which is the
+correct behaviour for it.

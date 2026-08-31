@@ -875,6 +875,75 @@ console.log('36. every prompt document declares its premises (documents get obey
   check('empty-assumptions check can fail', !/Assumes:\s*\n\s*-\s*\S/.test('Written against: v1.0.0\nAssumes:\n'));
 }
 
+console.log('38. the ladder never gates a FACT (the negative the citations exposed)');
+{
+  // Writing CLAIMS-FACTS-AND-CALLS.md surfaced a claim nothing checked: "the
+  // ladder applies to calls only". True by construction (the fact path returns
+  // before ladder evaluation) but unasserted — a refactor could route a fact
+  // through evaluateLadder() and no test would object. Asserting the NEGATIVE
+  // is the whole point: a fact whose type is ladder-DISABLED must still push.
+  const { admit, isFact, withLadder } = await import('./src/core/budget.js');
+  const allDisabled = { PUMP: 'DISABLED', LISTING: 'DISABLED', FUNDING: 'DISABLED', UNLOCK: 'DISABLED' };
+  for (const type of ['LISTING', 'FUNDING', 'UNLOCK']) {
+    const v = withLadder(allDisabled, () => admit({ source: 'CEX', type, severity: 'HIGH', key: `l${type}${Math.random()}`, title: 't', lines: [] }));
+    check(`${type} fact admits even with its ladder DISABLED`, v.allow === true && v.kind === 'FACT');
+    check(`${type} fact carries no tier/score under a disabled ladder`, v.score === undefined && v.tier === undefined);
+  }
+  // Control: the same disabled ladder DOES gate a call — otherwise the fixture
+  // above would pass simply because the injection never took effect.
+  const call = withLadder(allDisabled, () => admit({ source: 'SIG', type: 'PUMP', severity: 'HIGH', key: `c${Math.random()}`, title: 't', lines: [] }));
+  check('CONTROL: the same disabled ladder suppresses a CALL (injection is live)', call.allow === false);
+  check('the fact predicate itself ignores ladder state', isFact({ type: 'LISTING' }));
+}
+
+console.log('37. DESCRIPTIVE docs cite a fixture per claim (invariants, not prose)');
+{
+  // A descriptive document is closer to an invariant than to prose — and an
+  // invariant can be tested. So the bar for STATUS: DESCRIPTIVE is that every
+  // claim names the fixture that fails if code and document diverge. Drift is
+  // then DISCOVERED rather than merely discoverable. A claim with no citation
+  // must say UNENFORCED, which makes "we believe this" vs "we check this"
+  // visible instead of blurred.
+  const { readdirSync: rds2, statSync: st2 } = await import('node:fs');
+  const SKIP2 = new Set(['node_modules', '.git', 'data', 'fixtures', 'backups']);
+  const walk2 = (dir) => rds2(dir).flatMap((f) => {
+    if (SKIP2.has(f)) return [];
+    const p = dir === '.' ? f : `${dir}/${f}`;
+    try { return st2(p).isDirectory() ? walk2(p) : (f.endsWith('.md') ? [p] : []); } catch { return []; }
+  });
+  const suite = readFileSync('test-delivery.js', 'utf8');
+  const sectionTitles = [...suite.matchAll(/console\.log\('(\d+[a-z]?\..*?)'\)/g)].map((m) => m[1]);
+  check('suite exposes its section titles for citation', sectionTitles.length >= 30);
+
+  const descriptive = walk2('.').filter((f) => /Status:\s*DESCRIPTIVE/.test(readFileSync(f, 'utf8').slice(0, 1600)));
+  check('at least one DESCRIPTIVE doc exists to check', descriptive.length >= 1);
+  const uncited = [], badCite = [];
+  let claims = 0, unenforced = 0;
+  for (const f of descriptive) {
+    const body = readFileSync(f, 'utf8');
+    const claimBlock = body.split(/^##\s+Claims\s*$/m)[1];
+    if (!claimBlock) { uncited.push(`${f}: no "## Claims" section`); continue; }
+    for (const line of claimBlock.split('\n')) {
+      if (!/^-\s+\S/.test(line)) continue;
+      if (/^##\s/.test(line)) break;
+      claims++;
+      const cite = line.match(/\[fixture:\s*(.+?)\]/);
+      if (/\[UNENFORCED:/.test(line)) { unenforced++; continue; }
+      if (!cite) { uncited.push(`${f}: ${line.trim().slice(0, 60)}`); continue; }
+      // The citation must name a section that REALLY EXISTS — otherwise a
+      // renamed fixture leaves a dangling reference that still reads as proof.
+      if (!sectionTitles.includes(cite[1].trim())) badCite.push(`${cite[1].slice(0, 50)}`);
+    }
+  }
+  check('DESCRIPTIVE docs declare claims', claims >= 5);
+  check('every claim is cited or explicitly UNENFORCED', uncited.length === 0, uncited.slice(0, 2).join(' | '));
+  check('every citation names a fixture that exists', badCite.length === 0, badCite.slice(0, 2).join(' | '));
+  check('UNENFORCED claims are declared, not hidden', unenforced >= 1);
+  // Self-tests.
+  check('dangling citation would be caught', !sectionTitles.includes('99. a fixture that does not exist'));
+  check('uncited claim would be caught', !/\[fixture:|\[UNENFORCED:/.test('- an unbacked claim'));
+}
+
 console.error = origErr;
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
