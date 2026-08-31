@@ -879,6 +879,41 @@ console.log('36. every prompt document declares its premises (documents get obey
   check('empty-assumptions check can fail', !/Assumes:\s*\n\s*-\s*\S/.test('Written against: v1.0.0\nAssumes:\n'));
 }
 
+console.log('42. static mean + recorded ratio = drift detection without false demotion');
+{
+  // A ROLLING mean re-centres on whatever the treasury now does, absorbing a real
+  // schedule change silently — a falsifier that tracks a moving target is not one.
+  // So the mean stays STATIC and each confirmation records WHERE IN THE BAND it
+  // landed; sustained one-sided deviation surfaces as DRIFT for the operator, never
+  // as automatic silence.
+  const { cadenceDecision, driftStatus, cadenceStatus } = await import('./src/sources/calendar/cadence-watch.js');
+  const W = '0x54B8c65f0635fD91C8729Dd3269C630d9AED54e5';
+  const spec = { wallet: W, meanAmount: 12069436, monthEnd: false, expectDay: 6, monthsObserved: 13 };
+  const after = new Date('2026-09-13T00:00:00Z');
+  const d = cadenceDecision(spec, 2026, 8, after, { '2026-08-06': 13318135 });
+  check('CONFIRM records the ratio, not just the verdict', d.ratio === 1.103);
+  // UNITS: the spec mean is peak-day-derived, so the ratio must use peak day. The
+  // 5-day window sum (14.5M) would read +20% and compare different denominators —
+  // the Part 0 units rule, which is exactly how this metric could have lied.
+  check('ratio compares peak-day to a peak-day mean, not the window sum', Math.abs(d.ratio - 13318135 / 12069436) < 0.001 && d.ratio < 1.15);
+  const mk = (ratios) => Object.fromEntries(ratios.map((r, i) => [`2026-0${i + 1}`, { action: 'CONFIRM', ratio: r }]));
+  check('one high reading is NOT drift', driftStatus(mk([1.10])).drifting === false);
+  check('two is still not drift', driftStatus(mk([1.10, 1.12])).drifting === false);
+  check('three same-side readings ARE drift', driftStatus(mk([1.10, 1.12, 1.15])).drifting === true);
+  check('drift reports magnitude and run length', (() => { const s = driftStatus(mk([1.10, 1.12, 1.15])); return s.pct === 12 && s.run === 3; })());
+  check('a reading inside the threshold breaks the run', driftStatus(mk([1.10, 1.02, 1.15])).drifting === false);
+  check('a sign flip breaks the run', driftStatus(mk([1.10, 0.85, 1.15])).drifting === false);
+  check('downward drift is detected too', (() => { const s = driftStatus(mk([0.88, 0.86, 0.85])); return s.drifting && s.pct < 0; })());
+  check('no confirmations yet = no drift claim', driftStatus({}) === null);
+  // Drift must NEVER demote — it is operator judgement, not automatic silence.
+  const toks = [{ sym: 'X', cadence: spec, events: [{ date: '2026-01-01', source: 'onchain-cadence' }] }];
+  const st = { months: { X: mk([1.10, 1.12, 1.15]) }, demotions: {} };
+  const line = cadenceStatus(toks, st, new Date('2026-04-01')).line;
+  check('drift surfaces in the heartbeat', /DRIFT \+12% x3 windows/.test(line));
+  check('drift does NOT demote the row', Object.keys(st.demotions).length === 0 && !/demoted/.test(line));
+  check('a single confirmation still shows its position in the band', /\+10% vs mean/.test(cadenceStatus(toks, { months: { X: mk([1.10]) }, demotions: {} }, new Date('2026-02-01')).line));
+}
+
 console.log('41. predict the floor, report the total (stages have different epistemics)');
 {
   // Forward stages can only claim what is PREDICTABLE, so an irregular co-emitter

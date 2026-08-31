@@ -1990,3 +1990,32 @@ Also kept visible per the reviewer's note: claimCoverage is DERIVED FROM ROW SHA
 never stored. A stored coverage field describing a spec would drift from the spec it
 describes — the same drift already fixed at three levels (prose version strings,
 premise headers, fixture citations). It would have been the easiest thing to write.
+
+## 2026-08-31 (v0.27.3) — STATIC MEAN + RECORDED RATIO: drift without false demotion
+
+DECISION (recorded before the fourth data point, as advised): the cadence mean stays
+**STATIC**. A rolling mean re-centres on whatever the treasury now does, so a real
+schedule change is absorbed silently — a falsifier that tracks a moving target is not
+a falsifier. Static risks eventually false-demoting a legitimate change, and the
+resolution is NOT to loosen the falsifier but to record WHERE IN THE BAND each
+confirmation lands:
+  - cadenceDecision CONFIRM now stamps `ratio` (observed / mean).
+  - driftStatus(months): >=3 consecutive same-side deviations beyond ±10% => DRIFT.
+  - Heartbeat shows `⚠️ DRIFT +12% x3 windows`, or the single-reading position
+    `(+10% vs mean)`. **Drift is REPORTED, never acted on** — it is a question for
+    the operator ("did the schedule change?"), not grounds for automatic silence.
+    Fixture asserts drift does not demote.
+
+**UNITS CATCH — the metric could have lied on its first use.** The reviewer's +20%
+(14.5M vs 12.07M) compared the RETROSPECTIVE 5-DAY WINDOW SUM against a mean derived
+from PEAK DAY PER MONTH. The decision-relevant ratio is peak-day 13,318,135 /
+12,069,436 = **1.103, i.e. +10.3%** — inside the band and half the apparent
+deviation. Different denominators, Part 0's units rule, and precisely the shape that
+makes a drift metric produce confident nonsense. The ratio is computed from the same
+measure the mean was derived from, with a fixture pinning it
+("ratio compares peak-day to a peak-day mean, not the window sum").
+
+So: ONE observation at +10.3%, not +20%, and one point is not a trend. EIGEN's stamp
+on 3 Sep is the second (family ratio: 9,284,426 / 9,515,075 = 0.976, i.e. −2.4%).
+Fixture 42 (13 checks) covers run-length, threshold breaks, sign flips, downward
+drift, and the no-demotion guarantee.

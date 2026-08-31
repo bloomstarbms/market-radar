@@ -1,5 +1,5 @@
 <!-- PREMISE
-Written against: v0.27.2
+Written against: v0.27.3
 Reviewed: 2026-08-29
 Assumes:
 - This directory holds SESSION BRIEFS imported from the Cowork outputs folder —

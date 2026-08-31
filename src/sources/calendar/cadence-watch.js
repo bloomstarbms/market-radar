@@ -79,7 +79,12 @@ export function cadenceDecision(spec, year, month, now, outflows) {
   const fam = Array.isArray(spec.wallets) && spec.wallets.length;
   if (!fam) {
     const { day, amt } = peakIn(outflows);
-    if (amt >= spec.meanAmount * 0.5) return { action: 'CONFIRM', date: day, amount: Math.round(amt) };
+    // ratio: where in the band this landed. CONFIRM/DEMOTE alone discards it, and
+    // eleven observations AT the mean vs eleven trending +20% are different facts —
+    // only one of them says the schedule is changing. Compared like with like: the
+    // spec mean is derived from PEAK DAY per month, so the ratio uses peak day, not
+    // the window sum (mixing those was a units error waiting to happen).
+    if (amt >= spec.meanAmount * 0.5) return { action: 'CONFIRM', date: day, amount: Math.round(amt), ratio: +(amt / spec.meanAmount).toFixed(3) };
     return { action: 'DEMOTE', window, largestSeen: Math.round(amt) };
   }
 
@@ -100,7 +105,7 @@ export function cadenceDecision(spec, year, month, now, outflows) {
   // because staying verified would keep asserting a number that just went unverified.
   if (silent.length) return { action: 'PARTIAL', ...detail, silent, reason: `wallet(s) ${silent.join(', ')} did not emit` };
   if (shortfall) return { action: 'PARTIAL', ...detail, reason: `family total ${Math.round(total).toLocaleString()} is below the ${Math.round(familyMean * (1 - band)).toLocaleString()} floor` };
-  return { action: 'CONFIRM', date: per.map((p) => p.day).sort()[0], amount: Math.round(total), familyTotal: Math.round(total), perWallet: detail.perWallet };
+  return { action: 'CONFIRM', date: per.map((p) => p.day).sort()[0], amount: Math.round(total), familyTotal: Math.round(total), ratio: +(total / familyMean).toFixed(3), perWallet: detail.perWallet };
 }
 
 // Evidence gate: a demotion may only be decided on a fetch that actually REACHED the
@@ -279,6 +284,34 @@ export function retrospectiveLine(obs, spec) {
     : `Observed on-chain: ${fmt(obs.total)} total from the tracked schedule; no other watched holder emitted in this window.`;
 }
 
+// DRIFT: the mean stays STATIC deliberately. A rolling mean re-centres on whatever
+// the treasury now does, so a real schedule change gets absorbed silently — a
+// falsifier that tracks a moving target is not a falsifier. Static detects change but
+// would eventually false-demote a legitimate one, so the resolution is to record WHERE
+// IN THE BAND each confirmation lands and surface sustained one-sided deviation as
+// DRIFT (operator judgement) rather than as a demotion (automatic silence).
+// Pure: takes the stamped months for one token.
+export function driftStatus(months, { minRun = 3, threshold = 0.10 } = {}) {
+  const confirms = Object.entries(months || {})
+    .filter(([, r]) => r.action === 'CONFIRM' && typeof r.ratio === 'number')
+    .sort(([a], [b]) => a.localeCompare(b));
+  if (!confirms.length) return null;
+  // longest run of same-side deviations ending at the most recent window
+  let run = 0, side = 0;
+  for (let i = confirms.length - 1; i >= 0; i--) {
+    const dev = confirms[i][1].ratio - 1;
+    const s = dev > threshold ? 1 : dev < -threshold ? -1 : 0;
+    if (s === 0) break;
+    if (side === 0) side = s;
+    else if (s !== side) break;
+    run++;
+  }
+  const recent = confirms.slice(-Math.max(run, 1)).map(([, r]) => r.ratio);
+  const mean = recent.reduce((a, b) => a + b, 0) / recent.length;
+  return { run, side, drifting: run >= minRun,
+    pct: Math.round((mean - 1) * 100), last: confirms[confirms.length - 1][1].ratio, n: confirms.length };
+}
+
 // Heartbeat line. A watch that silently stops watching is the failure mode this module
 // exists to prevent — so its own liveness is on the operator channel.
 export function cadenceStatus(tokens = null, state = loadWatchState(), now = new Date()) {
@@ -301,7 +334,13 @@ export function cadenceStatus(tokens = null, state = loadWatchState(), now = new
     const confirmed = Object.entries(months).filter(([, r]) => r.action === 'CONFIRM').map(([m]) => m).sort();
     const lastOk = confirmed.pop();
     const ageD = lastOk ? Math.round((now - new Date(lastOk + '-01')) / 86400e3) : null;
-    return `${t.sym} ${lastOk ? `ok ${lastOk}` : 'no window closed yet'}${ageD !== null && ageD > 65 ? ' ⚠️ stale confirm' : ''}`;
+    const d = driftStatus(months);
+    // Drift is reported, never acted on: a sustained one-sided deviation is a
+    // question for the operator ("did the schedule change?"), not grounds for
+    // automatic silence.
+    const driftMark = d?.drifting ? ` ⚠️ DRIFT ${d.pct > 0 ? '+' : ''}${d.pct}% x${d.run} windows`
+      : d?.last ? ` (${d.last > 1 ? '+' : ''}${Math.round((d.last - 1) * 100)}% vs mean)` : '';
+    return `${t.sym} ${lastOk ? `ok ${lastOk}` : 'no window closed yet'}${driftMark}${ageD !== null && ageD > 65 ? ' ⚠️ stale confirm' : ''}`;
   });
   return { line: `Cadence watch: ${parts.join(' · ')}`, demoted };
 }
