@@ -1951,3 +1951,42 @@ asserted `cadence.wallet` — the SHAPE that happened to satisfy the invariant �
 so failed the moment EIGEN widened to a family spec, i.e. the test obstructed the
 improvement it existed to protect. ASSERT THE INVARIANT ("this row has a forward
 falsifier"), NOT THE SHAPE CURRENTLY SATISFYING IT.
+
+## 2026-08-31 (v0.27.2) — PREDICT THE FLOOR, REPORT THE TOTAL: stages have different epistemics
+
+The stages do not make the same KIND of claim. T-14/T-3/T-0 are forward and can only
+assert what is predictable, so an irregular co-emitter must stay out (inside a cadence
+band it would false-demote every quiet month) and the figure is honestly a FLOOR.
+T+3 is RETROSPECTIVE: it reports what actually moved, carries no falsification risk,
+and understates if it omits the irregular emitter.
+
+Shipped:
+ - Row field `alsoObserve[]` — addresses that emit near the date but IRREGULARLY.
+   Explicitly NOT in the falsifier; summed only for the retrospective stage.
+   Addresses resolved through resolveWalletRef (fabrication guard applies).
+ - `observedAround(addrs, sym, date, grace)` in cadence-watch: sums the real window;
+   returns NULL when the fetch did not cover it. `retrospectiveLine()` is pure and
+   fixture-tested; a failed read SAYS SO rather than falling back to the forward
+   floor (absence-of-observation rule, third application).
+ - `claimCoverage(row, lead)` is now stage-aware: lead<0 => amount 'observed-actual',
+   scope 'retrospective'.
+ - Fixture 41 (11 checks) incl. "does not understate by omitting the irregular
+   emitter" and "uncovered read says so instead of claiming a total".
+
+**MEASURED against the real August window — the gap was bigger than the estimate
+suggested.** ENA's T+3 line now reads:
+  "Observed on-chain: 14,496,186 from the tracked schedule + 3,439,024 from other
+   holders = 17,935,210 total."
+The forward floor quotes 12.07M. Reporting only the floor at T+3 would have
+understated actual distribution by ~33%, not the ~24% the single-day sample implied
+(the window sums 5 days, the earlier figure was one peak day).
+
+GENERALISABLE: **a claim's epistemics depend on WHEN it is made, not only on what is
+watched.** The same row can honestly say less before an event than after it. Auditing
+"claim vs falsifier" per row (v0.27.1) is necessary but not sufficient — the audit is
+per row PER STAGE.
+
+Also kept visible per the reviewer's note: claimCoverage is DERIVED FROM ROW SHAPE,
+never stored. A stored coverage field describing a spec would drift from the spec it
+describes — the same drift already fixed at three levels (prose version strings,
+premise headers, fixture citations). It would have been the easiest thing to write.

@@ -9,7 +9,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { config, ROOT } from '../../config.js';
 import { dispatch } from '../../core/dispatcher.js';
-import { loadWatchState, activeDemotions } from './cadence-watch.js';
+import { loadWatchState, activeDemotions, observedAround, retrospectiveLine } from './cadence-watch.js';
 
 const FILE = join(ROOT, 'unlocks.json');
 // STAGE TIERING (coverage-session Part 3): at 25+ tracked tokens, un-tiered monthly
@@ -64,7 +64,14 @@ function nextMonthlyDate(day, from = new Date()) {
 //
 // Derived from row SHAPE, never stored — a stored coverage field would drift from the
 // spec it describes, which is the same class of defect one level up.
-export function claimCoverage(t) {
+// lead < 0 (T+3) is RETROSPECTIVE: it can report what actually happened, including
+// irregular emitters excluded from the forward falsifier. Predict the floor, report
+// the total — same row, different claim per stage, both true.
+export function claimCoverage(t, lead = 3) {
+  if (lead < 0 && (t?.cadence || t?.alsoObserve)) return {
+    date: 'observed', amount: 'observed-actual', scope: 'retrospective',
+    line: 'Retrospective: the figures below are on-chain observations of what moved, not a forward estimate.',
+  };
   const fam = Array.isArray(t?.cadence?.wallets) ? t.cadence.wallets.length : 0;
   if (fam) return {
     date: 'observed', amount: 'observed', scope: 'family',
@@ -145,8 +152,16 @@ export async function pollUnlocks() {
       // (enforced on-chain); a cadence read is a habit (custody can change it at
       // will). Both verify, but they fail differently — the message says which one
       // it is resting on instead of letting "verified" imply the stronger class.
+      // T+3 reports observed totals; if the read fails, it says so rather than
+      // silently falling back to the forward floor (absence-of-observation rule).
+      let retro = null;
+      if (lead < 0 && (t.cadence || t.alsoObserve)) {
+        const addrs = [...(t.cadence?.wallets?.map((w) => w.addr) ?? (t.cadence?.wallet ? [t.cadence.wallet] : [])), ...(t.alsoObserve ?? [])];
+        const obs = addrs.length ? await observedAround(addrs, t.sym, dateKey, t.cadence?.graceDays ?? 3).catch(() => null) : null;
+        retro = retrospectiveLine(obs, t.cadence);
+      }
       const confidence = (Array.isArray(t.events) && t.events.length)
-        ? `Verified — source: ${t.events[0].source}. ${claimCoverage(t).line}`
+        ? `Verified — source: ${t.events[0].source}. ${claimCoverage(t, lead).line}${retro ? ' ' + retro : ''}`
         : t.verified
         ? 'Date verified against the public unlock calendar.'
         : '⚠️ Recurring-schedule estimate — confirm the exact date on cryptorank.io/token-unlock.';

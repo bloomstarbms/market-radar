@@ -879,6 +879,40 @@ console.log('36. every prompt document declares its premises (documents get obey
   check('empty-assumptions check can fail', !/Assumes:\s*\n\s*-\s*\S/.test('Written against: v1.0.0\nAssumes:\n'));
 }
 
+console.log('41. predict the floor, report the total (stages have different epistemics)');
+{
+  // Forward stages can only claim what is PREDICTABLE, so an irregular co-emitter
+  // stays out of the falsifier and the figure is a floor. T+3 is RETROSPECTIVE: it
+  // reports what actually moved, carries no falsification risk, and must not
+  // understate by omitting the irregular emitter. Same row, different claim, both true.
+  const { retrospectiveLine } = await import('./src/sources/calendar/cadence-watch.js');
+  const { claimCoverage } = await import('./src/sources/calendar/unlocks.js');
+  const W = '0x54B8c65f0635fD91C8729Dd3269C630d9AED54e5', O = '0x2146AA5807D96E6B2922a149CeE870F17347F1d0';
+  const spec = { wallet: W, meanAmount: 12069436, monthsObserved: 13 };
+  const row = { cadence: spec, alsoObserve: [O] };
+  check('forward stage quotes a FLOOR', claimCoverage(row, 3).amount === 'observed-partial' && /floor, not a total/.test(claimCoverage(row, 3).line));
+  check('T+3 switches to observed-actual', claimCoverage(row, -3).amount === 'observed-actual' && claimCoverage(row, -3).scope === 'retrospective');
+  check('T-0 is still forward-looking', claimCoverage(row, 0).amount === 'observed-partial');
+  // The real August split: 13.32M metronome + 2.91M irregular.
+  const obs = { total: 16227640, window: 'x', per: [{ addr: W, amt: 13318135 }, { addr: O, amt: 2909505 }] };
+  const line = retrospectiveLine(obs, spec);
+  check('retrospective line separates tracked from other holders', /13,318,135 from the tracked schedule/.test(line) && /2,909,505 from other holders/.test(line));
+  check('retrospective line states the TOTAL', /16,227,640 total/.test(line));
+  check('retrospective line does not understate by omitting the irregular emitter', !/12,069,436/.test(line));
+  const solo = retrospectiveLine({ total: 13318135, window: 'x', per: [{ addr: W, amt: 13318135 }] }, spec);
+  check('no co-emission = plain total, no phantom "other holders"', /no other watched holder emitted/.test(solo));
+  // Absence-of-observation: a failed read must NOT silently fall back to the floor.
+  check('uncovered read says so instead of claiming a total', /did not cover the window, so no total is claimed/.test(retrospectiveLine(null, spec)));
+  // Promotion validates the address list (fabrication guard applies here too).
+  const { promoteRow } = await import('./src/core/unlock-promote.js');
+  let bad = false;
+  try { promoteRow({ sym: 'X', name: 'X' }, { events: [{ date: '2026-09-01', source: 's', detail: 'd' }], reviewBy: '2026-12-01', alsoObserve: ['0x2146'] }); } catch { bad = true; }
+  check('alsoObserve refuses a truncated address', bad);
+  const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens.find((t) => t.sym === 'ENA');
+  check('LIVE ENA carries its irregular co-emitters for T+3', live.alsoObserve?.length === 2);
+  check('LIVE ENA keeps them OUT of the falsifier', !live.cadence.wallets && live.cadence.wallet === W);
+}
+
 console.log('40. claim coverage is stated per row (date/amount/scope, not just date)');
 {
   // The class behind fixture 39: a falsifier usually covers ONE of the claims a

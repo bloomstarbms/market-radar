@@ -246,6 +246,39 @@ export async function pollCadence(loadTokens) {
   if (dirty) saveWatchState(st);
 }
 
+// RETROSPECTIVE OBSERVATION for the T+3 stage. Forward stages claim a predictable
+// floor; this reports what actually moved — including irregular emitters that must
+// stay OUT of the cadence band (they would false-demote a quiet month) but belong in
+// a backward-looking total. Returns null when the fetch did not cover the window:
+// "we did not look" must not become a total, same rule as windowObserved().
+export async function observedAround(addrs, sym, dateISO, graceDays = 3) {
+  const target = new Date(dateISO + 'T00:00:00Z');
+  const sKey = new Date(target.getTime() - 86400e3).toISOString().slice(0, 10);
+  const eKey = new Date(target.getTime() + graceDays * 86400e3).toISOString().slice(0, 10);
+  const per = [];
+  for (const a of addrs) {
+    const f = await fetchOutflows(a, sym, sKey);
+    if (!windowObserved(f)) return null;
+    let amt = 0;
+    for (const [d, v] of Object.entries(f.byDay)) if (d >= sKey && d <= eKey) amt += v;
+    per.push({ addr: a, amt });
+  }
+  return { total: per.reduce((s, p) => s + p.amt, 0), per, window: `${sKey}..${eKey}` };
+}
+
+// PURE: renders the retrospective line from an observedAround() result. Separated so
+// the wording is fixture-testable without touching the network.
+export function retrospectiveLine(obs, spec) {
+  if (!obs) return 'Post-event totals unavailable — the on-chain read did not cover the window, so no total is claimed here.';
+  const watched = new Set((spec?.wallets?.map((w) => w.addr) ?? (spec?.wallet ? [spec.wallet] : [])).map((a) => a.toLowerCase()));
+  const core = obs.per.filter((p) => watched.has(p.addr.toLowerCase())).reduce((s, p) => s + p.amt, 0);
+  const other = obs.total - core;
+  const fmt = (n) => Math.round(n).toLocaleString();
+  return other > 0
+    ? `Observed on-chain: ${fmt(core)} from the tracked schedule + ${fmt(other)} from other holders = ${fmt(obs.total)} total. Retrospective and fully observed — the forward estimate quotes only the predictable component.`
+    : `Observed on-chain: ${fmt(obs.total)} total from the tracked schedule; no other watched holder emitted in this window.`;
+}
+
 // Heartbeat line. A watch that silently stops watching is the failure mode this module
 // exists to prevent — so its own liveness is on the operator channel.
 export function cadenceStatus(tokens = null, state = loadWatchState(), now = new Date()) {

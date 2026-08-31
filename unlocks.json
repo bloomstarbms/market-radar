@@ -243,7 +243,7 @@
      "detail": "13 consecutive monthly distributions from custody 0x54B8c65f0635fD91C8729Dd3269C630d9AED54e5 (Aug 2025-Aug 2026), mean 12.07M ENA, cv 0.26; emits on the 6th, rolls to Monday when the 6th is a weekend (observed 3/3 weekend cases)"
     }
    ],
-   "note": "Behavioural (habit, not commitment): cadence-watch auto-demotes if a monthly window passes with no qualifying outflow. SCOPE — this row watches ONE metronome (0x54B8, ~12.07M/mo). MEASURED 31 Aug: the 1.185B holder 0x2146 ALSO emits on the 6th (2.91M on 2026-08-06) but irregularly, so the true monthly distribution EXCEEDS the figure here. Deliberately not folded into a family spec: an irregular emitter would false-demote a family band. The message states this figure is a floor, not a total.",
+   "note": "Behavioural (habit, not commitment): cadence-watch auto-demotes if a monthly window passes with no qualifying outflow. SCOPE — the FALSIFIER watches ONE metronome (0x54B8, ~12.07M/mo); forward stages quote that as a FLOOR. Irregular co-emitters 0x2146 (1.185B holder, 2.91M on 2026-08-06) and 0xdeDc are deliberately NOT in the cadence band — an irregular emitter would false-demote every quiet month — but ARE summed at T+3, which is retrospective and carries no falsification risk. Predict the floor, report the total.",
    "monthlyDay": 6,
    "cadence": {
     "wallet": "0x54B8c65f0635fD91C8729Dd3269C630d9AED54e5",
@@ -252,7 +252,11 @@
     "monthsObserved": 13,
     "roll": "nextBusinessDay"
    },
-   "stage": "FULL"
+   "stage": "FULL",
+   "alsoObserve": [
+    "0x2146AA5807D96E6B2922a149CeE870F17347F1d0",
+    "0xdeDc15Fa923D4e147875C63C0a97F85F178dfE96"
+   ]
   },
   {
    "sym": "ALT",

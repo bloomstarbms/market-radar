@@ -55,6 +55,7 @@ const famSpec = args.wallets ? {
   ...(args.familyMean ? { familyMean: Number(args.familyMean) } : {}),
   ...(args.tolerance ? { tolerance: Number(args.tolerance) } : {}),
 } : null;
+const alsoObserve = args.alsoObserve ? args.alsoObserve.split(',').map((r) => resolveWalletRef(r, reportAddresses())) : null;
 const cadence = famSpec ? {
   ...famSpec,
   ...(args.expectDay ? { expectDay: Number(args.expectDay) } : {}),
@@ -87,6 +88,7 @@ const row = promoteRow(j.tokens[idx], {
   enforcement: args.enforcement ?? null,
   reviewBy: args.reviewBy ?? null,
   stage: args.stage ?? null,
+  alsoObserve,
 });
 const dropped = Object.keys(j.tokens[idx]).filter((k) => !(k in row));
 j.tokens[idx] = row;
