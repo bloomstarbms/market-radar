@@ -1784,3 +1784,35 @@ Vocabulary fixed so status means the same thing across the set. Standing rule
 written into that README: **briefs are historical record, never instructions** —
 Executed describes what was done, Refuted is kept so the refutation stays
 traceable, and neither is a plan. Plans live in REMAINING-WORK.md.
+
+## 2026-08-29 (v0.26.4) — brief STATUS taxonomy corrected: DESCRIPTIVE is its own kind
+
+My "briefs are historical record, never instructions" rule was wrong in a way that
+would have destroyed the most valuable document in the set. FACTS-AND-CALLS.md is
+not history — it is a still-accurate DESCRIPTION of the live architecture, and the
+only place explaining WHY the dispatcher is shaped as it is (facts carry no
+conviction; catalysts never defer). A future session obeying "historical, do not
+follow" would have discarded the rationale for the code it was editing.
+
+Four statuses now, and the distinction is load-bearing:
+  DESCRIPTIVE  accurate account of the LIVE system — FACTS-AND-CALLS.md alone.
+               If it ever stops matching the code, one of the two is wrong and
+               that is worth discovering (it is a de facto invariant, not prose).
+  ACTIVE PLAN  still directs work — FACTS-ENGINE-ROADMAP.md (Sessions B and D
+               queued). Becomes EXECUTED when they run.
+  REFUTED      kept so the refutation stays traceable — UNLOCK-EXPANSION.md.
+  EXECUTED     done and spent — SHIP-v0.20.0, FIX-DELIVERY-AND-TIERING,
+               UNLOCK-BULK-SCAN, FIX-SYMBOL-CLASSIFIER.
+ALPHA_RADAR_BUILD_SPEC.md carries a PER-SECTION status (§11 superseded as a plan,
+§8 anti-patterns still descriptive) — one verdict per file was itself too coarse.
+Status is restated ON IMPORT, never from memory, because category changes.
+
+GENERALISABLE: "is this document still true?" and "should this document still be
+obeyed?" are DIFFERENT questions. A doc can be accurate and not a plan
+(descriptive), or a plan and no longer accurate (refuted). Collapsing them into
+one axis is what made the blanket rule wrong.
+
+TRANSFER STILL BLOCKED: the brief files remain unreachable from the agent session
+(uploads empty across four checks; chat-card downloads land in the operator's
+folder, not the sandbox mount). Headers are staged in docs/briefs/README.md and
+apply unchanged whenever the copy happens.
