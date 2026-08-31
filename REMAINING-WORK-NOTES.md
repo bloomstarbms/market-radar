@@ -1904,3 +1904,50 @@ aggregate is a gap that stays invisible while the component behaves.
 
 VPS window is OPEN (calendar loop closed cleanly; migration was gated on "on or
 after the 31st"). Steps 1-4 operator-side, stop at 5 and paste drill output.
+
+## 2026-08-31 (v0.27.1) — CLAIM-COVERAGE SWEEP: all five rows, claim vs falsifier
+
+EIGEN's gap was found by ACCIDENT (both numbers happened to sit in one report), so
+the class got swept deliberately. DATE, AMOUNT, CADENCE and SCOPE are four separate
+claims; a falsifier usually covers one.
+
+  ROW    DATE        AMOUNT             SCOPE          FALSIFIER
+  EIGEN  observed    observed           family         cadence family x2, ±25% band
+  ENA    observed    observed-PARTIAL   tranche        cadence, one wallet
+  ARB    announced   UNCHECKED          announcement   reviewBy 2026-11-30
+  STRK   announced   UNCHECKED          announcement   reviewBy 2026-11-30
+  ZRO    announced   UNCHECKED          announcement   reviewBy 2026-09-22
+
+**ENA — measured, and it is NOT EIGEN's bug but it is EIGEN's shape.** The watched
+metronome 0x54B8 holds 71.6M; holder 0x2146 holds 1.185B and, checked today, ALSO
+emits on the 6th (2,909,505 on 2026-08-06) — irregularly. So the true monthly
+distribution EXCEEDS the 12.07M the row cites. ENA's note already scoped to "the
+metronomic tranche", so the message was not lying — but the scoping lived in prose
+that could drift. DECISION: do NOT fold 0x2146 into a family spec — an irregular
+emitter inside a family band would false-demote the row every quiet month. Instead
+the row now says the figure is A FLOOR, NOT A TOTAL, and that other holders emit
+uncovered. Recorded in the row note with the measurement and the date.
+
+**ARB / STRK / ZRO — reviewBy falsifies the DATE'S FRESHNESS, never the amount.**
+92.65M ARB and 127M STRK are announcement-stated and nothing on-chain checks them.
+Accepted as a DECISION rather than left as an oversight (per the brief): these are
+announcement-path rows on chains we cannot read, so amount verification is not
+available at $0. The message now SAYS SO: "The AMOUNT is announcement-stated —
+nothing observes it on-chain."
+
+MECHANISM: claimCoverage(row) in unlocks.js, DERIVED FROM ROW SHAPE (a stored
+coverage field would drift from the spec it describes — the same defect one level
+up). Its line is rendered into every unlock message, so the disclosure reaches the
+channel and not just the audit. Fixture 40 (10 checks) asserts every live verified
+row states date AND amount coverage, and that any row whose amount is unchecked
+says so explicitly.
+
+GENERALISABLE (now the standing rule): **every claim in a message needs a falsifier
+that covers it, or an explicit note that it does not.** Silence about coverage
+reads as coverage.
+
+FIXTURE-DESIGN LESSON (recorded separately because it will recur): fixture 34
+asserted `cadence.wallet` — the SHAPE that happened to satisfy the invariant — and
+so failed the moment EIGEN widened to a family spec, i.e. the test obstructed the
+improvement it existed to protect. ASSERT THE INVARIANT ("this row has a forward
+falsifier"), NOT THE SHAPE CURRENTLY SATISFYING IT.

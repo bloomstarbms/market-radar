@@ -55,6 +55,32 @@ function nextMonthlyDate(day, from = new Date()) {
   return null;
 }
 
+// CLAIM COVERAGE — every claim in a message needs a falsifier that covers it, or an
+// explicit note that it does not. DATE, AMOUNT, CADENCE and SCOPE are four separate
+// claims and a falsifier usually covers one. EIGEN's gap (message claimed the family
+// figure, spec watched one wallet) was found by accident because both numbers
+// happened to sit in one report; this makes the mapping explicit for every row so the
+// next mismatch is visible rather than lucky.
+//
+// Derived from row SHAPE, never stored — a stored coverage field would drift from the
+// spec it describes, which is the same class of defect one level up.
+export function claimCoverage(t) {
+  const fam = Array.isArray(t?.cadence?.wallets) ? t.cadence.wallets.length : 0;
+  if (fam) return {
+    date: 'observed', amount: 'observed', scope: 'family',
+    line: `Date and amount both observed on-chain — ${fam} custody wallets, each required to emit and the family total to land within ±${Math.round((t.cadence.tolerance ?? 0.25) * 100)}%, over ${t.cadence.monthsObserved} months. Auto-demotes if the pattern breaks.`,
+  };
+  if (t?.cadence) return {
+    date: 'observed', amount: 'observed-partial', scope: 'tranche',
+    line: `Date and amount observed on-chain for ONE custody wallet (${t.cadence.monthsObserved} months). Other holders may emit on the same date and are NOT covered by this figure — treat it as a floor, not a total. Auto-demotes if that wallet's pattern breaks.`,
+  };
+  if (t?.reviewBy) return {
+    date: 'announced', amount: 'unchecked', scope: 'announcement',
+    line: `Date is project-announced and re-attested by ${t.reviewBy} (the row demotes itself if that passes). The AMOUNT is announcement-stated — nothing observes it on-chain.`,
+  };
+  return { date: 'unknown', amount: 'unchecked', scope: 'unknown', line: 'Coverage unstated — this row should not be alerting.' };
+}
+
 // COVERAGE LINE — what the module knows and, crucially, what it CANNOT know. The
 // bulk scan (29 Aug) established that unlock coverage is an Ethereum/EVM feature:
 // 55 of 156 scanned symbols vest on their own chains, invisible from here. Absence
@@ -120,9 +146,7 @@ export async function pollUnlocks() {
       // will). Both verify, but they fail differently — the message says which one
       // it is resting on instead of letting "verified" imply the stronger class.
       const confidence = (Array.isArray(t.events) && t.events.length)
-        ? (t.events[0].source === 'onchain-cadence' && t.cadence
-          ? `Date verified — schedule inferred from ${t.cadence.monthsObserved} months of observed emissions (behavioural, not contractually enforced; auto-demotes if the pattern breaks).`
-          : `Date verified — source: ${t.events[0].source}.`)
+        ? `Verified — source: ${t.events[0].source}. ${claimCoverage(t).line}`
         : t.verified
         ? 'Date verified against the public unlock calendar.'
         : '⚠️ Recurring-schedule estimate — confirm the exact date on cryptorank.io/token-unlock.';

@@ -1,7 +1,7 @@
 {
  "comment": "Token unlock watchlist. Two entry types: 'monthlyDay' = recurring cliff on that day each month (most vesting contracts release monthly); 'date' = one-off YYYY-MM-DD. Bot pings 7 days and 3 days before. verified:true = confirmed against cryptorank.io/token-unlock on 2026-08-01; others are recurring-schedule estimates — check the date on cryptorank before acting.",
  "source": "https://cryptorank.io/token-unlock (free public page)",
- "lastReviewed": "2026-08-31 (promoted EIGEN via promote-unlock.js)",
+ "lastReviewed": "2026-08-31 (promoted ENA via promote-unlock.js)",
  "tokens": [
   {
    "sym": "EIGEN",
@@ -243,7 +243,7 @@
      "detail": "13 consecutive monthly distributions from custody 0x54B8c65f0635fD91C8729Dd3269C630d9AED54e5 (Aug 2025-Aug 2026), mean 12.07M ENA, cv 0.26; emits on the 6th, rolls to Monday when the 6th is a weekend (observed 3/3 weekend cases)"
     }
    ],
-   "note": "Behavioural verification (habit, not commitment): cadence-watch auto-demotes if a monthly window passes with no qualifying outflow. Source wallet is an active ops treasury; largest holder 0x2146 is irregular — this row covers the metronomic tranche only.",
+   "note": "Behavioural (habit, not commitment): cadence-watch auto-demotes if a monthly window passes with no qualifying outflow. SCOPE — this row watches ONE metronome (0x54B8, ~12.07M/mo). MEASURED 31 Aug: the 1.185B holder 0x2146 ALSO emits on the 6th (2.91M on 2026-08-06) but irregularly, so the true monthly distribution EXCEEDS the figure here. Deliberately not folded into a family spec: an irregular emitter would false-demote a family band. The message states this figure is a floor, not a total.",
    "monthlyDay": 6,
    "cadence": {
     "wallet": "0x54B8c65f0635fD91C8729Dd3269C630d9AED54e5",

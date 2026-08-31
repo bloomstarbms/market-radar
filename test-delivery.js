@@ -879,6 +879,32 @@ console.log('36. every prompt document declares its premises (documents get obey
   check('empty-assumptions check can fail', !/Assumes:\s*\n\s*-\s*\S/.test('Written against: v1.0.0\nAssumes:\n'));
 }
 
+console.log('40. claim coverage is stated per row (date/amount/scope, not just date)');
+{
+  // The class behind fixture 39: a falsifier usually covers ONE of the claims a
+  // message makes. EIGEN's mismatch was found by accident. This states the mapping
+  // for every verified row, derived from SHAPE (a stored coverage field would drift
+  // from the spec it describes — same defect one level up).
+  const { claimCoverage } = await import('./src/sources/calendar/unlocks.js');
+  const famRow = { cadence: { wallets: [{}, {}], tolerance: 0.25, monthsObserved: 11 } };
+  const oneRow = { cadence: { wallet: '0x' + 'a'.repeat(40), monthsObserved: 13 } };
+  const annRow = { reviewBy: '2026-11-30' };
+  check('family cadence: date AND amount observed', claimCoverage(famRow).amount === 'observed' && claimCoverage(famRow).scope === 'family');
+  check('single-wallet cadence: amount only PARTIALLY covered', claimCoverage(oneRow).amount === 'observed-partial');
+  check('single-wallet message says the figure is a FLOOR, not a total', /floor, not a total/.test(claimCoverage(oneRow).line));
+  check('single-wallet message warns other holders are uncovered', /NOT covered/.test(claimCoverage(oneRow).line));
+  check('announcement row: amount is UNCHECKED and says so', claimCoverage(annRow).amount === 'unchecked' && /nothing observes it on-chain/.test(claimCoverage(annRow).line));
+  check('announcement row still discloses its date falsifier', /re-attested by 2026-11-30/.test(claimCoverage(annRow).line));
+  check('a row with no falsifier at all is refused, not narrated', /should not be alerting/.test(claimCoverage({}).line));
+  // Every LIVE verified row must state coverage for both date and amount.
+  const rows = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens.filter((t) => !t.retired && t.events?.length);
+  const undisclosed = rows.filter((t) => { const c = claimCoverage(t); return c.date === 'unknown' || c.amount === 'unknown' || !c.line; });
+  check('every LIVE verified row states date AND amount coverage', undisclosed.length === 0, undisclosed.map((t) => t.sym).join(','));
+  const unchecked = rows.filter((t) => claimCoverage(t).amount === 'unchecked');
+  check('rows whose AMOUNT nothing checks are known and disclosed (not silent)', unchecked.every((t) => /announcement-stated/.test(claimCoverage(t).line)));
+  check('the disclosure reaches the message, not just the audit', rows.length > 0 && typeof claimCoverage(rows[0]).line === 'string');
+}
+
 console.log('39. the falsifier covers what the MESSAGE claims (family, not one wallet)');
 {
   // The spec watched ONE metronome while the alert asserted the FAMILY figure. If
