@@ -2132,3 +2132,25 @@ new machinery.
 
 GENERALISABLE: **a derived parameter must state what it was derived from, how many
 observations, and when — and must not re-derive itself from data it is judging.**
+
+## 2026-09-01 — rescan brief written; VPS provisioning is operator-side
+
+docs/briefs/RESCAN-CANDIDATE-INDEX.md — ACTIVE PLAN, the corrected successor to
+UNLOCK-BULK-SCAN.md (EXECUTED; its population premise refuted at the root, so it is
+superseded rather than amended — patching a spent brief into an active one blurs the
+STATUS distinction that exists to stop exactly that).
+
+Pre-registration is written INTO the brief now rather than at session start, so the
+numbers are binding rather than fitted after early data: resolution materially above
+39/156; cadence on ~a quarter to a third of locked-supply tokens; and the line that
+matters — **under ~10% on a population CHOSEN for having unlocks indicts the METHOD,
+not the queue.** Post-mortem hypothesis stated in advance so it is checkable rather
+than retrospective: EIGEN and ENA may be detectable only because they are (a) large
+enough for institutional custody, (b) professionally managed, (c) batching rather
+than continuous. If the line fires, examine which leg the failures lack — do NOT
+widen a detector that is already correct on what it covers.
+
+Standing order carried into the brief: FIX BLOCKERS, LOG THE REST (a blocker is a
+defect that stops the scan or produces wrong verdicts — nothing else), and DO NOT
+TOUCH ANOTHER PARAMETER. E_SCALE and floorFor(n)'s thresholds are logged as known
+constants-fitted-to-one-case; real, and not worth a session at five tokens.
