@@ -294,15 +294,34 @@ export function retrospectiveLine(obs, spec) {
 // (ENA's 1.659) cannot inflate the band the way a mean or max would. Floored so a
 // suspiciously quiet history cannot produce a hair-trigger, capped so a chaotic one
 // cannot produce a band that could never fail.
-export function deriveTolerance(ratios, { k = 3, floor = 0.15, cap = 0.60 } = {}) {
-  const devs = (ratios || []).map((r) => Math.abs(r - 1)).sort((a, b) => a - b);
-  if (devs.length < 4) return { tolerance: 0.25, basis: 'default (fewer than 4 observed windows)' };
+// THE BAND IS STATIC AFTER PROMOTION. Re-deriving as windows accrue would inherit
+// exactly the failure rejected for the mean: a genuinely drifting schedule produces
+// wider deviations, which widen the MAD, which widen the band — the falsifier
+// accommodating the drift instead of catching it, one level up. So: derive ONCE at
+// promotion, re-derive only on explicit re-attestation, and record the window count
+// so a band from n=11 is visibly weaker evidence than one from n=30.
+//
+// TWO derived terms, no intuited floor. The first floor here was 0.15, which was a
+// guess — and EIGEN's band WAS that floor, so the most-watched row was not actually
+// derived from anything. Replaced by the row's own WORST OBSERVED SHORTFALL: the
+// band must not demote behaviour the row has already exhibited. (3xMAD alone would
+// have false-demoted both EIGEN and ENA once each, so the second term is load-bearing,
+// not decoration.) The remaining 0.05/0.60 clamps are degenerate-input guards only —
+// a fixture asserts neither binds on any real row.
+export function deriveTolerance(ratios, { k = 3, margin = 1.1, hardFloor = 0.05, cap = 0.60 } = {}) {
+  const rs = ratios || [];
+  const devs = rs.map((r) => Math.abs(r - 1)).sort((a, b) => a - b);
+  if (devs.length < 4) return { tolerance: 0.25, n: devs.length, basis: `default (only ${devs.length} observed windows — too few to derive)` };
   const mid = Math.floor(devs.length / 2);
   const mad = devs.length % 2 ? devs[mid] : (devs[mid - 1] + devs[mid]) / 2;
-  const raw = k * mad;
-  const tolerance = +Math.max(floor, Math.min(cap, raw)).toFixed(2);
-  return { tolerance, mad: +mad.toFixed(3), raw: +raw.toFixed(3),
-    basis: `${k}x MAD of ${devs.length} observed windows (MAD ${(mad * 100).toFixed(1)}%)${raw < floor ? ', raised to floor' : raw > cap ? ', capped' : ''}` };
+  const spread = k * mad;
+  const worstShortfall = Math.max(0, ...rs.map((r) => 1 - r));
+  const needed = worstShortfall * margin;
+  const raw = Math.max(spread, needed);
+  const tolerance = +Math.max(hardFloor, Math.min(cap, raw)).toFixed(2);
+  const driver = needed > spread ? `worst observed shortfall ${(worstShortfall * 100).toFixed(1)}% x${margin}` : `${k}x MAD (MAD ${(mad * 100).toFixed(1)}%)`;
+  return { tolerance, n: devs.length, mad: +mad.toFixed(3), spread: +spread.toFixed(3), worstShortfall: +worstShortfall.toFixed(3),
+    basis: `derived from ${devs.length} observed windows: ${driver}${raw < hardFloor ? ', raised to degenerate-input floor' : raw > cap ? ', capped' : ''}` };
 }
 
 // DRIFT: the mean stays STATIC deliberately. A rolling mean re-centres on whatever

@@ -2095,3 +2095,40 @@ GENERALISABLE: **a threshold calibrated on one instance is a constant, not a
 parameter.** Derive per subject from that subject's own history, floor and cap it
 against degenerate inputs, and make the derivation travel with the number so the next
 reader can see what it was fitted to.
+
+## 2026-09-01 (v0.28.1) — band is STATIC; and the last intuited constant discharged
+
+TWO open questions closed.
+
+**1. STATIC vs RE-DERIVED — decided STATIC, enforced structurally.** Re-deriving as
+windows accrue inherits exactly the failure rejected for the mean: a drifting
+schedule produces wider deviations -> wider MAD -> wider band -> the falsifier
+accommodates the drift instead of catching it, one level up from where that was
+closed. So: derive ONCE at promotion, re-derive only by explicit re-promotion. The
+spec now records `toleranceN` (window count) and `toleranceAt` (date), so a band from
+n=11 is visibly weaker evidence than one from n=30 and widening it is a decision, not
+a slide. FIXTURE, not a promise: the watch module must contain exactly ONE occurrence
+of deriveTolerance — the definition, zero call sites. Re-derivation lives only in the
+promotion path.
+
+**2. THE 0.15 FLOOR WAS INTUITION, AND EIGEN'S BAND WAS THE FLOOR** — so the
+most-watched row was not actually derived from anything. Discharged: the band must
+exceed the WORST SHORTFALL THE ROW HAS ACTUALLY EXHIBITED (x1.1), i.e.
+tolerance = clamp(max(3xMAD, worstShortfall x 1.1), 0.05, 0.60).
+That second term is load-bearing, not decoration: 3xMAD ALONE would have
+false-demoted EIGEN once in 11 windows AND ENA once in 13. Measured.
+  EIGEN  ±13%  (worst shortfall 11.5% x1.1) — derived, no longer the floor. 0/11.
+  ENA    ±52%  (worst shortfall 46.9% x1.1) — 0/13.
+The residual 0.05/0.60 clamps are degenerate-input guards ONLY (flat history, chaos);
+a fixture asserts neither binds on any real row, so no live band rests on a guess.
+
+HONEST CAVEAT ON ENA: ±52% is wide because its worst shortfall is the 2025-08 RAMP-UP
+month (ratio 0.531), a known artifact rather than normal behaviour. Excluding it would
+give ~±38%. Not excluded, because ENA has no family spec today and silently trimming
+inconvenient history is how a band gets fitted to a story. If ENA is ever given a
+family spec, the exclusion must be EXPLICIT and its reason recorded in the basis
+string — the caller controls which ratios are passed, so the capability exists without
+new machinery.
+
+GENERALISABLE: **a derived parameter must state what it was derived from, how many
+observations, and when — and must not re-derive itself from data it is judging.**

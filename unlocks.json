@@ -19,7 +19,7 @@
      "detail": "Monthly custody distribution, ~9.5M EIGEN observed last cycle. Backtest: eth wallets 0x3De6b6b1/0x34BcF805 outbound transfers, monthly on the 30th (28th/29th short months) since 2025-10-30."
     }
    ],
-   "note": "Custody-held (BitGo WalletSimple x21, 484M family) — behavioural: announcement described the schedule, custody enforces nothing. TWO metronomes watched (0x34BcF805 ~7.82M/mo + 0x3De6b6b1 ~1.69M/mo, family ~9.5M): every wallet must emit AND the family total must land inside a band DERIVED FROM THIS ROW'S OWN 11-window history (3x MAD), not a global constant. Largest wallet (176.7M) mostly dormant = later tranches.",
+   "note": "Custody-held (BitGo WalletSimple x21, 484M family) — behavioural: announcement described the schedule, custody enforces nothing. TWO metronomes watched (0x34BcF805 ~7.82M/mo + 0x3De6b6b1 ~1.69M/mo, family ~9.5M): every wallet must emit AND the family total must land inside a band DERIVED FROM THIS ROW'S OWN 11 windows — the band exceeds the worst shortfall the row has actually exhibited, and is STATIC until a re-attestation re-derives it. Largest wallet (176.7M) mostly dormant = later tranches.",
    "monthlyDay": 30,
    "cadence": {
     "wallets": [
@@ -33,8 +33,10 @@
      }
     ],
     "familyMean": 9515075,
-    "tolerance": 0.15,
-    "toleranceBasis": "3x MAD of 11 observed windows (MAD 3.4%), raised to floor",
+    "tolerance": 0.13,
+    "toleranceBasis": "derived from 11 observed windows: worst observed shortfall 11.5% x1.1",
+    "toleranceN": 11,
+    "toleranceAt": "2026-09-01",
     "expectDay": 30,
     "monthEnd": true,
     "monthsObserved": 11,

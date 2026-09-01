@@ -76,6 +76,10 @@ if (famSpec && args.tolerance) {
     const d = autoTolerance(sym.toUpperCase(), famSpec.wallets.map((w) => w.addr), mean);
     famSpec.tolerance = d.tolerance;
     famSpec.toleranceBasis = d.basis;   // the derivation travels with the number
+    famSpec.toleranceN = d.n;           // n=11 is visibly weaker evidence than n=30
+    famSpec.toleranceAt = new Date().toISOString().slice(0, 10); // STATIC from here:
+    // re-derived only by an explicit re-promotion, never by the watch as windows
+    // accrue (that would let a drifting schedule widen its own band).
     console.log(`tolerance derived: ±${Math.round(d.tolerance * 100)}% — ${d.basis}`);
   } else famSpec.tolerance = Number(args.tolerance);
 }

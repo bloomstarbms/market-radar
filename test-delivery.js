@@ -892,6 +892,16 @@ console.log('44. band width is DERIVED per row, not a global constant');
   check('a steady row derives a TIGHTER band than the old constant', e.tolerance < 0.25);
   check('a volatile row derives a WIDER band than the old constant', n.tolerance > 0.25);
   check('the two rows differ materially (the whole point)', n.tolerance >= e.tolerance * 2);
+  // NO INTUITED FLOOR. The first version floored at 0.15 — and EIGEN's band WAS the
+  // floor, so the most-watched row was not derived from anything. The band must
+  // instead exceed the worst shortfall the row has actually exhibited; 3xMAD alone
+  // would have false-demoted BOTH rows once, so this term is load-bearing.
+  check('the band exceeds the worst shortfall the row has actually shown', e.tolerance > 0.115 && n.tolerance > 0.469);
+  check('3xMAD ALONE would have false-demoted EIGEN', E.filter((r) => r < 1 - e.spread).length === 1);
+  check('3xMAD ALONE would have false-demoted ENA', N.filter((r) => r < 1 - n.spread).length === 1);
+  check('EIGEN is now derived, not floored', /worst observed shortfall/.test(e.basis) && e.tolerance !== 0.15);
+  check('the remaining clamps never bind on a real row', e.tolerance > 0.05 && e.tolerance < 0.60 && n.tolerance > 0.05 && n.tolerance < 0.60);
+  check('window count travels with the band (n=11 is weaker than n=30)', e.n === 11 && n.n === 13);
   // Regression demonstrated, not asserted: the global constant on ENA's real history.
   const breaches = (rs, band) => rs.filter((r) => r < 1 - band).length;
   check('the GLOBAL band would have demoted ENA on its own normal history', breaches(N, 0.25) >= 2);
@@ -900,17 +910,25 @@ console.log('44. band width is DERIVED per row, not a global constant');
   // MAD, not mean/max: one outlier month must not inflate the band.
   const withOutlier = deriveTolerance([...E, 3.5]);
   check('a single outlier barely moves a MAD-derived band', Math.abs(withOutlier.tolerance - e.tolerance) <= 0.05);
-  check('floor prevents a hair-trigger band on a suspiciously quiet history', deriveTolerance([1, 1, 1, 1, 1]).tolerance === 0.15);
+  check('degenerate flat history hits the hard floor, not a hair-trigger', deriveTolerance([1, 1, 1, 1, 1]).tolerance === 0.05);
   check('cap prevents a band that could never fail', deriveTolerance([0.1, 2.5, 0.2, 3.0, 0.15]).tolerance <= 0.60);
   check('too little history falls back to the default, and SAYS so', /default/.test(deriveTolerance([1.0, 1.1]).basis));
-  check('the derivation travels with the number', /MAD of 11 observed windows/.test(e.basis));
+  check('the derivation travels with the number', /derived from 11 observed windows/.test(e.basis) && /shortfall|MAD/.test(e.basis));
   // A band with no stated derivation is refused at promotion and at boot.
   const { cadenceSpecProblems } = await import('./src/core/unlock-promote.js');
   const base = { wallets: [{ addr: '0x' + 'a'.repeat(40), meanAmount: 1 }], monthEnd: true, expectDay: 30, monthsObserved: 11 };
   check('a bare tolerance is refused', cadenceSpecProblems({ ...base, tolerance: 0.25 }).some((p) => /toleranceBasis/.test(p)));
   check('a derived tolerance passes', cadenceSpecProblems({ ...base, tolerance: 0.15, toleranceBasis: '3x MAD of 11' }).length === 0);
   const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens.find((t) => t.sym === 'EIGEN');
-  check('LIVE EIGEN carries a derived band with its basis', live.cadence.tolerance === 0.15 && /MAD/.test(live.cadence.toleranceBasis));
+  check('LIVE EIGEN carries a derived band with its basis and n', live.cadence.tolerance === 0.13 && /observed windows/.test(live.cadence.toleranceBasis) && live.cadence.toleranceN === 11);
+
+  // THE BAND IS STATIC. Re-deriving as windows accrue would let a drifting schedule
+  // widen its own band — the same failure rejected for the mean, one level up.
+  // Structural, not a promise: the watch module must never call the deriver.
+  const watchSrc = readFileSync('src/sources/calendar/cadence-watch.js', 'utf8');
+  const callsites = (watchSrc.match(/deriveTolerance\s*\(/g) || []).length;
+  check('the WATCH never re-derives the band (definition only, no call sites)', callsites === 1, `${callsites} occurrences`);
+  check('re-derivation lives in the promotion path, an explicit act', /deriveTolerance/.test(readFileSync('promote-unlock.js', 'utf8')));
 }
 
 console.log('43. drift detector BACKTESTED against 24 real windows (calibration frozen)');
