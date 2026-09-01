@@ -879,6 +879,40 @@ console.log('36. every prompt document declares its premises (documents get obey
   check('empty-assumptions check can fail', !/Assumes:\s*\n\s*-\s*\S/.test('Written against: v1.0.0\nAssumes:\n'));
 }
 
+console.log('44. band width is DERIVED per row, not a global constant');
+{
+  // ±25% fit EIGEN (natural range ±12%) by coincidence — it was the only row with a
+  // family spec. ENA's observed range is 0.53–1.66; under the same constant it would
+  // breach in months where it behaves exactly as it always has. A constant
+  // calibrated on the first case is wrong for the second row it meets.
+  const { deriveTolerance } = await import('./src/sources/calendar/cadence-watch.js');
+  const E = [1.123, 1.121, 1.034, 0.931, 0.920, 0.885, 1.029, 0.985, 0.999, 0.986, 0.987];
+  const N = [0.531, 1.032, 1.659, 1.087, 0.853, 1.071, 1.150, 0.882, 1.062, 1.051, 0.658, 0.859, 1.103];
+  const e = deriveTolerance(E), n = deriveTolerance(N);
+  check('a steady row derives a TIGHTER band than the old constant', e.tolerance < 0.25);
+  check('a volatile row derives a WIDER band than the old constant', n.tolerance > 0.25);
+  check('the two rows differ materially (the whole point)', n.tolerance >= e.tolerance * 2);
+  // Regression demonstrated, not asserted: the global constant on ENA's real history.
+  const breaches = (rs, band) => rs.filter((r) => r < 1 - band).length;
+  check('the GLOBAL band would have demoted ENA on its own normal history', breaches(N, 0.25) >= 2);
+  check('the DERIVED band demotes ENA less often', breaches(N, n.tolerance) < breaches(N, 0.25));
+  check('the derived band still never demotes EIGEN', breaches(E, e.tolerance) === 0);
+  // MAD, not mean/max: one outlier month must not inflate the band.
+  const withOutlier = deriveTolerance([...E, 3.5]);
+  check('a single outlier barely moves a MAD-derived band', Math.abs(withOutlier.tolerance - e.tolerance) <= 0.05);
+  check('floor prevents a hair-trigger band on a suspiciously quiet history', deriveTolerance([1, 1, 1, 1, 1]).tolerance === 0.15);
+  check('cap prevents a band that could never fail', deriveTolerance([0.1, 2.5, 0.2, 3.0, 0.15]).tolerance <= 0.60);
+  check('too little history falls back to the default, and SAYS so', /default/.test(deriveTolerance([1.0, 1.1]).basis));
+  check('the derivation travels with the number', /MAD of 11 observed windows/.test(e.basis));
+  // A band with no stated derivation is refused at promotion and at boot.
+  const { cadenceSpecProblems } = await import('./src/core/unlock-promote.js');
+  const base = { wallets: [{ addr: '0x' + 'a'.repeat(40), meanAmount: 1 }], monthEnd: true, expectDay: 30, monthsObserved: 11 };
+  check('a bare tolerance is refused', cadenceSpecProblems({ ...base, tolerance: 0.25 }).some((p) => /toleranceBasis/.test(p)));
+  check('a derived tolerance passes', cadenceSpecProblems({ ...base, tolerance: 0.15, toleranceBasis: '3x MAD of 11' }).length === 0);
+  const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens.find((t) => t.sym === 'EIGEN');
+  check('LIVE EIGEN carries a derived band with its basis', live.cadence.tolerance === 0.15 && /MAD/.test(live.cadence.toleranceBasis));
+}
+
 console.log('43. drift detector BACKTESTED against 24 real windows (calibration frozen)');
 {
   // The detector deserves the standard it enforces. At monthly windows its first
@@ -1015,8 +1049,11 @@ console.log('39. the falsifier covers what the MESSAGE claims (family, not one w
   const { cadenceDecision } = await import('./src/sources/calendar/cadence-watch.js');
   const { cadenceSpecProblems } = await import('./src/core/unlock-promote.js');
   const A = '0x34BcF805A503D5151c05CD349699a8aD1767a026', B = '0x3De6b6b121282CBe2F46d24f0023e7D59bB6c24e';
+  // tolerance carries its derivation (§44): a bare band is a constant fitted to
+  // whichever row it was written for, and is now refused.
   const spec = { wallets: [{ addr: A, meanAmount: 7822556 }, { addr: B, meanAmount: 1692519 }],
-    familyMean: 9515075, tolerance: 0.25, monthEnd: true, expectDay: 30, monthsObserved: 11 };
+    familyMean: 9515075, tolerance: 0.25, toleranceBasis: 'fixture: fixed band for the arithmetic under test',
+    monthEnd: true, expectDay: 30, monthsObserved: 11 };
   const after = new Date('2026-09-03T06:00:00Z');
   // The real August emission.
   const real = { [A]: { '2026-08-30': 7920090 }, [B]: { '2026-08-30': 1364336 } };

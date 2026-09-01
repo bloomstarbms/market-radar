@@ -1,5 +1,5 @@
 <!-- PREMISE
-Written against: v0.27.4
+Written against: v0.28.0
 Reviewed: 2026-08-29
 Assumes:
 - Describes SHIPPED behaviour only; anything aspirational belongs in REMAINING-WORK.md.

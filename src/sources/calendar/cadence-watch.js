@@ -284,6 +284,27 @@ export function retrospectiveLine(obs, spec) {
     : `Observed on-chain: ${fmt(obs.total)} total from the tracked schedule; no other watched holder emitted in this window.`;
 }
 
+// BAND WIDTH IS DERIVED PER ROW, NOT GLOBAL. The first family spec used ±25%, which
+// fits EIGEN (natural range ±12%) BY COINCIDENCE — it was the only row that had one.
+// ENA's observed range is 0.53–1.66; under a global ±25% it would breach in months
+// where it is behaving exactly as it always has. A constant calibrated on the first
+// case is wrong for the second row it meets.
+//
+// Robust by construction: 3 x MEDIAN absolute deviation, so a single outlier month
+// (ENA's 1.659) cannot inflate the band the way a mean or max would. Floored so a
+// suspiciously quiet history cannot produce a hair-trigger, capped so a chaotic one
+// cannot produce a band that could never fail.
+export function deriveTolerance(ratios, { k = 3, floor = 0.15, cap = 0.60 } = {}) {
+  const devs = (ratios || []).map((r) => Math.abs(r - 1)).sort((a, b) => a - b);
+  if (devs.length < 4) return { tolerance: 0.25, basis: 'default (fewer than 4 observed windows)' };
+  const mid = Math.floor(devs.length / 2);
+  const mad = devs.length % 2 ? devs[mid] : (devs[mid - 1] + devs[mid]) / 2;
+  const raw = k * mad;
+  const tolerance = +Math.max(floor, Math.min(cap, raw)).toFixed(2);
+  return { tolerance, mad: +mad.toFixed(3), raw: +raw.toFixed(3),
+    basis: `${k}x MAD of ${devs.length} observed windows (MAD ${(mad * 100).toFixed(1)}%)${raw < floor ? ', raised to floor' : raw > cap ? ', capped' : ''}` };
+}
+
 // DRIFT: the mean stays STATIC deliberately. A rolling mean re-centres on whatever
 // the treasury now does, so a real schedule change gets absorbed silently — a
 // falsifier that tracks a moving target is not a falsifier. Static detects change but

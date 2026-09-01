@@ -10,6 +10,7 @@
 // precisely because promotion was done by hand-patching.
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 import { promoteRow, resolveWalletRef } from './src/core/unlock-promote.js';
+import { deriveTolerance } from './src/sources/calendar/cadence-watch.js';
 
 // Every address a tool has actually written. wallet= is resolved against THIS set —
 // a prefix is enough, a fabricated full address is refused. Never type addresses.
@@ -47,14 +48,37 @@ const eventDate = args.date ?? null;
 // FAMILY spec: wallets=0xaaa:7822556,0xbbb:1364336 (ref:mean pairs, refs resolved
 // against report files exactly like single wallets). Use this whenever the message
 // claims a family total — the falsifier must cover what the alert asserts.
+// tolerance=auto derives the band from the ROW'S OWN observed history (3x MAD),
+// because a global constant fits whichever row it was written for. Ratios come from
+// the cadence report's emission series, summed per month across the watched wallets.
+function autoTolerance(sym, walletAddrs, mean) {
+  const rep = JSON.parse(readFileSync('data/cadence-report.json', 'utf8'))[sym];
+  const watched = new Set(walletAddrs.map((a) => a.toLowerCase()));
+  const byMonth = {};
+  for (const p of rep?.perWallet || []) {
+    if (typeof p.solo !== 'object' || !watched.has(p.addr.toLowerCase())) continue;
+    for (const e of p.solo.emissions) { const m = e.d.slice(0, 7); byMonth[m] = (byMonth[m] || 0) + e.amt; }
+  }
+  const ratios = Object.values(byMonth).map((v) => v / mean);
+  return deriveTolerance(ratios);
+}
+
 const famSpec = args.wallets ? {
   wallets: args.wallets.split(',').map((pair) => {
     const [ref, mean] = pair.split(':');
     return { addr: resolveWalletRef(ref, reportAddresses()), meanAmount: Number(mean) };
   }),
   ...(args.familyMean ? { familyMean: Number(args.familyMean) } : {}),
-  ...(args.tolerance ? { tolerance: Number(args.tolerance) } : {}),
 } : null;
+if (famSpec && args.tolerance) {
+  if (args.tolerance === 'auto') {
+    const mean = famSpec.familyMean ?? famSpec.wallets.reduce((s, w) => s + w.meanAmount, 0);
+    const d = autoTolerance(sym.toUpperCase(), famSpec.wallets.map((w) => w.addr), mean);
+    famSpec.tolerance = d.tolerance;
+    famSpec.toleranceBasis = d.basis;   // the derivation travels with the number
+    console.log(`tolerance derived: ±${Math.round(d.tolerance * 100)}% — ${d.basis}`);
+  } else famSpec.tolerance = Number(args.tolerance);
+}
 const alsoObserve = args.alsoObserve ? args.alsoObserve.split(',').map((r) => resolveWalletRef(r, reportAddresses())) : null;
 const cadence = famSpec ? {
   ...famSpec,

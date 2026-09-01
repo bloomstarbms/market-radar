@@ -2057,3 +2057,41 @@ detector enforces on the schedules it watches.
 DATA CAVEAT: ENA's first window (2025-08, ratio 0.531) is a partial first month —
 the schedule was ramping. Left in rather than trimmed; it makes the series harsher,
 not kinder.
+
+## 2026-08-31 (v0.28.0) — BAND WIDTH DERIVED PER ROW: the constant fit one row by luck
+
+±25% was written when EIGEN was the only family spec, and it fits EIGEN (natural
+range ±12%) BY COINCIDENCE. Measured against ENA's real 13 windows (range
+0.531–1.659), the SAME constant would demote it in 2 of 13 months for behaving
+exactly as it always has. The second row a constant meets is the one it does not fit.
+
+`deriveTolerance(ratios)` = 3 x MEDIAN absolute deviation, floor 0.15, cap 0.60.
+MAD not mean/max SO ONE OUTLIER CANNOT INFLATE THE BAND (ENA's 1.659 month would do
+exactly that to a max-based rule; fixture proves adding a 3.5x month moves the
+derived band <=0.05).
+  EIGEN  MAD 3.4% -> raw 10.2% -> FLOORED to ±15%  (tighter than the old constant:
+         more sensitive, and still 0 breaches across its 11 windows)
+  ENA    MAD 11.8% -> ±35%                          (wider: 1 breach instead of 2,
+         and the remaining one is the partial ramp-up month, not normal behaviour)
+So the derivation is better in BOTH directions — the constant was simultaneously too
+loose for the steady row and too tight for the volatile one.
+
+`tolerance=auto` in promote-unlock derives from the row's own emission history and
+records `toleranceBasis` alongside the number. **cadenceSpecProblems now REFUSES a
+tolerance without a basis** — a band with no stated derivation is exactly the thing
+that just went wrong, so it cannot be written again silently. EIGEN re-promoted:
+±15%, basis recorded; its Sep 3 verdict under the tighter band is still CONFIRM
+(ratio 0.976).
+
+SECOND INSTANCE OF THE FIXTURE LESSON: fixture 39's spec carried a bare tolerance and
+failed the moment the basis requirement landed. Correct outcome — the fixture's DATA
+was now genuinely invalid, so the data was updated, not the rule. Distinguish this
+from the fixture-34 case, where the ASSERTION pinned an implementation shape and had
+to be loosened. Rule of thumb: if the new invariant makes the fixture's world
+impossible, fix the fixture's world; if it makes the fixture's ASSERTION wrong, the
+assertion was over-specified.
+
+GENERALISABLE: **a threshold calibrated on one instance is a constant, not a
+parameter.** Derive per subject from that subject's own history, floor and cap it
+against degenerate inputs, and make the derivation travel with the number so the next
+reader can see what it was fitted to.

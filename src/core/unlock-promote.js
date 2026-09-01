@@ -34,6 +34,7 @@ export function cadenceSpecProblems(spec) {
       if (!(w?.meanAmount > 0)) p.push(`cadence.wallets[${w?.addr?.slice(0, 10)}].meanAmount required`);
     }
     if (spec.tolerance !== undefined && !(spec.tolerance > 0 && spec.tolerance < 1)) p.push('cadence.tolerance must be between 0 and 1');
+    if (spec.tolerance !== undefined && !spec.toleranceBasis) p.push('cadence.tolerance needs toleranceBasis — a band with no stated derivation is a constant fitted to whichever row it was written for');
   } else if (!/^0x[0-9a-fA-F]{40}$/.test(spec.wallet || '')) {
     p.push('cadence needs wallet (full address) or wallets[]');
   } else if (!(spec.meanAmount > 0)) {
