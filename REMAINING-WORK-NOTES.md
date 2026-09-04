@@ -2154,3 +2154,97 @@ Standing order carried into the brief: FIX BLOCKERS, LOG THE REST (a blocker is 
 defect that stops the scan or produces wrong verdicts — nothing else), and DO NOT
 TOUCH ANOTHER PARAMETER. E_SCALE and floorFor(n)'s thresholds are logged as known
 constants-fitted-to-one-case; real, and not worth a session at five tokens.
+
+## 2026-09-04 — RESCAN PRE-REGISTRATION (written before any API was touched)
+
+Milestone first, for the record: EIGEN's August window CONFIRMED autonomously at
+2026-09-02T05:06 — family 9,284,426, ratio 0.976, both metronomes present, inside
+the ±13% band the row derived from its own history. Nobody looked. Eleven consecutive
+month-ends, the eleventh verified by the system. The drift detector now has its first
+real data point.
+
+PRE-REGISTERED for the candidate-index rescan (per docs/briefs/RESCAN-CANDIDATE-INDEX.md):
+ 1. RESOLUTION: materially above 39/156 (25%). Expect >=60% of the index to resolve
+    to an Ethereum ERC-20. Under 40% ⇒ the index is not the population it claims to
+    be — diagnose the index before anything downstream.
+ 2. LOCKED SUPPLY among resolved: 40–70% (a chosen population should skew high).
+ 3. CADENCE among locked-supply tokens: 25–33%.
+    **FALSIFICATION LINE: under ~10% ⇒ THE METHOD DOES NOT GENERALISE.** The
+    population is chosen, so a null cannot be blamed on the queue. If it fires, do
+    NOT widen the detector; test the triple (large enough for institutional custody ·
+    professionally managed · batch not continuous) against the failures, leg by leg.
+ 4. PROMOTIONS this session: **3–6** (each with cadence spec, derived tolerance
+    with basis, stage, and a replaying backtest).
+ 5. Aggregator dates never ship. Names only from the index. Every date established
+    independently.
+
+## 2026-09-04 — RESCAN RESULT: the line FIRED (3/65 = 4.6%). Zero promotions.
+## Post-mortem refines the triple: the decisive leg is TEMPORAL.
+
+POPULATION: FALLBACK. CryptoRank key returned 401 on v1 AND v2; the public page timed
+out. Per the brief, top-250 by mcap (CoinGecko), filtered to 175 with the rule
+recorded in data/scan-queue.json. STATED AT QUEUE TIME: a mcap index is NOT chosen
+for having unlocks, so this population is weaker than the one the pre-registration
+assumed. That caveat is load-bearing below.
+
+PRE-REGISTERED vs ACTUAL:
+ 1. RESOLUTION  >=60% expected, <40% line  → 85/175 = 49%. Below expectation, above
+    the line. The top-250 holds more L1s (90 NON-NATIVE) than assumed.
+ 2. LOCKED SUPPLY 40–70% of resolved       → 72/85 = 85%. Above range, same reason as
+    29 Aug: >=0.3% contract-held reads as "locked" whether it vests or not.
+ 3. CADENCE 25–33% of locked-supply tokens → **3/65 = 4.6%. THE LINE FIRED.**
+    Family verdicts: INSUFFICIENT 36 · IRREGULAR 22 · NO-OUTFLOWS 4 · CADENCE 3.
+ 4. PROMOTIONS 3–6                          → **0** meeting the standard.
+
+INSTRUMENT CHECK BEFORE ACCEPTING THE LINE (absence-of-observation class): 36
+INSUFFICIENT verdicts came from a pagination-capped bulk pass, so they could be
+truncation rather than absence. Re-ran FULL-DEPTH detect-cadence on four of the
+highest-held INSUFFICIENT rows — VIRTUAL (83.8%), KITE (80.3%), DRV (67.1%), SNX
+(63.1%): all stayed INSUFFICIENT/NO-OUTFLOWS. The instrument was not blind. The three
+hits at full depth: FLOKI 4mo day~27 cv 0.32 zero off-schedule; CHZ 5mo day~17-19
+with 24 off-schedule moves (an ops wallet, ENA-shaped, n too small); ETHFI 4mo at
+~144k/mo, immaterial. None promotable under the EIGEN/ENA bar (>=~10 clean months).
+
+POST-MORTEM AGAINST THE TRIPLE (large · professional · batch):
+ (a) LARGE — every top-250 token satisfies it. NOT the discriminator.
+ (b) PROFESSIONAL custody — 47 D-CUSTODY rows say most have it. NOT the discriminator.
+ (c) BATCH vs continuous — necessary (MANA/RAIL A-READABLE = continuous = no event,
+     the WLD finding again) but not sufficient: dozens of batch-capable custody
+     treasuries showed no cadence.
+ THE MISSING LEG IS TEMPORAL: **the token must be INSIDE an active monthly-tranche
+ vesting schedule right now.** The failures sort cleanly by it —
+   fully vested, treasury dormant:  SNX, GNO, CVX (NO-OUTFLOWS / INSUFFICIENT)
+   too new, schedule not started:   KITE, DRV (<4 months of history)
+   continuous release, no event:    MANA, RAIL (A-READABLE)
+   irregular ops treasuries:        22 IRREGULAR
+ EIGEN, ENA, and the two weak hits (FLOKI, CHZ) are all 2024–25 launches currently
+ mid-schedule. That property is exactly what a "tokens with UPCOMING unlocks" index
+ selects for and a mcap index does not.
+
+SO THE HONEST READING IS NARROWER THAN "THE METHOD DOES NOT GENERALISE": the method
+does not generalise to CUSTODY TREASURIES BROADLY, and the population that would
+test it properly — tokens known to be mid-schedule — is the one the dead API key
+denied us. The line fired on the fallback; the intended population is still
+untested. Refined addressable set: custody-held tokens inside an active monthly
+tranche schedule. That is a smaller set than hoped and a precise one.
+
+WATCH CANDIDATES (logged, not promoted — n too small for the bar):
+  FLOKI 0x2b9d5c7f2E day~27, 4 months, clean. Re-run detect-cadence when >=8
+        months exist (~Dec 2026). Promote only if the run holds.
+  CHZ   0x2F1d275439 day~17-19, 5 months, busy ops wallet. Same re-check, ~Nov 2026.
+NOT added to unlocks.json: no add-row tool exists and hand-editing is forbidden;
+building one is machinery this brief forbids. The cadence report keeps their series.
+
+DEFECTS LOGGED, NOT FIXED (per standing order — none blocked the scan or produced
+a wrong verdict): NO_VEST regex missed several RWA treasury tokens (USTB, JTRSY, JAAA,
+OUSG, USTBL — all resolved and scanned harmlessly to INSUFFICIENT); junk symbols
+(PC0000031, 币安人生, USELESS) passed taxonomy; the 0.3% held threshold still cannot
+tell treasury from vesting (third scan to say so).
+
+NEXT: get a real known-upcoming-unlocks index. Options at $0: a valid CryptoRank
+key (theirs is dead), or Tokenomist/DefiLlama unlock pages as NAME sources only, or
+hand-curate ~30 names from public unlock calendars (names, never dates). Then
+re-run this exact pipeline. The pre-registration for THAT run: cadence >=25% among
+locked-supply tokens, because mid-schedule is now the stated necessary condition
+and the index selects for it directly. Under 10% there would indict the method
+without the fallback caveat.

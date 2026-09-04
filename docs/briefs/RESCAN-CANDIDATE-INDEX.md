@@ -1,7 +1,7 @@
 <!-- PREMISE
-Written against: v0.28.2
+Written against: v0.28.3
 Reviewed: 2026-09-01
-Status: ACTIVE PLAN — not yet run. This is the corrected successor to
+Status: EXECUTED 2026-09-04 on the FALLBACK population (top-250 by mcap; CryptoRank key dead). Line fired at 3/65. Post-mortem refined the addressable set to "custody-held AND mid-schedule". The INTENDED population (known-upcoming-unlocks index) remains UNTESTED — this brief re-activates the day a real index is obtained. This is the corrected successor to
   UNLOCK-BULK-SCAN.md, which is EXECUTED and whose POPULATION premise was refuted
   at the root (gate-passers were never selected for having schedules). Its
   mechanics still hold; do not re-run its queue.
