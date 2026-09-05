@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { config, ROOT } from '../../config.js';
 import { dispatch } from '../../core/dispatcher.js';
 import { loadWatchState, activeDemotions, observedAround, retrospectiveLine, loadRecheckState, effectiveSourced } from './cadence-watch.js';
-import { sourceIsStale, SOURCE_STALE_DAYS, pressureStage } from '../../core/unlock-promote.js';
+import { sourceIsStale, SOURCE_STALE_DAYS, pressureStage, falsifierWeak, chanceRate, UNVERIFIABLE_MECHANISMS } from '../../core/unlock-promote.js';
 
 const FILE = join(ROOT, 'unlocks.json');
 // STAGE TIERING (coverage-session Part 3): at 25+ tracked tokens, un-tiered monthly
@@ -73,13 +73,19 @@ function nextMonthlyDate(day, from = new Date()) {
 // irregular emitters excluded from the forward falsifier. Predict the floor, report
 // the total — same row, different claim per stage, both true.
 export function claimCoverage(t, lead = 3) {
+  if (t?.provenance === 'sourced' && UNVERIFIABLE_MECHANISMS.includes(t.mechanism)) return {
+    date: 'no-discrete-event', amount: 'sourced', scope: 'mechanism',
+    line: t.mechanism === 'continuous-claim'
+      ? `No discrete event: the vesting contract pays a continuous stream that beneficiaries claim at will; ${t.source}'s date discretises it. Tracked, never announced. Basis: ${t.mechanismBasis}`
+      : `Index contradicted by chain: ${t.source}'s dates do not match where the contract's claims occur. Tracked, never announced. Basis: ${t.mechanismBasis}`,
+  };
   if (t?.provenance === 'sourced') return {
     date: 'sourced', amount: 'sourced', scope: 'source',
-    line: `Date and amount are ${t.source}'s published figures — not independently verified. Falsifier: the source itself, re-read weekly; silent after ${SOURCE_STALE_DAYS} days unrefreshed.`,
+    line: `Date and amount are ${t.source}'s published figures — not independently verified (pending a route). Falsifier: the source itself, re-read weekly; silent after ${SOURCE_STALE_DAYS} days unrefreshed.`,
   };
   if (t?.enforcement === 'contract' && t?.clusterSpec) return {
     date: 'observed', amount: 'source-stated', scope: 'contract',
-    line: `Date verified on-chain — contract-enforced: post-cliff claim clusters replayed on ${t.clusterSpec.hits}/${t.clusterSpec.n} past cliffs from the vesting contract. Amount is the schedule's stated tranche (claims vary by beneficiary). Falsifier: the next cliff's cluster; upgradeable proxy ${t.upgradeable ? 'YES — re-read scheduled' : 'no'}.`,
+    line: `Date verified on-chain — contract-enforced: post-cliff claim clusters replayed on ${t.clusterSpec.hits}/${t.clusterSpec.n} past cliffs from the vesting contract. Amount is the schedule's stated tranche (claims vary by beneficiary). Falsifier: the next cliff's cluster${falsifierWeak(t.clusterSpec) ? ` — WEAK: the contract clusters ${t.clusterSpec.hits + t.clusterSpec.offIndex}x in ${t.clusterSpec.spanDays} days, so a random ${t.clusterSpec.windowDays}-day window catches one ${Math.round(chanceRate(t.clusterSpec) * 100)}% of the time; ${t.clusterSpec.hits}/${t.clusterSpec.n} on-index is barely above chance` : ''}; upgradeable proxy ${t.upgradeable ? 'YES — re-read scheduled' : 'no'}.`,
   };
   if (lead < 0 && (t?.cadence || t?.alsoObserve)) return {
     date: 'observed', amount: 'observed-actual', scope: 'retrospective',
@@ -120,6 +126,11 @@ export function unlockCoverage(tokens = null) {
     sourced: sourced.length,
     staleSourced: stale.length,
     belowFloor: sourced.filter((t) => t.stage !== 'LOGGED' && pressureStage(t) === 'LOGGED').length,
+    sourcedPending: sourced.filter((t) => !UNVERIFIABLE_MECHANISMS.includes(t.mechanism)).length,
+    sourcedUnverifiable: sourced.filter((t) => UNVERIFIABLE_MECHANISMS.includes(t.mechanism)).length,
+    continuousClaim: sourced.filter((t) => t.mechanism === 'continuous-claim').length,
+    indexContradicted: sourced.filter((t) => t.mechanism === 'index-contradicted').length,
+    weakFalsifier: verified.filter((t) => falsifierWeak(t.clusterSpec)).length,
     estimated: tokens.filter((t) => !t.retired && !t.events?.length && t.provenance !== 'sourced').length,
     retired: tokens.filter((t) => t.retired).length,
     cadence: verified.filter((t) => t.cadence).length,
@@ -128,7 +139,7 @@ export function unlockCoverage(tokens = null) {
     stages,
   };
   c.sourceDemoted = sourceDemoted;
-  c.line = `Unlock coverage: ${c.tracked} tracked · ${c.verified} verified (${c.cadence} cadence-watched · ${c.contractCliff} contract-cliff · ${c.reviewBy} review-dated) · ${c.sourced} sourced${c.staleSourced ? ` (${c.staleSourced} STALE, silent)` : ''}${c.belowFloor ? ` (${c.belowFloor} below pressure floor, silent)` : ''}${sourceDemoted ? ` (${sourceDemoted} retracted by source)` : ''} · ${c.estimated} estimated (silent) · ${c.retired} retired · stages ${Object.entries(stages).map(([k, v]) => k + ':' + v).join(' ')} · verified reads are Ethereum/EVM only — sourced rows cite a named calendar and are not independently checked`;
+  c.line = `Unlock coverage: ${c.tracked} tracked · ${c.verified} verified (${c.cadence} cadence-watched · ${c.contractCliff} contract-cliff${c.weakFalsifier ? ` [${c.weakFalsifier} weak falsifier]` : ''} · ${c.reviewBy} review-dated) · ${c.sourced} sourced (${c.sourcedPending} pending verification · ${c.sourcedUnverifiable} unverifiable by mechanism: ${c.continuousClaim} continuous-claim, ${c.indexContradicted} index-contradicted)${c.staleSourced ? ` (${c.staleSourced} STALE, silent)` : ''}${c.belowFloor ? ` (${c.belowFloor} below pressure floor, silent)` : ''}${sourceDemoted ? ` (${sourceDemoted} retracted by source)` : ''} · ${c.estimated} estimated (silent) · ${c.retired} retired · stages ${Object.entries(stages).map(([k, v]) => k + ':' + v).join(' ')} · verified reads are Ethereum/EVM only — sourced rows cite a named calendar and are not independently checked`;
   return c;
 }
 

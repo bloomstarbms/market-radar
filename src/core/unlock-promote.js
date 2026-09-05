@@ -19,7 +19,48 @@ export const ESTIMATED_ONLY_FIELDS = ['pctOfMcap'];
 // falsifier is the source itself: re-read weekly, stale at 21 days. A sourced row
 // without source + sourceFetchedAt is refused at promotion and at boot, the same
 // shape discipline as a verified row without a forward falsifier.
-export const SOURCED_ROW_FIELDS = ['sym', 'name', 'provenance', 'source', 'sourceFetchedAt', 'sourceEvents', 'chain', 'token', 'stage', 'note', 'circSupply', 'totalLocked', 'maxSupply'];
+export const SOURCED_ROW_FIELDS = ['sym', 'name', 'provenance', 'source', 'sourceFetchedAt', 'sourceEvents', 'chain', 'token', 'stage', 'note', 'circSupply', 'totalLocked', 'maxSupply', 'mechanism', 'mechanismBasis'];
+// MECHANISM (v0.30.1). Route 2 found by failing that a sourced date can describe
+// three different things on chain: a custody batch, a cliff-gated claim, or NOTHING
+// DISCRETE — a continuous-claim stream the index has discretised (L3), or a date the
+// contract contradicts outright (REZ). A sourced row is therefore 'pending' (could
+// still be verified by a route) or unverifiable BY MECHANISM — and the latter is not
+// "the source is unreliable", it is "the event it names does not exist as an event".
+// Unverifiable rows route to LOGGED: pushing a date that corresponds to nothing on
+// chain is the defect, not the silence. The stamp is written through promote-unlock.js
+// from the cliff-cluster report (evidence), never typed.
+export const MECHANISMS = ['pending', 'continuous-claim', 'index-contradicted', 'cliff-gated', 'custody-batch'];
+export const UNVERIFIABLE_MECHANISMS = ['continuous-claim', 'index-contradicted'];
+// Pure: does the cluster report SUPPORT the mechanism label? continuous-claim needs a
+// wide claimant base with claims on most days and no parameterisation reaching 2/3;
+// index-contradicted needs every covered index cliff to show no cluster while the
+// contract DID cluster elsewhere (otherwise it is merely quiet, which proves nothing).
+export function mechanismEvidence(mechanism, results, pastCliffs) {
+  const best = results.slice().sort((a, b) => (b.distinctRecipients || 0) - (a.distinctRecipients || 0))[0];
+  if (!best) return { ok: false, why: 'no result rows' };
+  const grid = best.grid || [];
+  const maxFrac = Math.max(0, ...grid.map((g) => g.hits / g.n));
+  if (mechanism === 'continuous-claim') {
+    const ok = (best.distinctRecipients || 0) >= 100 && best.n >= 3 && grid.length >= 9 && maxFrac < 2 / 3 && (best.activeDayFrac ?? 1) >= 0.8;
+    return { ok, why: ok ? '' : `needs >=100 claimants (${best.distinctRecipients}), n>=3 (${best.n}), full grid (${grid.length}), max replay <2/3 (${maxFrac.toFixed(2)})`,
+      basis: `${best.distinctRecipients} distinct claimants pull from ${String(best.contract).slice(0, 10)} on ${Math.round((best.activeDayFrac ?? 1) * 100)}% of days; best replay ${maxFrac.toFixed(2)} of ${best.n} index cliffs across ${grid.length} parameterisations — a stream, not a cliff` };
+  }
+  if (mechanism === 'index-contradicted') {
+    const none = (best.perCliff || []).length >= 3 && best.perCliff.every((c) => !c.cluster) && grid.every((g) => g.hits === 0);
+    const off = best.offIndexClusters || [];
+    const ok = none && off.length >= 1;
+    return { ok, why: ok ? '' : `needs 0 on-index clusters at every parameterisation with >=3 cliffs (${best.hits}/${best.n}) AND >=1 off-index cluster (${off.length})`,
+      basis: `0/${best.n} index cliffs (${pastCliffs.join(', ')}) show a claim cluster from ${String(best.contract).slice(0, 10)} at any of ${grid.length} parameterisations, while the contract clustered ${off.length}x off-index (${off.map((o) => o.from + ' ' + o.ratio + 'x/' + o.recipients + 'r').join(', ')}) — the listed dates are not where the claims are` };
+  }
+  return { ok: false, why: `mechanism '${mechanism}' is not stamped by this path` };
+}
+export function mechanismProblems(t) {
+  const p = [];
+  if (t.mechanism != null && !MECHANISMS.includes(t.mechanism)) p.push(`unknown mechanism '${t.mechanism}'`);
+  if (t.mechanism && t.mechanism !== 'pending' && !t.mechanismBasis) p.push('a non-pending mechanism needs mechanismBasis (evidence from the cluster report)');
+  if (UNVERIFIABLE_MECHANISMS.includes(t.mechanism) && t.stage !== 'LOGGED') p.push(`mechanism '${t.mechanism}' has no discrete event to announce — stage must be LOGGED`);
+  return p;
+}
 export const SOURCE_STALE_DAYS = 21;
 
 export function sourcedRowProblems(t) {
@@ -31,6 +72,7 @@ export function sourcedRowProblems(t) {
   if (t.verified === true) p.push('sourced row is marked verified:true');
   if (!t.chain) p.push('sourced row has no chain (use "unconfirmed" until resolved — a wrong chain reads as "no locked supply", silently)');
   if (t.stage === 'FULL') p.push('sourced rows cannot be FULL: T-14 and T+3 assume observation a sourced row cannot make');
+  p.push(...mechanismProblems(t));
   return p;
 }
 // SOURCED PRESSURE FLOOR (Route 2, Part 6). FORT went LOGGED by hand in v0.29.0 —
@@ -64,6 +106,7 @@ export function derivePressureFloor(tokens, percentile = 25) {
 // row's own stage. A row with no maxSupply cannot be sized -> its own stage (we did
 // not look is not "small").
 export function pressureStage(t, floor = SOURCED_PRESSURE_FLOOR) {
+  if (UNVERIFIABLE_MECHANISMS.includes(t?.mechanism)) return 'LOGGED';
   const evs = t?.sourceEvents || [];
   if (!evs.length) return t?.stage ?? 'STANDARD';
   const catsOf = (e) => String(e.cats || '').split('+').filter(Boolean);
@@ -81,11 +124,12 @@ export function sourceIsStale(t, now = Date.now()) {
 }
 
 // Pure constructor for a sourced row — whitelist copy, same discipline as promoteRow.
-export function sourceRow(oldRow, { source, sourceFetchedAt, sourceEvents, chain, token = null, stage = 'STANDARD', note = '', circSupply = null, totalLocked = null, maxSupply = null }) {
+export function sourceRow(oldRow, { source, sourceFetchedAt, sourceEvents, chain, token = null, stage = 'STANDARD', note = '', circSupply = null, totalLocked = null, maxSupply = null, mechanism = 'pending', mechanismBasis = null }) {
   if (!oldRow?.sym) throw new Error('sourceRow: no sym');
   if (oldRow.retired) throw new Error(`sourceRow: ${oldRow.sym} is RETIRED`);
   if (Array.isArray(oldRow.events) && oldRow.events.length) throw new Error(`sourceRow: ${oldRow.sym} is VERIFIED — a verified row is not downgraded to sourced by this path`);
-  const row = { sym: oldRow.sym, name: oldRow.name, provenance: 'sourced', source, sourceFetchedAt, sourceEvents, chain, stage, note };
+  const row = { sym: oldRow.sym, name: oldRow.name, provenance: 'sourced', source, sourceFetchedAt, sourceEvents, chain, stage, note, mechanism };
+  if (mechanismBasis) row.mechanismBasis = mechanismBasis;
   if (token) row.token = token;
   if (circSupply != null) row.circSupply = circSupply;
   if (totalLocked != null) row.totalLocked = totalLocked;
@@ -168,6 +212,20 @@ export function clusterSpecProblems(spec) {
   if (!(spec.n >= 3)) p.push('clusterSpec.n >= 3 required (backtested cliffs)');
   return p;
 }
+// A presence test on an index date is near-vacuous when the contract clusters so
+// often that a random window of the same length would catch one anyway. Chance
+// rate = clusters (on + off index) x windowDays / covered span. ORDER: 13 clusters
+// over 101 days, w5 -> 0.64; its 6/8 = 0.75 replay is barely above chance. The row
+// stays verified — the schedule did replay — but the falsifier is WEAK, and a weak
+// falsifier is stated everywhere the verification is. Derived, recorded, not felt.
+export function chanceRate(spec) {
+  if (!spec || !(spec.spanDays > 0) || !Number.isFinite(spec.offIndex)) return null;
+  return +Math.min(1, (spec.hits + spec.offIndex) * spec.windowDays / spec.spanDays).toFixed(2);
+}
+export function falsifierWeak(spec) {
+  const c = chanceRate(spec);
+  return c !== null && c >= 0.5;
+}
 export function forwardFalsifierProblems(t) {
   if (t.enforcement === 'contract') {
     const p = [];
@@ -218,6 +276,8 @@ export function promoteRow(oldRow, { events, monthlyDay = null, date = null, not
   // events travel as history, and the chain/token resolution survives.
   if (oldRow.provenance === 'sourced') {
     row.sourceHistory = { source: oldRow.source, sourceFetchedAt: oldRow.sourceFetchedAt, sourceEvents: oldRow.sourceEvents, supersededAt: new Date().toISOString().slice(0, 10) };
+  } else if (oldRow.sourceHistory) {
+    row.sourceHistory = oldRow.sourceHistory; // a RE-promotion must not lose where the row came from (dropped once, v0.30.1)
   }
   if (oldRow.chain) row.chain = oldRow.chain;
   if (oldRow.token) row.token = oldRow.token;

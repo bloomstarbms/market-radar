@@ -1074,6 +1074,8 @@
     "baselineDaily": 19488,
     "n": 8,
     "hits": 6,
+    "offIndex": 7,
+    "spanDays": 113,
     "basis": "derived on 8 past cliffs: replays at 6/8 under w5/r3; grid w3r2:7 w3r3:6 w3r5:5 w5r2:7 w5r3:6 w5r5:5 w7r2:6 w7r3:5 w7r5:4; off-index clusters 7"
    },
    "cliffDates": [
@@ -1317,8 +1319,10 @@
     }
    ],
    "chain": "ethereum",
-   "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
+   "stage": "LOGGED",
+   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified. MECHANISM continuous-claim (2026-09-05): 2367 distinct claimants pull from 0x8E02d37b on 100% of days; best replay 0.50 of 4 index cliffs across 9 parameterisations — a stream, not a cliff",
+   "mechanism": "continuous-claim",
+   "mechanismBasis": "2367 distinct claimants pull from 0x8E02d37b on 100% of days; best replay 0.50 of 4 index cliffs across 9 parameterisations — a stream, not a cliff",
    "token": "ethereum:0x88909D489678dD17aA6D9609F89B0419Bf78FD9a",
    "circSupply": 865789824,
    "totalLocked": 2467543509,
@@ -1363,8 +1367,10 @@
     }
    ],
    "chain": "ethereum",
-   "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
+   "stage": "LOGGED",
+   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified. MECHANISM index-contradicted (2026-09-05): 0/4 index cliffs (2026-05-30, 2026-06-30, 2026-07-30, 2026-08-30) show a claim cluster from 0x97061282 at any of 9 parameterisations, while the contract clustered 4x off-index (2026-04-30 13.97x/23r, 2026-05-05 8.42x/12r, 2026-05-10 4.76x/11r, 2026-05-25 5.72x/5r) — the listed dates are not where the claims are",
+   "mechanism": "index-contradicted",
+   "mechanismBasis": "0/4 index cliffs (2026-05-30, 2026-06-30, 2026-07-30, 2026-08-30) show a claim cluster from 0x97061282 at any of 9 parameterisations, while the contract clustered 4x off-index (2026-04-30 13.97x/23r, 2026-05-05 8.42x/12r, 2026-05-10 4.76x/11r, 2026-05-25 5.72x/5r) — the listed dates are not where the claims are",
    "token": "ethereum:0x3b50805453023a91a8bf641e279401a0b23fa6f9",
    "circSupply": 9416666667,
    "totalLocked": 583333333,

@@ -886,6 +886,57 @@ console.log('36. every prompt document declares its premises (documents get obey
   check('empty-assumptions check can fail', !/Assumes:\s*\n\s*-\s*\S/.test('Written against: v1.0.0\nAssumes:\n'));
 }
 
+console.log('48. MECHANISM — a sourced date can name no discrete event; weak falsifiers are stated');
+{
+  const { mechanismEvidence, mechanismProblems, sourceRow, sourcedRowProblems, pressureStage, chanceRate, falsifierWeak, promoteRow, UNVERIFIABLE_MECHANISMS } = await import('./src/core/unlock-promote.js');
+  const { claimCoverage, unlockCoverage, leadsFor } = await import('./src/sources/calendar/unlocks.js');
+  const { cadenceStatus } = await import('./src/sources/calendar/cadence-watch.js');
+  const grid9 = (hits) => [3, 5, 7].flatMap((w) => [2, 3, 5].map((r) => ({ windowDays: w, minRatio: r, hits, n: 4, off: 2 })));
+  const stream = { contract: '0x' + '8'.repeat(40), distinctRecipients: 2367, n: 4, hits: 1, activeDayFrac: 1, grid: grid9(2), perCliff: [{ cluster: false }, { cluster: false }, { cluster: true }, { cluster: false }], offIndexClusters: [] };
+  const quiet = { contract: '0x' + '9'.repeat(40), distinctRecipients: 71, n: 4, hits: 0, activeDayFrac: 0.47, grid: grid9(0), perCliff: [{ cluster: false }, { cluster: false }, { cluster: false }, { cluster: false }], offIndexClusters: [{ from: '2026-04-30', ratio: 13.97, recipients: 23 }] };
+  const cliffy = { ...stream, distinctRecipients: 80, hits: 3, grid: grid9(3) };
+  // Evidence rules, each capable of refusing.
+  check('continuous-claim: wide claimant base, claims most days, never 2/3 -> supported', mechanismEvidence('continuous-claim', [stream], []).ok);
+  check('continuous-claim: refused when any parameterisation replays >=2/3', !mechanismEvidence('continuous-claim', [cliffy], []).ok);
+  check('continuous-claim: refused with few claimants (a quiet contract is not a stream)', !mechanismEvidence('continuous-claim', [{ ...stream, distinctRecipients: 40 }], []).ok);
+  check('continuous-claim: refused when claims are NOT on most days', !mechanismEvidence('continuous-claim', [{ ...stream, activeDayFrac: 0.4 }], []).ok);
+  check('index-contradicted: 0 on-index everywhere + >=1 off-index cluster -> supported', mechanismEvidence('index-contradicted', [quiet], ['2026-05-30']).ok);
+  check('index-contradicted: refused when the contract simply never clusters (silence proves nothing)', !mechanismEvidence('index-contradicted', [{ ...quiet, offIndexClusters: [] }], []).ok);
+  check('index-contradicted: refused when any index cliff DID cluster', !mechanismEvidence('index-contradicted', [{ ...quiet, perCliff: [{ cluster: true }, { cluster: false }, { cluster: false }, { cluster: false }], hits: 1 }], []).ok);
+  check('basis sentence carries the numbers', /2367 distinct claimants/.test(mechanismEvidence('continuous-claim', [stream], []).basis) && /13\.97x\/23r/.test(mechanismEvidence('index-contradicted', [quiet], []).basis));
+  check('an unknown mechanism label is not stamped by this path', !mechanismEvidence('vibes', [stream], []).ok);
+  // Row gate: unverifiable mechanisms MUST be LOGGED and MUST carry a basis.
+  const base = { source: 'defillama', sourceFetchedAt: new Date().toISOString().slice(0, 16), chain: 'ethereum', sourceEvents: [{ t: 1, n: 1e6, cats: 'insiders' }], maxSupply: 1e9 };
+  check('unverifiable mechanism at STANDARD is refused by the boot gate', mechanismProblems({ ...base, mechanism: 'continuous-claim', mechanismBasis: 'x', stage: 'STANDARD' }).length > 0);
+  check('non-pending mechanism without basis is refused', mechanismProblems({ ...base, mechanism: 'index-contradicted', stage: 'LOGGED' }).length > 0);
+  check('pending needs nothing further', mechanismProblems({ ...base, mechanism: 'pending', stage: 'STANDARD' }).length === 0);
+  check('sourceRow defaults mechanism to pending', sourceRow({ sym: 'T', name: 'T' }, base).mechanism === 'pending');
+  check('sourceRow refuses an unverifiable mechanism at STANDARD (constructor = gate)', (() => { try { sourceRow({ sym: 'T', name: 'T' }, { ...base, mechanism: 'continuous-claim', mechanismBasis: 'x' }); return false; } catch { return true; } })());
+  check('unverifiable mechanism -> LOGGED at runtime whatever the size', pressureStage({ ...base, mechanism: 'continuous-claim', stage: 'STANDARD', sourceEvents: [{ t: 1, n: 5e7, cats: 'insiders' }] }) === 'LOGGED' && leadsFor({ stage: 'LOGGED' }).length === 0);
+  check('the unverifiable set is exactly the two Route 2 found', UNVERIFIABLE_MECHANISMS.length === 2);
+  // Weak falsifier: derived chance rate, not an impression.
+  const spec = { windowDays: 5, minRatio: 3, minRecipients: 5, baselineDaily: 1, n: 8, hits: 6, offIndex: 7, spanDays: 113, basis: 'b' };
+  check('chance rate = clusters x window / span (ORDER: 13x5/113 = 0.58)', chanceRate(spec) === 0.58 && falsifierWeak(spec));
+  check('a quiet contract (2 clusters in 113d) has a strong falsifier', !falsifierWeak({ ...spec, hits: 2, offIndex: 0 }));
+  check('no span recorded -> no chance rate -> not called weak (unknown is not strong either)', chanceRate({ ...spec, spanDays: undefined }) === null && !falsifierWeak({ ...spec, spanDays: undefined }));
+  // Re-promotion keeps provenance history.
+  const rp = promoteRow({ sym: 'X', name: 'X', verified: true, events: [{ date: '2026-09-01', source: 'a' }], sourceHistory: { source: 'defillama', supersededAt: '2026-09-05' } }, { events: [{ date: '2026-09-05', source: 'announcement' }], reviewBy: '2026-12-01' });
+  check('re-promoting a verified row keeps sourceHistory (dropped once)', rp.sourceHistory?.source === 'defillama');
+  // Live rows and lines.
+  const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
+  const l3 = live.find((t) => t.sym === 'L3'), rez = live.find((t) => t.sym === 'REZ'), order = live.find((t) => t.sym === 'ORDER');
+  check('LIVE: L3 is continuous-claim, LOGGED, with basis', l3?.mechanism === 'continuous-claim' && l3.stage === 'LOGGED' && /2367/.test(l3.mechanismBasis));
+  check('LIVE: REZ is index-contradicted, LOGGED, with the off-index dates in its basis', rez?.mechanism === 'index-contradicted' && rez.stage === 'LOGGED' && /2026-04-30/.test(rez.mechanismBasis));
+  check('LIVE: every sourced row passes the gate with mechanisms in place', sourcedRowProblems(l3).length === 0 && sourcedRowProblems(rez).length === 0);
+  check('LIVE: ORDER is verified AND its coverage line says the falsifier is weak, with the chance rate', falsifierWeak(order?.clusterSpec) && /WEAK/.test(claimCoverage(order, 0).line) && /58% of the time/.test(claimCoverage(order, 0).line));
+  check('claimCoverage for a stream says there is no discrete event', claimCoverage(l3, 3).scope === 'mechanism' && /No discrete event/.test(claimCoverage(l3, 3).line));
+  check('claimCoverage for a contradicted index says the chain contradicts it', /Index contradicted by chain/.test(claimCoverage(rez, 3).line));
+  const cov = unlockCoverage();
+  check('coverage line splits sourced into pending vs unverifiable-by-mechanism', /\d+ pending verification · 2 unverifiable by mechanism: 1 continuous-claim, 1 index-contradicted/.test(cov.line) && cov.sourcedPending + cov.sourcedUnverifiable === cov.sourced);
+  check('coverage line flags the weak falsifier next to the contract-cliff count', /1 contract-cliff \[1 weak falsifier\]/.test(cov.line));
+  check('heartbeat carries the weak flag with the chance rate', /ORDER cliff .* falsifier WEAK \(chance 58%\)/.test(cadenceStatus().line));
+}
+
 console.log('47. sourced PRESSURE FLOOR is derived from the index distribution, recorded, static');
 {
   const { SOURCED_PRESSURE_FLOOR: F, derivePressureFloor, pressureStage, NON_PRESSURE_CATS } = await import('./src/core/unlock-promote.js');
@@ -1001,7 +1052,7 @@ console.log('46. CONTRACT-CLIFF tier (Route 2) — enforcement:contract is EARNE
   check('claimCoverage states the upgradeable answer explicitly', /upgradeable proxy (yes|no)/i.test(cov.line));
   check('coverage line carries the contract-cliff count', /1 contract-cliff/.test(unlockCoverage().line));
   const st = cadenceStatus();
-  check('heartbeat lists ORDER with its next cliff', /ORDER cliff 0\/0 confirmed · next 2026-/.test(st.line));
+  check('heartbeat lists ORDER with its next cliff', /ORDER cliff 0\/0 confirmed · next 2026-\d\d-\d\d/.test(st.line));
 }
 
 console.log('45. SOURCED tier — a named source pushes, labelled; its falsifier is the source');

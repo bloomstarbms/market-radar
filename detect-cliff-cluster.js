@@ -169,7 +169,12 @@ if (IS_CLI) (async () => {
         grid.push({ windowDays, minRatio, hits: v.hits, n: v.n, off: v.offIndexClusters.length });
       }
       const v = clusterVerdicts(f.byDay, past, { windowDays: 5, minRatio: 3 });
-      results.push({ contract: c.addr, pctSupply: c.pctSupply, verdict: v.verified ? 'CLUSTERS-REPLAY' : v.hits ? 'PARTIAL' : 'NO-CLUSTERS', ...v, grid, pages: f.pages });
+      // activeDayFrac: share of covered days with ANY outflow. A stream claims on
+      // most days; a cliff-gated contract is quiet between cliffs. Recorded so the
+      // continuous-claim mechanism stamp has a number, not an impression.
+      const spanDays = Math.max(1, Math.round((Date.now() - new Date(untilDate + 'T00:00:00Z').getTime()) / 86400e3));
+      const activeDayFrac = +(Math.min(1, Object.keys(f.byDay).length / spanDays)).toFixed(2);
+      results.push({ contract: c.addr, pctSupply: c.pctSupply, verdict: v.verified ? 'CLUSTERS-REPLAY' : v.hits ? 'PARTIAL' : 'NO-CLUSTERS', ...v, grid, pages: f.pages, activeDayFrac, spanDays });
       console.log(`${sym} ${c.addr.slice(0, 10)} ${c.pctSupply ?? ''}%: ${v.hits}/${v.n} cliffs cluster (w5 r3) · recipients ${v.distinctRecipients} · off-index ${v.offIndexClusters.length} · ${v.verified ? 'REPLAYS' : 'no'}`);
       console.log('   ' + v.perCliff.map((p) => `${p.cliff}:${p.ratio}x/${p.recipients}r${p.cluster ? '✓' : '·'}`).join(' '));
     }

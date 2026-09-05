@@ -35,7 +35,7 @@ if (!sym) {
   process.exit(1);
 }
 const args = Object.fromEntries(kvs.map((s) => { const i = s.indexOf('='); return [s.slice(0, i), s.slice(i + 1)]; }));
-if (!args.keepEvents && !['sourced', 'contract-cliff'].includes(args.provenance) && (!args.source || !args.detail)) { console.error('source= and detail= are required — provenance is what "verified" means. (keepEvents=1 reuses existing provenance.)'); process.exit(1); }
+if (!args.keepEvents && !args.mechanism && !['sourced', 'contract-cliff'].includes(args.provenance) && (!args.source || !args.detail)) { console.error('source= and detail= are required — provenance is what "verified" means. (keepEvents=1 reuses existing provenance.)'); process.exit(1); }
 
 const j = JSON.parse(readFileSync('unlocks.json', 'utf8'));
 let idx = j.tokens.findIndex((t) => t.sym === sym.toUpperCase());
@@ -75,6 +75,29 @@ if (args.provenance === 'sourced') {
   process.exit(0);
 }
 
+// v0.30.1: mechanism=<continuous-claim|index-contradicted> on a SOURCED row. The
+// verdict is derived from data/cliff-cluster-report.json (Route 2's evidence), the
+// basis string is built from it, and the stage goes LOGGED: there is no discrete
+// event to announce. Refused where the report does not support the label.
+if (args.mechanism) {
+  const t = j.tokens[idx];
+  if (!t || t.provenance !== 'sourced') { console.error(`${sym}: mechanism= applies to a SOURCED row`); process.exit(1); }
+  const rep = JSON.parse(readFileSync('data/cliff-cluster-report.json', 'utf8'))[sym.toUpperCase()];
+  const res = (rep?.results || []).filter((r) => Array.isArray(r.perCliff));
+  if (!res.length) { console.error(`${sym}: no cliff-cluster evidence — run detect-cliff-cluster.js first`); process.exit(1); }
+  const { mechanismEvidence, sourceRow: sr } = await import('./src/core/unlock-promote.js');
+  const ev = mechanismEvidence(args.mechanism, res, rep.pastCliffs || []);
+  if (!ev.ok) { console.error(`${sym}: report does not support mechanism '${args.mechanism}': ${ev.why}`); process.exit(1); }
+  const row = sr({ sym: t.sym, name: t.name }, { source: t.source, sourceFetchedAt: t.sourceFetchedAt, sourceEvents: t.sourceEvents, chain: t.chain, token: t.token ?? null,
+    stage: 'LOGGED', note: (t.note ? t.note + ' ' : '') + `MECHANISM ${args.mechanism} (${new Date().toISOString().slice(0, 10)}): ${ev.basis}`,
+    circSupply: t.circSupply ?? null, totalLocked: t.totalLocked ?? null, maxSupply: t.maxSupply ?? null, mechanism: args.mechanism, mechanismBasis: ev.basis });
+  j.tokens[idx] = row;
+  j.lastReviewed = new Date().toISOString().slice(0, 10) + ` (mechanism ${row.sym} via promote-unlock.js)`;
+  writeFileSync('unlocks.json.tmp', JSON.stringify(j, null, 1)); renameSync('unlocks.json.tmp', 'unlocks.json');
+  console.log(`${row.sym} mechanism ${args.mechanism} → LOGGED. ${ev.basis}`);
+  process.exit(0);
+}
+
 // ROUTE 2: provenance=contract-cliff contract=<ref> — the row is built from
 // data/cliff-cluster-report.json (the tool's own verdicts: per-cliff replay, baseline,
 // recipients) so nothing is typed. enforcement:'contract' is EARNED here: it requires
@@ -90,7 +113,7 @@ if (args.provenance === 'contract-cliff') {
   const dc = (disc?.contracts || []).find((c) => c.addr.toLowerCase() === contract.toLowerCase());
   const upgradeable = /proxy|upgradeable|beacon/i.test(dc?.why || dc?.name || '') ? true : (args.upgradeable === 'true');
   const clusterSpec = { windowDays: res.params.windowDays, minRatio: res.params.minRatio, minRecipients: res.params.minRecipients,
-    baselineDaily: Math.max(res.medianDaily, 1), n: res.n, hits: res.hits,
+    baselineDaily: Math.max(res.medianDaily, 1), n: res.n, hits: res.hits, offIndex: res.offIndexClusters.length, spanDays: res.spanDays,
     basis: `derived on ${res.n} past cliffs: replays at ${res.hits}/${res.n} under w${res.params.windowDays}/r${res.params.minRatio}; grid ${res.grid.map((g) => 'w' + g.windowDays + 'r' + g.minRatio + ':' + g.hits).join(' ')}; off-index clusters ${res.offIndexClusters.length}` };
   const cliffDates = res.perCliff.map((c) => ({ date: c.cliff, ratio: c.ratio, recipients: c.recipients, cluster: c.cluster }));
   const future = (rep.futureCliffs || []).map((d) => ({ date: d, cluster: null }));

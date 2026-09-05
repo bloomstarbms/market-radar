@@ -2639,3 +2639,52 @@ re-checked against the off-index clusters at that refresh.
 RESULTS AGAINST PRIORS, PLAINLY: identified matched my range, not the reviewer's;
 clustering failed the shared line; promotions below both ranges. The method works
 on one contract class and fails on another — a smaller claim than the brief made.
+
+## 2026-09-05 — REVIEW OF ROUTE 2: MECHANISM, NOT FAILURE (v0.30.1)
+
+Reviewer's reading, adopted: the 20% is a THIRD MECHANISM. Route 1 finds custody
+batches; Route 2 finds cliff-gated claims; L3 is neither — a continuous-claim
+contract where tokens accrue and beneficiaries pull at will. THERE IS NO UNLOCK
+EVENT. The index's "cliff" for L3 is DefiLlama discretising a stream, and until now
+the sourced row was pushing a date that corresponds to nothing on chain. The finding
+reached the row.
+
+MECHANISM FIELD on sourced rows: pending | continuous-claim | index-contradicted |
+cliff-gated | custody-batch. Stamped ONLY through promote-unlock.js from the
+cliff-cluster report (mechanismEvidence: each label has a rule that can refuse), with
+a basis sentence built from the numbers. Unverifiable-by-mechanism rows MUST be
+LOGGED — the constructor and the boot gate both refuse otherwise.
+ - L3 → continuous-claim: 2,367 claimants pull on 100% of covered days (activeDayFrac
+   now recorded by the detector); best replay 0.50 of 4 at 9 parameterisations.
+ - REZ → index-contradicted: 0/4 on-index at every parameterisation; the contract
+   clustered 4x off-index (Apr 30 13.97x/23r, May 5, May 10, May 25). DIRECT CHECK,
+   as asked: the off-index clusters are NOT a periodic set of real dates — they are
+   one May burst (initial plan funding, by shape) then a trickle. So there are no
+   observed dates to correct the row TO; the row demotes to LOGGED with the
+   contradiction recorded. If a later refresh moves REZ's dates, the sourced
+   recheck path will show it as a REVISE and the mechanism stamp should be re-run.
+Not stamped: RE (never emits — silence proves nothing; rule refuses), ACX (same).
+
+ORDER'S CAVEAT IN THE ROW, NOT THE NOTES: falsifier strength is now DERIVED —
+chanceRate = clusters(on+off) x windowDays / spanDays; WEAK at >= 0.5. ORDER: 13
+clusters in 113 days, w5 → 0.58; its 6/8 = 0.75 replay is barely above chance. The
+claimCoverage line, the coverage line ("[1 weak falsifier]") and the heartbeat all
+say both: verified, weak falsifier. My first threshold (offIndex >= n) was wrong by
+one and wrong in kind; replaced before it shipped.
+
+CORRECTION to the previous entry: ORDER's next index cliff is 2026-09-07, not 09-19
+(the row's cliffDates are authoritative; I read the wrong line).
+
+RE-PROMOTION DROPPED sourceHistory once (promoteRow only carried it when the OLD row
+was sourced). Fixed: a re-promotion keeps it; fixture 48 pins it; ORDER restored
+from the pre-run copy and re-promoted.
+
+REVISED PICTURE, RECORDED PLAINLY: of 14 Tier-1 tokens both routes together verified
+ONE. Custody-batch is rare, cliff-gated is rare, the rest is continuous-claim or
+index-mismatched. For most mid-schedule tokens SOURCED IS NOT A BRIDGE — IT IS THE
+HONEST CEILING, and "don't let it become the default" carries that qualification.
+The coverage line now splits sourced into "pending verification" (a route could
+still reach it) and "unverifiable by mechanism" (no discrete event exists), so the
+difference is visible rather than inferred: 29 sourced = 27 pending · 2 unverifiable.
+Next candidates for mechanism stamps need a cluster run first — the label is
+never applied from an impression.
