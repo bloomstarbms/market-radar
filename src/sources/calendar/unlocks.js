@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { config, ROOT } from '../../config.js';
 import { dispatch } from '../../core/dispatcher.js';
 import { loadWatchState, activeDemotions, observedAround, retrospectiveLine, loadRecheckState, effectiveSourced } from './cadence-watch.js';
-import { sourceIsStale, SOURCE_STALE_DAYS } from '../../core/unlock-promote.js';
+import { sourceIsStale, SOURCE_STALE_DAYS, pressureStage } from '../../core/unlock-promote.js';
 
 const FILE = join(ROOT, 'unlocks.json');
 // STAGE TIERING (coverage-session Part 3): at 25+ tracked tokens, un-tiered monthly
@@ -77,6 +77,10 @@ export function claimCoverage(t, lead = 3) {
     date: 'sourced', amount: 'sourced', scope: 'source',
     line: `Date and amount are ${t.source}'s published figures — not independently verified. Falsifier: the source itself, re-read weekly; silent after ${SOURCE_STALE_DAYS} days unrefreshed.`,
   };
+  if (t?.enforcement === 'contract' && t?.clusterSpec) return {
+    date: 'observed', amount: 'source-stated', scope: 'contract',
+    line: `Date verified on-chain — contract-enforced: post-cliff claim clusters replayed on ${t.clusterSpec.hits}/${t.clusterSpec.n} past cliffs from the vesting contract. Amount is the schedule's stated tranche (claims vary by beneficiary). Falsifier: the next cliff's cluster; upgradeable proxy ${t.upgradeable ? 'YES — re-read scheduled' : 'no'}.`,
+  };
   if (lead < 0 && (t?.cadence || t?.alsoObserve)) return {
     date: 'observed', amount: 'observed-actual', scope: 'retrospective',
     line: 'Retrospective: the figures below are on-chain observations of what moved, not a forward estimate.',
@@ -115,14 +119,16 @@ export function unlockCoverage(tokens = null) {
     verified: verified.length,
     sourced: sourced.length,
     staleSourced: stale.length,
+    belowFloor: sourced.filter((t) => t.stage !== 'LOGGED' && pressureStage(t) === 'LOGGED').length,
     estimated: tokens.filter((t) => !t.retired && !t.events?.length && t.provenance !== 'sourced').length,
     retired: tokens.filter((t) => t.retired).length,
     cadence: verified.filter((t) => t.cadence).length,
+    contractCliff: verified.filter((t) => t.enforcement === 'contract').length,
     reviewBy: verified.filter((t) => t.reviewBy && !t.cadence).length,
     stages,
   };
   c.sourceDemoted = sourceDemoted;
-  c.line = `Unlock coverage: ${c.tracked} tracked · ${c.verified} verified (${c.cadence} cadence-watched · ${c.reviewBy} review-dated) · ${c.sourced} sourced${c.staleSourced ? ` (${c.staleSourced} STALE, silent)` : ''}${sourceDemoted ? ` (${sourceDemoted} retracted by source)` : ''} · ${c.estimated} estimated (silent) · ${c.retired} retired · stages ${Object.entries(stages).map(([k, v]) => k + ':' + v).join(' ')} · verified reads are Ethereum/EVM only — sourced rows cite a named calendar and are not independently checked`;
+  c.line = `Unlock coverage: ${c.tracked} tracked · ${c.verified} verified (${c.cadence} cadence-watched · ${c.contractCliff} contract-cliff · ${c.reviewBy} review-dated) · ${c.sourced} sourced${c.staleSourced ? ` (${c.staleSourced} STALE, silent)` : ''}${c.belowFloor ? ` (${c.belowFloor} below pressure floor, silent)` : ''}${sourceDemoted ? ` (${sourceDemoted} retracted by source)` : ''} · ${c.estimated} estimated (silent) · ${c.retired} retired · stages ${Object.entries(stages).map(([k, v]) => k + ':' + v).join(' ')} · verified reads are Ethereum/EVM only — sourced rows cite a named calendar and are not independently checked`;
   return c;
 }
 
@@ -161,10 +167,14 @@ export function sourcedMessage(t, ev, lead, now = new Date()) {
 
 async function pushSourced(t, now) {
   let fired = 0;
+  // Pressure floor applied at RUNTIME as an overlay (the row file keeps its single
+  // writer): a sourced row whose tranches are below the derived floor, or are
+  // farming/staking-only, is tracked but silent — LOGGED has no leads.
+  const leads = leadsFor({ stage: pressureStage(t) });
   for (const ev of t.sourceEvents || []) {
     const target = new Date(ev.t * 1000);
     const daysOut = Math.round((target - now) / 86400e3);
-    for (const lead of leadsFor(t)) {
+    for (const lead of leads) {
       if (lead < 0 || daysOut !== lead) continue; // sourced rows never look backward
       const msg = sourcedMessage(t, ev, lead, now);
       if (await dispatch({
@@ -212,6 +222,26 @@ export async function pollUnlocks() {
       continue;
     }
     if (!Array.isArray(t.events) || !t.events.length) { estimatedSkipped++; continue; }
+    // CONTRACT-CLIFF rows (route 2) carry a LIST of cliff dates, like sourced rows but
+    // verified: each future cliff alerts on its own stages in the verified format.
+    if (t.enforcement === 'contract' && Array.isArray(t.cliffDates)) {
+      for (const c of t.cliffDates.filter((x) => x.cluster === null)) {
+        const target = new Date(c.date + 'T00:00:00Z');
+        const daysOut = Math.round((target - now) / 86400e3);
+        for (const lead of leadsFor(t)) {
+          if (lead < 0 || daysOut !== lead) continue;
+          if (await dispatch({
+            source: 'CAL', type: 'UNLOCK', severity: lead === 3 || lead === 0 ? 'HIGH' : 'MEDIUM',
+            key: `${t.sym}:${c.date}:${lead}:cliff`, cooldownMin: 2 * 24 * 60,
+            title: lead === 0 ? `${t.sym} contract cliff today — ${c.date}` : `${t.sym} contract cliff in ${lead} days — ${c.date}`,
+            lines: [`${t.name || t.sym}: scheduled cliff on a vesting contract`, t.note ? `Context: ${t.note}` : 'Claims open on this date; beneficiaries pull individually over the following days.',
+              'Fact only — no read on what claimants do with it.', `Verified — source: contract-cliff. ${claimCoverage(t, lead).line}`],
+            url: t.contract ? `https://etherscan.io/address/${t.contract}` : undefined,
+          })) fired++;
+        }
+      }
+      continue;
+    }
     const when = t.date ? new Date(t.date + 'T00:00:00Z') : (t.monthlyDay ? nextMonthlyDate(t.monthlyDay, new Date()) : null);
     const prev = t.date ? new Date(t.date + 'T00:00:00Z') : (t.monthlyDay ? lastMonthlyDate(t.monthlyDay, new Date()) : null);
 

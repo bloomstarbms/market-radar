@@ -1,6 +1,6 @@
 {
   "name": "market-radar",
-  "version": "0.29.0",
+  "version": "0.30.0",
   "description": "Unified Market Radar — DEX revival + CEX pump alerts via Telegram",
   "type": "module",
   "main": "src/index.js",

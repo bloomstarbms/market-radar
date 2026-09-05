@@ -35,7 +35,7 @@ if (!sym) {
   process.exit(1);
 }
 const args = Object.fromEntries(kvs.map((s) => { const i = s.indexOf('='); return [s.slice(0, i), s.slice(i + 1)]; }));
-if (!args.keepEvents && args.provenance !== 'sourced' && (!args.source || !args.detail)) { console.error('source= and detail= are required — provenance is what "verified" means. (keepEvents=1 reuses existing provenance.)'); process.exit(1); }
+if (!args.keepEvents && !['sourced', 'contract-cliff'].includes(args.provenance) && (!args.source || !args.detail)) { console.error('source= and detail= are required — provenance is what "verified" means. (keepEvents=1 reuses existing provenance.)'); process.exit(1); }
 
 const j = JSON.parse(readFileSync('unlocks.json', 'utf8'));
 let idx = j.tokens.findIndex((t) => t.sym === sym.toUpperCase());
@@ -58,17 +58,52 @@ if (args.provenance === 'sourced') {
     const res = JSON.parse(readFileSync('data/chain-resolution.json', 'utf8'))[sym.toUpperCase()];
     if (res?.asset_platform_id) { chain = res.asset_platform_id === 'binance-smart-chain' ? 'bsc' : res.asset_platform_id; const a = res.platforms?.[res.asset_platform_id]; if (a) token = `${chain}:${a}`; }
   }
-  const { sourceRow } = await import('./src/core/unlock-promote.js');
+  const { sourceRow, pressureStage } = await import('./src/core/unlock-promote.js');
+  // Default stage is the PRESSURE rule's answer (derived floor, farming/staking-only
+  // -> LOGGED); an explicit stage= still wins and is recorded as such.
+  const defaultStage = pressureStage({ sourceEvents, maxSupply: p.maxSupply ?? null, stage: 'STANDARD' });
   const row = sourceRow(j.tokens[idx] ?? { sym: sym.toUpperCase(), name: args.name ?? p.name }, {
     source: args.source, sourceFetchedAt: indexFile.fetchedAt, sourceEvents, chain, token,
-    stage: args.stage ?? 'STANDARD', note: args.note ?? `Sourced from ${args.source}'s unlock schedule; ${sourceEvents.filter((e) => e.t * 1000 > Date.now()).length} upcoming batch events at ingest. Not independently verified.`,
+    stage: args.stage ?? defaultStage, note: args.note ?? `Sourced from ${args.source}'s unlock schedule; ${sourceEvents.filter((e) => e.t * 1000 > Date.now()).length} upcoming batch events at ingest. Not independently verified.`,
     circSupply: p.circSupply ?? null, totalLocked: p.totalLocked ?? null, maxSupply: p.maxSupply ?? null,
   });
   if (idx < 0) j.tokens.push(row); else j.tokens[idx] = row;
   j.lastReviewed = new Date().toISOString().slice(0, 10) + ` (sourced ${row.sym} via promote-unlock.js)`;
   writeFileSync('unlocks.json.tmp', JSON.stringify(j, null, 1));
   renameSync('unlocks.json.tmp', 'unlocks.json');
-  console.log(`${row.sym} SOURCED (${args.source}, ${sourceEvents.length} batch events, chain ${chain}, stage ${row.stage}).`);
+  console.log(`${row.sym} SOURCED (${args.source}, ${sourceEvents.length} batch events, chain ${chain}, stage ${row.stage}${args.stage ? ' (explicit)' : ` (pressure rule: ${defaultStage})`}).`);
+  process.exit(0);
+}
+
+// ROUTE 2: provenance=contract-cliff contract=<ref> — the row is built from
+// data/cliff-cluster-report.json (the tool's own verdicts: per-cliff replay, baseline,
+// recipients) so nothing is typed. enforcement:'contract' is EARNED here: it requires
+// the cluster falsifier, >=2 replayed cliffs, and an explicit upgradeable flag.
+if (args.provenance === 'contract-cliff') {
+  if (!args.contract) { console.error('provenance=contract-cliff requires contract=<ref>'); process.exit(1); }
+  const rep = JSON.parse(readFileSync('data/cliff-cluster-report.json', 'utf8'))[sym.toUpperCase()];
+  if (!rep?.results) { console.error(`${sym} has no cliff-cluster report — run detect-cliff-cluster.js first`); process.exit(1); }
+  const contract = resolveWalletRef(args.contract, rep.results.map((r) => r.contract));
+  const res = rep.results.find((r) => r.contract.toLowerCase() === contract.toLowerCase());
+  if (!res || res.verdict !== 'CLUSTERS-REPLAY') { console.error(`${sym} ${contract.slice(0, 10)}: verdict ${res?.verdict ?? 'none'} — only CLUSTERS-REPLAY promotes`); process.exit(1); }
+  const disc = JSON.parse(readFileSync('data/vesting-discovery.json', 'utf8'))[sym.toUpperCase()];
+  const dc = (disc?.contracts || []).find((c) => c.addr.toLowerCase() === contract.toLowerCase());
+  const upgradeable = /proxy|upgradeable|beacon/i.test(dc?.why || dc?.name || '') ? true : (args.upgradeable === 'true');
+  const clusterSpec = { windowDays: res.params.windowDays, minRatio: res.params.minRatio, minRecipients: res.params.minRecipients,
+    baselineDaily: Math.max(res.medianDaily, 1), n: res.n, hits: res.hits,
+    basis: `derived on ${res.n} past cliffs: replays at ${res.hits}/${res.n} under w${res.params.windowDays}/r${res.params.minRatio}; grid ${res.grid.map((g) => 'w' + g.windowDays + 'r' + g.minRatio + ':' + g.hits).join(' ')}; off-index clusters ${res.offIndexClusters.length}` };
+  const cliffDates = res.perCliff.map((c) => ({ date: c.cliff, ratio: c.ratio, recipients: c.recipients, cluster: c.cluster }));
+  const future = (rep.futureCliffs || []).map((d) => ({ date: d, cluster: null }));
+  const { promoteRow: pr } = await import('./src/core/unlock-promote.js');
+  const row = pr(j.tokens[idx] ?? { sym: sym.toUpperCase(), name: args.name ?? sym }, {
+    events: [{ date: new Date().toISOString().slice(0, 10), source: 'contract-cliff', detail: args.detail ?? `Post-cliff claim clusters replay on ${res.hits}/${res.n} index cliff dates from vesting contract ${contract.slice(0, 10)} (${res.distinctRecipients} distinct claimants; ${res.offIndexClusters.length} off-index clusters reported).` }],
+    note: args.note ?? j.tokens[idx]?.note ?? '', enforcement: 'contract', contract, clusterSpec,
+    cliffDates: [...cliffDates, ...future], upgradeable, stage: args.stage ?? 'STANDARD',
+  });
+  if (idx < 0) j.tokens.push(row); else j.tokens[idx] = row;
+  j.lastReviewed = new Date().toISOString().slice(0, 10) + ` (contract-cliff ${row.sym} via promote-unlock.js)`;
+  writeFileSync('unlocks.json.tmp', JSON.stringify(j, null, 1)); renameSync('unlocks.json.tmp', 'unlocks.json');
+  console.log(`${row.sym} promoted CONTRACT-CLIFF (enforcement:contract, ${res.hits}/${res.n} cliffs replay, upgradeable ${upgradeable}, stage ${row.stage}, ${future.length} future cliffs).`);
   process.exit(0);
 }
 

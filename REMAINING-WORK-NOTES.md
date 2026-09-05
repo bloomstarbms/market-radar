@@ -2494,3 +2494,148 @@ Restart at v0.29.0: within the first poll the sourced tier pushed FORT (today), 
    tier's real dependency and it is not yet automated. Flagged as the next blocker.
 
 Labelling quirk, logged: an event ~9h ahead reads "today" (Math.round on days). Fine.
+
+## 2026-09-05 — REFRAME after Tier-1's 0/14: two verification routes, one per mechanism
+
+**Solana/per-chain reader recommendation WITHDRAWN** (reviewer, agreed). It was made
+when the constraint looked like chain reachability. Tier 1 says the constraint is
+DISTRIBUTION MECHANISM: insider vesting on 2024–25 launches is contract-claimable,
+each beneficiary pulls individually, no treasury batch. A per-chain reader looks for
+batch cadence; if batches are rare on EVM they are rare everywhere. The evidence for
+the reader evaporated in the run that was meant to justify it.
+
+**Contract-claimable vesting IS verifiable — by a different method.** REZ, L3, ZETA
+list clean monthly cliffs. If the cliffs are contract-enforced, the CONTRACT is the
+verification source, not custody outflows. So the method now has two routes:
+  CUSTODY-BATCH        → cadence detection on custody wallets (EIGEN, ENA, MOVE)
+  CONTRACT-CLAIMABLE   → cliff-schedule read + claimable-balance backtest
+                         (most 2024–25 launches; the fourteen Tier-1 rows)
+Tier 1's zero is a ROUTING signal, not a ceiling. The sourced tier is the PRIMARY
+instrument while route two is built — not a permanent default; its exit path is
+contract reads, not cadence.
+
+DESIGN NOTE for the contract-cliff reader (next build, one session):
+ - Target the C-bucket proxies discovery already surfaced (L3 0x8E02d37b6C
+   ERC1967Proxy 9.24%; REZ 0x9706128269 TransparentUpgradeableProxy 4.83%), not the
+   SafeProxies — the vesting contract holds the unvested balance.
+ - Custom vesting contracts have no standard selector, so the BACKTEST should not
+   depend on ABI: claims CLUSTER in the days after a cliff. Point detect-cadence at
+   the vesting CONTRACT's outflows with a wider post-cliff window (claims spread over
+   ~3–5 days), and require the cluster to replay on past cliff dates from the index.
+   That reuses the existing detector with a different address and window, and it
+   verifies the SCHEDULE (the cliff date) even though no single batch exists.
+ - Where an ABI is readable (OZ-style getters, or a verified custom contract), read
+   the schedule directly and treat the claims cluster as the backtest.
+ - Promotion provenance: 'contract-cliff' — the first rows that could honestly carry
+   enforcement:'contract'. Forward falsifier: the next cliff's claims cluster (same
+   windowObserved discipline), plus the source recheck as a second leg.
+
+PRESSURE FLOOR — now concrete, to encode: a sourced event goes LOGGED by default when
+tranche ÷ maxSupply is below a floor DERIVED from the index's own distribution (not
+a guessed constant — same rule as tolerance bands), or when its category is
+farming-only. FORT (0.005%/week, farming) is the type specimen. Encode in a
+non-coverage session with the derivation recorded per row.
+
+THE 403 IS IP-CLASS: realistic browser headers do not pass (sandbox now times out
+entirely; desktop gets a clean Cloudflare 403). Bridge until fixed: browser-pane
+__NEXT_DATA__ capture → data/unlock-index.json, before 2026-09-26 or the sourced
+tier goes stale and silent (visibly). Reviewer has offered the first refresh.
+Sustainable fix candidates: a residential-IP fetch from the operator's browser
+profile, or a scheduled browser-pane refresh; the heartbeat's stale count is the
+alarm either way.
+
+## 2026-09-05 — ROUTE 2 PRE-REGISTRATION (contract-cliff via post-cliff claim clustering)
+
+Population: the 14 Tier-1 tokens with no custody cadence. From the discovery report,
+BEFORE any network call: contracts in bucket C holding >=2% and NOT bridge/shared:
+  ORDER  ERC1967Proxy 13.9% + LockedTokenVault 13.2%   past cliffs 8
+  L3     ERC1967Proxy 9.2%                             past cliffs 4
+  REZ    TransparentUpgradeableProxy 4.8%              past cliffs 4
+  ACX    unverified 7.9%                                past cliffs 4
+  RE     TokenLockupPlans_Bound (Hedgey) 34.0%          past cliffs 3
+  YB / FXN have real VestingEscrow contracts but ZERO past cliffs in the index —
+  untestable by backtest this session. HFT's only C is 0xA9D1e08C, a contract shared
+  with L3 and CHZ — suspected exchange custody, excluded. CARV, H, MAV: no C >=2%.
+  ZETA, STO: bridges. CFG: 0 past cliffs.
+
+BINDING (reviewer's priors in brackets, mine from the report):
+ - contract identified with >=2% AND >=3 past cliffs: 5–6 of 14  [8–11]
+ - clustering on >=2/3 of past cliffs among identified: >=50%     [>=50%]
+   under 25% ⇒ window or baseline is wrong, not the hypothesis
+ - promotions with enforcement:'contract': 2–4                    [4–7]
+ - EIGEN degenerate check: the tool with a 1-day window on EIGEN's custody wallet
+   must reproduce the cadence result (cluster on every month-end).
+PARAMETERS ARE DERIVED, NOT ASSERTED: window ∈ {3,5,7}d, ratio ∈ {2,3,5}, chosen by
+what separates cliff dates from non-cliff dates across the identified contracts;
+basis recorded on the spec and pinned by fixture.
+
+## 2026-09-05 — ROUTE 2 RESULT vs PRE-REGISTRATION (v0.30.0)
+
+MEASURED (binding lines in brackets):
+ - identified (>=2%, >=3 past cliffs, not bridge/shared): 5 of 14  [mine 5–6; reviewer 8–11]
+   ORDER (2 contracts), L3, REZ, ACX, RE.
+ - clustering on >=2/3 of past cliffs among identified: 1/5 = 20%  [>=50%; <25% ⇒ window/baseline wrong]
+   ORDER LockedTokenVault 6/8 at w5/r3; grid 7/8 6/8 5/8 7/8 6/8 5/8 6/8 5/8 4/8
+   (never below half, >=2/3 at 5 of 9 parameterisations). ORDER ERC1967Proxy 1/8.
+   L3 1/4 (max 2/4 anywhere in the grid; 2,367 recipients claim DAILY — no cliff
+   signal exists to find). REZ 0/4 at every setting, but off-index clusters Apr 30
+   (14x, 23 recipients), May 5/10/25 — the CONTRACT clusters, the INDEX dates are
+   wrong. RE 0/3: the Hedgey vault holds 340.4M RE and has never emitted RE (shared
+   vault, token-filtered). ACX: the contract never emits.
+ - promotions enforcement:'contract': 1 (ORDER)                     [2–4; 4–7]
+ - EIGEN degenerate check: 1-day window, 10/10 month-ends at 24–29x, 3 off-index
+   clusters = the known ad-hoc moves. PASSED.
+
+THE <25% LINE FIRED. Pre-registered reading: "window or baseline is wrong". The
+parameter sweep was run to honour that reading and REFUTES it: no setting in
+w{3,5,7} x r{2,3,5} rescues L3 or REZ, and ORDER passes under most. So the refined
+hypothesis, stated AFTER the data and marked as such: post-cliff clustering replays
+only where claims are CLIFF-GATED (a beneficiary can claim nothing until the date).
+Continuous-vesting contracts with a claim() that is always callable (L3) produce a
+daily smear with no cliff signal — they are verifiable by ABI read or not at all.
+The detector's second output is real: it AUDITS the index (REZ's listed dates do not
+match where the claims are). Neither of these was predicted; both are logged as
+findings, not results.
+
+ENFORCEMENT:'contract' IS NOW EARNED, NOT DECLARED: forwardFalsifierProblems refuses
+the bare label (fixture 46 flips the v0.28 fixture that accepted it). ORDER carries
+contract, clusterSpec {w5 r3 recips5 baseline 19,488/day, n8 hits6, basis}, 8 past
+cliffDates with verdicts, 3 future with cluster:null, upgradeable:false. Stage
+LOGGED by pressure (0.05%/tranche, farming) — verified, tracked, silent; the row
+exists to prove the tier, not to alert.
+
+FORWARD FALSIFIER: pollCliffWatch — after each future cliff + windowDays, token-
+filtered contract outflows with recipients (resumable cache); CONFIRM/DEMOTE on
+PRESENCE (ratio >= minRatio AND recipients >= minRecipients), never on amount-in-band;
+uncovered fetch -> no verdict, retried; DEMOTE is an overlay + operator DM. Heartbeat:
+"ORDER cliff 0/0 confirmed · next 2026-09-19". Index says 2026-09-19 is the next
+cliff; the vault emits weekly, so the 20th–24th window will show a cluster whether
+or not the index date is exact — a CONFIRM there is weaker evidence than it looks,
+and the off-index count is the honest companion figure. Logged, not fixed.
+
+PRESSURE FLOOR (Part 6) ENCODED: SOURCED_PRESSURE_FLOOR = 0.061% of maxSupply per
+tranche, the 25th percentile of 180 sourced events across 30 rows (p10 0.005 · p50
+0.539 · p75 1.511), recorded static with basis; fixture re-derives from the live
+file and fails if the index is refreshed without re-recording. Rule: row median
+below floor OR every tranche farming/staking-only -> LOGGED. Applied at ingest
+(default stage) and at runtime (overlay — the file keeps one writer). Silenced now:
+FORT (by hand already), TIA (staking-only), FXN (farming-only), ASTER 0.028%, CFG
+0.059% (borderline by 0.002 — the rule is the rule; recorded). EIGEN/ENA/MOVE-scale
+tranches sit 10–40x above the floor.
+
+SOLANA READER WITHDRAWN (reviewer, 2026-09-05): mid-schedule non-EVM tokens are not
+reachable at $0 without a per-chain reader, and per-chain readers are out of scope.
+TWO ROUTES stand: custody-batch -> cadence (EIGEN, ENA, MOVE and the four before);
+contract-claimable -> cliff-cluster (ORDER; next candidates need >=3 past cliffs and
+cliff-gated claims). SOURCED IS PRIMARY until route 2 covers more than one row.
+
+INDEX REFRESH DEPENDENCY (Part 7): data/unlock-index.json fetched 2026-09-05T08:27;
+every sourced row goes STALE and silent on 2026-09-26 without a browser-pane
+recapture (403 is IP-class). Refresh procedure: capture __NEXT_DATA__ -> run
+fetch-unlock-index.js trim -> re-run derivePressureFloor and re-record the static
+if it moved -> re-ingest changed rows via promote-unlock.js. REZ's dates should be
+re-checked against the off-index clusters at that refresh.
+
+RESULTS AGAINST PRIORS, PLAINLY: identified matched my range, not the reviewer's;
+clustering failed the shared line; promotions below both ranges. The method works
+on one contract class and fails on another — a smaller claim than the brief made.

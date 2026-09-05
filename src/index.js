@@ -20,7 +20,7 @@ import { checkConfluence } from './core/confluence.js';
 import { pollMacro, verifyCalendar } from './sources/calendar/macro.js';
 import { pollEvents } from './sources/calendar/events.js';
 import { pollUnlocks } from './sources/calendar/unlocks.js';
-import { pollCadence, pollSourceRecheck } from './sources/calendar/cadence-watch.js';
+import { pollCadence, pollSourceRecheck, pollCliffWatch } from './sources/calendar/cadence-watch.js';
 import { startUniverseSweep } from './core/universe.js';
 import { classifySymbol } from './core/taxonomy.js';
 
@@ -86,7 +86,7 @@ async function pollDex() {
 // messages (content vs telemetry), both idempotent-across-restart via persisted,
 // delivery-gated markers. Do not reintroduce in-memory sent-flags here.
 async function pollAll() {
-  const settled = await Promise.allSettled([pollDex(), pollCex(), pollFunding(), pollCascade(), pollAnnouncements(), pollMacro(), pollEvents(), pollUnlocks(), pollUpbit(), pollCadence(), pollSourceRecheck()]);
+  const settled = await Promise.allSettled([pollDex(), pollCex(), pollFunding(), pollCascade(), pollAnnouncements(), pollMacro(), pollEvents(), pollUnlocks(), pollUpbit(), pollCadence(), pollSourceRecheck(), pollCliffWatch()]);
   settled.forEach((r, i) => { if (r.status === 'rejected') console.error('[OPERATOR] poller #' + i + ' rejected:', r.reason?.stack || r.reason); });
   await checkPendingListings().catch((e) => console.error('[listing] pending re-check failed:', e.message));
   await checkOutcomes().catch(() => {});

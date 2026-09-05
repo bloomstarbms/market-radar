@@ -439,17 +439,82 @@ export async function pollSourceRecheck(loadTokens) {
   console.log('[unlocks] source recheck:', JSON.stringify(counts));
 }
 
+// ROUTE 2 FORWARD FALSIFIER — the next cliff's post-cliff claim cluster. PURE decision:
+// PENDING until [cliff, cliff+window] has closed; then CONFIRM if the window's claims
+// exceed minRatio x baseline with >= minRecipients distinct claimants, else DEMOTE.
+// PRESENCE of a cluster, not amount-in-band: claim amounts depend on beneficiary
+// behaviour and legitimately vary. Uncovered fetch -> the caller never calls this.
+export function cliffClusterDecision(spec, cliffDate, now, byDay) {
+  const start = new Date(cliffDate + 'T00:00:00Z').getTime();
+  const end = start + spec.windowDays * 86400e3;
+  if (now.getTime() <= end) return { action: 'PENDING', windowEnd: new Date(end).toISOString().slice(0, 10) };
+  let amt = 0; const to = new Set();
+  for (const [d, r] of Object.entries(byDay || {})) {
+    const t = new Date(d + 'T00:00:00Z').getTime();
+    if (t >= start && t < end) { amt += r.amt; (r.to || []).forEach((a) => to.add(a)); }
+  }
+  const ratio = amt / Math.max(spec.baselineDaily * spec.windowDays, 1e-9);
+  const ok = ratio >= spec.minRatio && to.size >= spec.minRecipients;
+  return { action: ok ? 'CONFIRM' : 'DEMOTE', cliff: cliffDate, ratio: +ratio.toFixed(2), recipients: to.size, inWindow: Math.round(amt) };
+}
+
+// Impure: for each contract-cliff row, evaluate any cliff whose window has closed and
+// is not yet stamped. Uses detect-cliff-cluster's fetch (resumable cache) so a busy
+// vesting proxy does not livelock a slice. Demotion is the overlay, as for cadence.
+export async function pollCliffWatch(loadTokens) {
+  let tokens = null;
+  try { tokens = loadTokens ? loadTokens() : JSON.parse(readFileSync(join(ROOT, 'unlocks.json'), 'utf8')).tokens; } catch { return; }
+  const rows = (tokens || []).filter((t) => t?.enforcement === 'contract' && t.clusterSpec && Array.isArray(t.cliffDates) && !t.retired);
+  if (!rows.length) return;
+  const st = loadWatchState();
+  st.cliffs = st.cliffs || {};
+  const now = new Date();
+  let dirty = false;
+  let fetcher = null;
+  for (const t of rows) {
+    const due = t.cliffDates.filter((c) => c.cluster === null && !st.cliffs[`${t.sym}:${c.date}`]
+      && now.getTime() > new Date(c.date + 'T00:00:00Z').getTime() + t.clusterSpec.windowDays * 86400e3);
+    if (!due.length) continue;
+    try { fetcher = fetcher || (await import('../../../detect-cliff-cluster.js')).outflowsWithRecipients; } catch (e) { console.error('[cliff-watch] tool import failed:', e.message); return; }
+    const tokenAddr = t.token?.startsWith('ethereum:') ? t.token.slice(9) : null;
+    const earliest = due.map((c) => c.date).sort()[0];
+    const f = await fetcher(t.contract, t.sym, new Date(new Date(earliest + 'T00:00:00Z').getTime() - 2 * 86400e3).toISOString().slice(0, 10), { deadlineTs: Date.now() + 60_000, tokenAddr, maxPages: 400 });
+    if (!f.covered) continue; // "we did not look" — retry next poll
+    const byDay = Object.fromEntries(Object.entries(f.byDay).map(([d, r]) => [d, { amt: r.amt, to: [...r.to] }]));
+    for (const c of due) {
+      const dec = cliffClusterDecision(t.clusterSpec, c.date, now, byDay);
+      if (dec.action === 'PENDING') continue;
+      st.cliffs[`${t.sym}:${c.date}`] = { ...dec, at: now.toISOString().slice(0, 16) };
+      dirty = true;
+      if (dec.action === 'DEMOTE') {
+        st.demotions[t.sym] = { at: now.toISOString().slice(0, 16), type: 'cliff-cluster-absent', cliff: c.date, ratio: dec.ratio, recipients: dec.recipients };
+        await broadcast(formatAlert({ source: 'SYS', type: 'CADENCE', severity: 'MEDIUM',
+          title: `${t.sym} contract-cliff row demoted — no claim cluster after ${c.date}`,
+          lines: [`Coverage change, not a market event: the vesting contract showed ${dec.recipients} claimants and ${dec.ratio}x baseline in the ${t.clusterSpec.windowDays}-day window after the scheduled cliff (needs >=${t.clusterSpec.minRatio}x and >=${t.clusterSpec.minRecipients}).`,
+            'Possible causes, all worth knowing: the contract was upgraded, the index date is wrong, or beneficiaries stopped claiming. Re-run detect-cliff-cluster.js before re-promoting.'] }), { toChannel: false }).catch(() => []);
+      }
+    }
+  }
+  if (dirty) saveWatchState(st);
+}
+
 // Heartbeat line. A watch that silently stops watching is the failure mode this module
 // exists to prevent — so its own liveness is on the operator channel.
 export function cadenceStatus(tokens = null, state = loadWatchState(), now = new Date()) {
   if (tokens === null) {
     try { tokens = JSON.parse(readFileSync(join(ROOT, 'unlocks.json'), 'utf8')).tokens; } catch { tokens = []; }
   }
-  const watched = (tokens || []).filter((t) => (t?.cadence || t?.reviewBy) && !t.retired);
+  const watched = (tokens || []).filter((t) => (t?.cadence || t?.reviewBy || t?.clusterSpec) && !t.retired);
   if (!watched.length) return { line: 'Cadence watch: no behavioural rows', demoted: [] };
   const demoted = Object.keys(activeDemotions(tokens, state));
   const parts = watched.map((t) => {
     if (demoted.includes(t.sym)) return `${t.sym} 🚨 demoted`;
+    if (t.clusterSpec) {
+      const stamps = Object.entries(state.cliffs || {}).filter(([k]) => k.startsWith(t.sym + ':')).map(([, v]) => v);
+      const ok = stamps.filter((v) => v.action === 'CONFIRM').length;
+      const nextCliff = (t.cliffDates || []).filter((c) => c.cluster === null).map((c) => c.date).sort()[0];
+      return `${t.sym} cliff ${ok}/${stamps.length} confirmed${nextCliff ? ` · next ${nextCliff}` : ''}`;
+    }
     if (!t.cadence) {
       // A switch that fires without warning turns demotion into a discovery instead
       // of a decision (restore-drill lesson): escalate T-14 ⚠️, T-3 🚨.

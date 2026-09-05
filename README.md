@@ -1,10 +1,11 @@
 <!-- PREMISE
-Written against: v0.29.0
+Written against: v0.30.0
 Reviewed: 2026-08-29
 Assumes:
 - Describes SHIPPED behaviour only; anything aspirational belongs in REMAINING-WORK.md.
 - FACTS push immediately (no score/budget/direction); CALLS carry the full apparatus.
 - Verified unlock reads are Ethereum/EVM only; SOURCED rows (v0.29.0) cite a named calendar and push labelled as not independently verified. Absence of a row is not "no unlocks".
+- CONTRACT-CLIFF rows (v0.30.0) carry enforcement:'contract' only when post-cliff claim clusters replayed on >=2/3 of past index cliffs (n>=3); one such row exists (ORDER). Sourced rows below the derived pressure floor (0.061% of supply per tranche) or farming/staking-only are tracked silently.
 -->
 
 # Market Radar

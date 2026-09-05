@@ -776,7 +776,10 @@ console.log('34. enforcement, not provenance label, decides the falsifier (the E
   const { activeDemotions: aD, cadenceStatus: cS } = await import('./src/sources/calendar/cadence-watch.js');
   const spec = { wallet: '0x34BcF805A503D5151c05CD349699a8aD1767a026', monthEnd: true, expectDay: 30, meanAmount: 7.8e6, monthsObserved: 11 };
   const ann = [{ date: '2026-09-16', source: 'announcement' }];
-  check('declared contract enforcement needs nothing further', forwardFalsifierProblems({ enforcement: 'contract', events: ann }).length === 0);
+  // v0.30.0: enforcement:'contract' is EARNED, not declared. A bare label used to pass;
+  // now the same row is refused until it carries the contract, a clusterSpec, replayed
+  // cliffDates and an upgradeable flag (Route 2).
+  check('DECLARED contract enforcement (bare label) is refused', forwardFalsifierProblems({ enforcement: 'contract', events: ann }).length > 0);
   check('behavioural row with NEITHER falsifier fails (however strong the label)', forwardFalsifierProblems({ events: [{ date: '2026-08-30', source: 'announcement+onchain-backtest' }] }).length > 0);
   check('cadence spec satisfies it', forwardFalsifierProblems({ events: ann, cadence: spec }).length === 0);
   check('reviewBy dead-man-switch satisfies it', forwardFalsifierProblems({ events: ann, reviewBy: '2026-11-30' }).length === 0);
@@ -883,6 +886,124 @@ console.log('36. every prompt document declares its premises (documents get obey
   check('empty-assumptions check can fail', !/Assumes:\s*\n\s*-\s*\S/.test('Written against: v1.0.0\nAssumes:\n'));
 }
 
+console.log('47. sourced PRESSURE FLOOR is derived from the index distribution, recorded, static');
+{
+  const { SOURCED_PRESSURE_FLOOR: F, derivePressureFloor, pressureStage, NON_PRESSURE_CATS } = await import('./src/core/unlock-promote.js');
+  const { unlockCoverage, leadsFor } = await import('./src/sources/calendar/unlocks.js');
+  check('floor is recorded with percentile, n and a basis sentence', F.pctOfMaxSupply > 0 && F.percentile === 25 && F.n >= 100 && /percentile/.test(F.basis) && /2026-09-05/.test(F.basis));
+  // The recorded static must be what the live index derives (re-derive on refresh, record again).
+  const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
+  const d = derivePressureFloor(live);
+  check('recorded floor equals the value the live rows derive (drift here = index refreshed, floor not re-recorded)', !!d && d.n === F.n && Math.abs(d.pctOfMaxSupply - F.pctOfMaxSupply) < 0.0005);
+  // FORT below (weekly 0.005% farming drip); EIGEN/ENA/MOVE-scale tranches well above.
+  const mk = (n, maxSupply, cats) => ({ stage: 'STANDARD', maxSupply, sourceEvents: [{ t: 1, n, cats }, { t: 2, n, cats }, { t: 3, n, cats }] });
+  check('FORT-scale tranche (0.005% farming) -> LOGGED', pressureStage(mk(50000, 1e9, 'farming')) === 'LOGGED');
+  check('FORT-scale tranche is LOGGED by SIZE alone, category aside', pressureStage(mk(50000, 1e9, 'insiders')) === 'LOGGED');
+  check('EIGEN-scale (9.6M of 1.67B = 0.57%) -> stays STANDARD', pressureStage(mk(9.6e6, 1.67e9, 'insiders')) === 'STANDARD');
+  check('ENA-scale (~2.3% of supply) -> stays STANDARD', pressureStage(mk(3.4e8, 1.5e10, 'insiders')) === 'STANDARD');
+  check('MOVE-scale (~1.9% of supply) -> stays STANDARD', pressureStage(mk(1.9e8, 1e10, 'insiders+privateSale')) === 'STANDARD');
+  check('farming/staking-ONLY row -> LOGGED whatever the size', pressureStage(mk(5e7, 1e9, 'staking')) === 'LOGGED' && pressureStage(mk(5e7, 1e9, 'farming+staking')) === 'LOGGED');
+  check('mixed categories (staking+insiders) are pressure', pressureStage(mk(5e7, 1e9, 'staking+insiders')) === 'STANDARD');
+  check('no maxSupply -> cannot be sized -> own stage (unknown is not small)', pressureStage({ stage: 'STANDARD', sourceEvents: [{ t: 1, n: 10, cats: 'insiders' }] }) === 'STANDARD');
+  check('LOGGED means no leads at runtime', leadsFor({ stage: pressureStage(mk(50000, 1e9, 'farming')) }).length === 0);
+  check('non-pressure categories are exactly farming and staking (a third would be a new decision)', NON_PRESSURE_CATS.length === 2);
+  check('LIVE: FORT is below the floor', pressureStage(live.find((t) => t.sym === 'FORT')) === 'LOGGED');
+  const below = live.filter((t) => t.provenance === 'sourced' && t.stage !== 'LOGGED' && pressureStage(t) === 'LOGGED').map((t) => t.sym);
+  const cov = unlockCoverage();
+  check('coverage line reports rows the floor silences (count matches)', (cov.belowFloor === below.length) && (below.length === 0 || new RegExp(`${below.length} below pressure floor`).test(cov.line)));
+  console.log(`      floor ${F.pctOfMaxSupply}% · silenced at runtime: ${below.join(', ') || 'none'}`);
+}
+
+console.log('46. CONTRACT-CLIFF tier (Route 2) — enforcement:contract is EARNED by replayed claim clusters');
+{
+  const { clusterVerdicts, reportContracts, NOT_VESTING_RX } = await import('./detect-cliff-cluster.js');
+  const { clusterSpecProblems, forwardFalsifierProblems, verifiedRowProblems } = await import('./src/core/unlock-promote.js');
+  const { cliffClusterDecision, cadenceStatus } = await import('./src/sources/calendar/cadence-watch.js');
+  const { claimCoverage, unlockCoverage } = await import('./src/sources/calendar/unlocks.js');
+  // Synthetic series: 60 days of 1k/day drip to 2 recipients; cliffs on days 10/30/50
+  // with 20 claimants taking 30k over the 5-day window. One off-index cluster on day 42.
+  const day = (i) => new Date(Date.UTC(2026, 0, 1) + i * 86400e3).toISOString().slice(0, 10);
+  const mk = (clusterDays, { recips = 20, offIndex = true } = {}) => {
+    const byDay = {};
+    for (let i = 0; i < 60; i++) byDay[day(i)] = { amt: 1000, to: new Set(['0xdrip1', '0xdrip2']) };
+    for (const c of clusterDays) for (let k = 0; k < 5; k++) { const r = byDay[day(c + k)]; r.amt += 6000; for (let j = 0; j < recips; j++) r.to.add('0xclaim' + j); }
+    if (offIndex) { const r = byDay[day(42)]; r.amt += 40000; for (let j = 0; j < 12; j++) r.to.add('0xoff' + j); }
+    return byDay;
+  };
+  const cliffs = [day(10), day(30), day(50)];
+  const v = clusterVerdicts(mk([10, 30, 50]), cliffs);
+  check('synthetic clusters on every cliff -> verified 3/3', v.verified && v.hits === 3 && v.n === 3);
+  check('baseline is the NON-window median x window (drip days only)', v.medianDaily === 1000 && v.baseline === 5000);
+  // Rolling windows: the reported window CONTAINS day 42 (its start may precede it).
+  const off = v.offIndexClusters;
+  check('off-index cluster is REPORTED, not hidden (index auditing is the second use)', off.length === 1 && off[0].from <= day(42) && off[0].from > day(37) && off[0].recipients === 14);
+  const nv = clusterVerdicts(mk([]), cliffs);
+  check('no clusters -> 0/3, not verified', !nv.verified && nv.hits === 0);
+  const few = clusterVerdicts(mk([10, 30, 50], { recips: 2 }), cliffs);
+  check('amount alone is NOT a cluster: 2 recipients fails the minRecipients gate', !few.verified && few.hits === 0);
+  check('2/3 replays is the floor (n=3): one miss still verifies, two do not',
+    clusterVerdicts(mk([10, 30]), cliffs).verified && !clusterVerdicts(mk([10]), cliffs).verified);
+  check('n<3 never verifies however clean', !clusterVerdicts(mk([10, 30]), [day(10), day(30)]).verified);
+
+  // FROZEN: the live report's parameter grid. ORDER's vault replays >=2/3 under all 9
+  // parameterisations; L3 (continuous claims, 2,367 recipients) never does. The sweep
+  // showed the 20% clustering rate is NOT a parameter artefact — that is the finding
+  // the next brief builds on, so it is pinned here.
+  const rep = JSON.parse(readFileSync('data/cliff-cluster-report.json', 'utf8'));
+  const vault = rep.ORDER?.results?.find((r) => /^0x6d00268a/i.test(r.contract));
+  // Observed grid: 7/8 6/8 5/8 7/8 6/8 5/8 6/8 5/8 4/8 — never below half, >=2/3 at 5 of 9
+  // (including the declared w5/r3). The verdict is robust to the window, sensitive to
+  // the ratio bar: that is what "not a parameter artefact" means here, no more.
+  check('FROZEN: ORDER vault verdict CLUSTERS-REPLAY at the declared parameters (6/8 @ w5/r3)', vault?.verdict === 'CLUSTERS-REPLAY' && vault.hits === 6 && vault.n === 8);
+  check('FROZEN: ORDER vault never falls below 1/2 at any of 9 parameterisations, >=2/3 at 5+', !!vault && vault.grid.length === 9 && vault.grid.every((g) => g.hits / g.n >= 0.5) && vault.grid.filter((g) => g.hits / g.n >= 2 / 3).length >= 5);
+  const l3 = rep.L3?.results?.find((r) => /^0x8E02d37b/i.test(r.contract));
+  check('FROZEN: L3 (continuous claims) never reaches 2/3 at any parameterisation', !!l3 && l3.grid.length === 9 && l3.grid.every((g) => g.hits / g.n < 2 / 3));
+  check('FROZEN: REZ shows off-index clusters and no on-index ones (index dates wrong, not the method)',
+    rep.REZ?.results?.[0]?.grid?.every((g) => g.hits === 0 && g.off > 0) === true);
+
+  // Bridge exclusion: the v0.29.0 STO false hit was a LayerZero adapter.
+  const disc = { STO: { contracts: [{ addr: '0x' + '1'.repeat(40), bucket: 'C', pctSupply: 9, name: 'StakeStoneLayerZeroAdapter' }, { addr: '0x' + '2'.repeat(40), bucket: 'C', pctSupply: 5, name: 'TokenVesting' }] } };
+  const cands = reportContracts('STO', disc);
+  check('STO LayerZero adapter classifies NOT-VESTING (excluded from cluster candidates)', cands.length === 1 && cands[0].name === 'TokenVesting');
+  check('exclusion regex covers adapter/bridge/connector', ['XBridge', 'OFTAdapter', 'L2Connector'].every((n) => NOT_VESTING_RX.test(n)) && !NOT_VESTING_RX.test('LockedTokenVault'));
+
+  // Promotion gate: enforcement:'contract' must carry its evidence.
+  const spec = { windowDays: 5, minRatio: 3, minRecipients: 5, baselineDaily: 19488, n: 8, hits: 6, basis: 'derived on 8 past cliffs' };
+  check('clusterSpec: complete spec passes', clusterSpecProblems(spec).length === 0);
+  check('clusterSpec: n<3 or missing basis refused', clusterSpecProblems({ ...spec, n: 2 }).length > 0 && clusterSpecProblems({ ...spec, basis: undefined }).length > 0);
+  const ev = [{ date: '2026-09-19', source: 'contract-cliff' }];
+  const good = { events: ev, enforcement: 'contract', contract: '0x6d00268a47D48474f999c18210c6877491AE6FB3', clusterSpec: spec, upgradeable: false,
+    cliffDates: [{ date: '2026-08-08', cluster: true }, { date: '2026-08-22', cluster: true }, { date: '2026-09-19', cluster: null }] };
+  check('earned contract row passes the forward-falsifier gate', forwardFalsifierProblems(good).length === 0);
+  check('refused without contract address', forwardFalsifierProblems({ ...good, contract: undefined }).length > 0);
+  check('refused without clusterSpec', forwardFalsifierProblems({ ...good, clusterSpec: undefined }).length > 0);
+  check('refused with <2 replayed cliffs', forwardFalsifierProblems({ ...good, cliffDates: [good.cliffDates[0], good.cliffDates[2]] }).length > 0);
+  check('refused without a boolean upgradeable flag', forwardFalsifierProblems({ ...good, upgradeable: 'no' }).length > 0);
+
+  // Forward falsifier: presence of the next cluster, not amount-in-band.
+  const stamp = (d) => new Date(d + 'T00:00:00Z');
+  const fut = {}; for (let i = 0; i < 12; i++) fut[day(200 + i)] = { amt: 19000, to: ['0xa', '0xb'] };
+  check('PENDING until cliff+window closes', cliffClusterDecision(spec, day(203), stamp(day(206)), fut).action === 'PENDING');
+  check('window closed, no cluster -> DEMOTE with ratio and recipients', (() => { const d = cliffClusterDecision(spec, day(203), stamp(day(210)), fut); return d.action === 'DEMOTE' && d.ratio < 3 && d.recipients === 2; })());
+  for (let k = 0; k < 5; k++) fut[day(203 + k)] = { amt: 80000, to: Array.from({ length: 9 }, (_, j) => '0xc' + j) };
+  const c = cliffClusterDecision(spec, day(203), stamp(day(210)), fut);
+  check('window closed, cluster present -> CONFIRM (ratio recorded)', c.action === 'CONFIRM' && c.ratio >= 3 && c.recipients === 9);
+  const bigButFew = {}; for (let k = 0; k < 5; k++) bigButFew[day(203 + k)] = { amt: 500000, to: ['0xwhale'] };
+  check('one whale claiming a lot is NOT a cluster (recipients gate holds forward too)', cliffClusterDecision(spec, day(203), stamp(day(210)), bigButFew).action === 'DEMOTE');
+
+  // Message + coverage.
+  const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
+  const order = live.find((t) => t.sym === 'ORDER');
+  check('LIVE: ORDER is the first contract-cliff row and passes the boot gate', order?.enforcement === 'contract' && verifiedRowProblems([order]).length === 0);
+  check('LIVE: ORDER carries 3 unobserved future cliffs for the watch', order?.cliffDates.filter((x) => x.cluster === null).length === 3);
+  const cov = claimCoverage(order, 0);
+  check('claimCoverage names the contract enforcement and the replay count', cov.scope === 'contract' && /contract-enforced/.test(cov.line) && /6\/8/.test(cov.line));
+  check('claimCoverage states the upgradeable answer explicitly', /upgradeable proxy (yes|no)/i.test(cov.line));
+  check('coverage line carries the contract-cliff count', /1 contract-cliff/.test(unlockCoverage().line));
+  const st = cadenceStatus();
+  check('heartbeat lists ORDER with its next cliff', /ORDER cliff 0\/0 confirmed · next 2026-/.test(st.line));
+}
+
 console.log('45. SOURCED tier — a named source pushes, labelled; its falsifier is the source');
 {
   const { sourceRow, sourcedRowProblems, sourceIsStale, promoteRow, SOURCE_STALE_DAYS } = await import('./src/core/unlock-promote.js');
@@ -939,7 +1060,10 @@ console.log('45. SOURCED tier — a named source pushes, labelled; its falsifier
   // Live file: all 30 pass the gate.
   const { verifiedRowProblems } = await import('./src/core/unlock-promote.js');
   const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
-  check('LIVE: 30 sourced rows present', live.filter((t) => t.provenance === 'sourced').length === 30);
+  // 30 ingested; ORDER superseded to contract-cliff in v0.30.0 (sourceHistory kept), so
+  // sourced + supersessions-from-sourced must still account for all 30.
+  const supersededFromSourced = live.filter((t) => t.provenance !== 'sourced' && !!t.sourceHistory?.source && !!t.sourceHistory?.supersededAt).length;
+  check('LIVE: the 30 sourced ingests are all accounted for (sourced + superseded)', live.filter((t) => t.provenance === 'sourced').length + supersededFromSourced === 30);
   check('LIVE: every sourced row passes the boot gate', verifiedRowProblems(live).length === 0);
   check('LIVE: the six formerly-unconfirmed chains are resolved and recorded', ['ASTER', 'FF', 'LISTA', 'STO', 'SOLV', 'RE'].every((s) => live.find((t) => t.sym === s)?.chain !== 'unconfirmed'));
 }

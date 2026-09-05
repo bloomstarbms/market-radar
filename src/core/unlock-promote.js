@@ -9,7 +9,7 @@
 // "Verify the fields, not just the date" — enforced by shape, not vigilance.
 
 // Fields a VERIFIED row may carry. Everything else from the estimated era is dropped.
-export const VERIFIED_ROW_FIELDS = ['sym', 'name', 'monthlyDay', 'date', 'verified', 'note', 'events', 'retired', 'retiredAt', 'cadence', 'enforcement', 'reviewBy', 'stage', 'alsoObserve', 'sourceHistory', 'chain', 'token'];
+export const VERIFIED_ROW_FIELDS = ['sym', 'name', 'monthlyDay', 'date', 'verified', 'note', 'events', 'retired', 'retiredAt', 'cadence', 'enforcement', 'reviewBy', 'stage', 'alsoObserve', 'sourceHistory', 'chain', 'token', 'contract', 'clusterSpec', 'cliffDates', 'upgradeable'];
 // Estimated-era fields that must NEVER appear on a verified row (boot-asserted).
 export const ESTIMATED_ONLY_FIELDS = ['pctOfMcap'];
 
@@ -33,6 +33,48 @@ export function sourcedRowProblems(t) {
   if (t.stage === 'FULL') p.push('sourced rows cannot be FULL: T-14 and T+3 assume observation a sourced row cannot make');
   return p;
 }
+// SOURCED PRESSURE FLOOR (Route 2, Part 6). FORT went LOGGED by hand in v0.29.0 —
+// weekly 0.005%-of-supply farming drips are not pressure — and a hand rule is a
+// second undischarged constant. The floor is DERIVED from the index distribution and
+// recorded here as a static, with its basis, exactly like a cadence tolerance: the
+// 25th percentile of tranche / maxSupply over every sourced event ingested.
+// Re-derive with derivePressureFloor() when the index is refreshed; record the new
+// value, do not let the floor move under the rows at runtime.
+export const SOURCED_PRESSURE_FLOOR = {
+  pctOfMaxSupply: 0.061,
+  percentile: 25,
+  n: 180,
+  basis: '25th percentile of tranche/maxSupply across 180 sourced batch events in 30 DefiLlama rows, index 2026-09-05T08:27; p10 0.005 p50 0.539 p75 1.511',
+};
+export const NON_PRESSURE_CATS = ['farming', 'staking'];
+export function derivePressureFloor(tokens, percentile = 25) {
+  const pcts = [];
+  for (const t of tokens || []) {
+    const evs = t.sourceEvents || t.sourceHistory?.sourceEvents || [];
+    if (!t.maxSupply) continue;
+    for (const e of evs) if (e.n > 0) pcts.push(100 * e.n / t.maxSupply);
+  }
+  pcts.sort((a, b) => a - b);
+  if (!pcts.length) return null;
+  return { pctOfMaxSupply: +pcts[Math.floor(pcts.length * percentile / 100)].toFixed(3), percentile, n: pcts.length };
+}
+// Pure: the stage the pressure rule assigns to a sourced row. LOGGED when the row's
+// median tranche is below the floor, or when every tranche is farming/staking-only
+// (emissions to stakers are not sell-side supply arriving at once). Otherwise the
+// row's own stage. A row with no maxSupply cannot be sized -> its own stage (we did
+// not look is not "small").
+export function pressureStage(t, floor = SOURCED_PRESSURE_FLOOR) {
+  const evs = t?.sourceEvents || [];
+  if (!evs.length) return t?.stage ?? 'STANDARD';
+  const catsOf = (e) => String(e.cats || '').split('+').filter(Boolean);
+  const nonPressure = evs.every((e) => { const c = catsOf(e); return c.length && c.every((x) => NON_PRESSURE_CATS.includes(x)); });
+  if (nonPressure) return 'LOGGED';
+  if (!t.maxSupply) return t.stage ?? 'STANDARD';
+  const pcts = evs.map((e) => 100 * e.n / t.maxSupply).sort((a, b) => a - b);
+  const median = pcts[Math.floor(pcts.length / 2)];
+  return median < floor.pctOfMaxSupply ? 'LOGGED' : (t.stage ?? 'STANDARD');
+}
+
 export function sourceIsStale(t, now = Date.now()) {
   const at = Date.parse(t.sourceFetchedAt);
   return !Number.isFinite(at) || (now - at) > SOURCE_STALE_DAYS * 86400e3;
@@ -114,8 +156,27 @@ export function resolveWalletRef(ref, knownAddresses) {
 //                     without deliberate re-promotion).
 // A row may declare enforcement:'contract' ONLY when the schedule is enforced
 // on-chain; everything else must carry one of the two. Boot refuses the rest.
+// ROUTE 2 (2026-09-05): enforcement:'contract' is EARNED, never declared. A row may
+// carry it only with a contract address, a cluster spec (the forward falsifier: the
+// next cliff's post-cliff claim cluster), and backtested cliff dates. Until this
+// session the label was claimable by nobody; ORDER's LockedTokenVault is the first.
+export function clusterSpecProblems(spec) {
+  if (!spec || typeof spec !== 'object') return ['missing clusterSpec'];
+  const p = [];
+  for (const k of ['windowDays', 'minRatio', 'minRecipients', 'baselineDaily']) if (!(spec[k] > 0)) p.push(`clusterSpec.${k} required (>0)`);
+  if (!spec.basis) p.push('clusterSpec.basis required — parameters are derived, not asserted');
+  if (!(spec.n >= 3)) p.push('clusterSpec.n >= 3 required (backtested cliffs)');
+  return p;
+}
 export function forwardFalsifierProblems(t) {
-  if (t.enforcement === 'contract') return [];
+  if (t.enforcement === 'contract') {
+    const p = [];
+    if (!/^0x[0-9a-fA-F]{40}$/.test(t.contract || '')) p.push("enforcement:'contract' requires a full contract address (resolved, never typed)");
+    for (const q of clusterSpecProblems(t.clusterSpec)) p.push(`enforcement:'contract' requires a cluster falsifier: ${q}`);
+    if (!Array.isArray(t.cliffDates) || t.cliffDates.filter((c) => c.cluster).length < 2) p.push("enforcement:'contract' requires >=2 backtested cliff dates with clusters");
+    if (typeof t.upgradeable !== 'boolean') p.push("enforcement:'contract' requires an explicit upgradeable flag (proxies are upgradeable — schedule a re-read)");
+    return p;
+  }
   // Observable emissions demand the stronger falsifier: a row DISCOVERED by cadence
   // cannot substitute a reviewBy for the spec — that would be a downgrade in disguise.
   if (t.events?.some((e) => e.source === 'onchain-cadence')) {
@@ -136,7 +197,7 @@ export function forwardFalsifierProblems(t) {
 // false-demote every quiet month), but summed for the RETROSPECTIVE stage. Forward
 // stages can only claim what is predictable, so they quote the metronome as a floor;
 // T+3 reports what was actually observed. Predict the floor, report the total.
-export function promoteRow(oldRow, { events, monthlyDay = null, date = null, note = '', cadence = null, enforcement = null, reviewBy = null, stage = null, alsoObserve = null }) {
+export function promoteRow(oldRow, { events, monthlyDay = null, date = null, note = '', cadence = null, enforcement = null, reviewBy = null, stage = null, alsoObserve = null, contract = null, clusterSpec = null, cliffDates = null, upgradeable = null }) {
   if (stage && !['FULL', 'STANDARD', 'LOGGED'].includes(stage)) throw new Error(`promoteRow: unknown stage '${stage}'`);
   for (const a of alsoObserve || []) {
     if (!/^0x[0-9a-fA-F]{40}$/.test(a)) throw new Error(`promoteRow: alsoObserve entry '${a}' is not a full address`);
@@ -167,6 +228,10 @@ export function promoteRow(oldRow, { events, monthlyDay = null, date = null, not
   if (reviewBy) row.reviewBy = reviewBy;
   if (stage) row.stage = stage;
   if (alsoObserve?.length) row.alsoObserve = alsoObserve;
+  if (contract) row.contract = contract;
+  if (clusterSpec) row.clusterSpec = clusterSpec;
+  if (cliffDates) row.cliffDates = cliffDates;
+  if (typeof upgradeable === 'boolean') row.upgradeable = upgradeable;
   const ff = forwardFalsifierProblems(row);
   if (ff.length) throw new Error(`promoteRow: ${ff.join('; ')}`);
   return row; // constructed — nothing from the estimated era survives except identity

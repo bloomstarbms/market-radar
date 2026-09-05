@@ -1,7 +1,7 @@
 {
  "comment": "Token unlock watchlist. Two entry types: 'monthlyDay' = recurring cliff on that day each month (most vesting contracts release monthly); 'date' = one-off YYYY-MM-DD. Bot pings 7 days and 3 days before. verified:true = confirmed against cryptorank.io/token-unlock on 2026-08-01; others are recurring-schedule estimates — check the date on cryptorank before acting.",
  "source": "https://cryptorank.io/token-unlock (free public page)",
- "lastReviewed": "2026-09-05 (sourced FORT via promote-unlock.js)",
+ "lastReviewed": "2026-09-05 (contract-cliff ORDER via promote-unlock.js)",
  "tokens": [
   {
    "sym": "EIGEN",
@@ -980,84 +980,165 @@
   {
    "sym": "ORDER",
    "name": "Orderly",
-   "provenance": "sourced",
-   "source": "defillama",
-   "sourceFetchedAt": "2026-09-05T08:27",
-   "sourceEvents": [
+   "verified": true,
+   "events": [
     {
-     "t": 1779062400,
-     "type": "cliff",
-     "n": 500000,
-     "cats": "farming"
-    },
-    {
-     "t": 1780272000,
-     "type": "cliff",
-     "n": 500000,
-     "cats": "farming"
-    },
-    {
-     "t": 1781481600,
-     "type": "cliff",
-     "n": 500000,
-     "cats": "farming"
-    },
-    {
-     "t": 1782691200,
-     "type": "cliff",
-     "n": 500000,
-     "cats": "farming"
-    },
-    {
-     "t": 1783900800,
-     "type": "cliff",
-     "n": 500000,
-     "cats": "farming"
-    },
-    {
-     "t": 1785110400,
-     "type": "cliff",
-     "n": 500000,
-     "cats": "farming"
-    },
-    {
-     "t": 1786320000,
-     "type": "cliff",
-     "n": 500000,
-     "cats": "farming"
-    },
-    {
-     "t": 1787529600,
-     "type": "cliff",
-     "n": 500000,
-     "cats": "farming"
-    },
-    {
-     "t": 1788739200,
-     "type": "cliff",
-     "n": 500000,
-     "cats": "farming"
-    },
-    {
-     "t": 1789948800,
-     "type": "cliff",
-     "n": 500000,
-     "cats": "farming"
-    },
-    {
-     "t": 1791158400,
-     "type": "cliff",
-     "n": 500000,
-     "cats": "farming"
+     "date": "2026-09-05",
+     "source": "contract-cliff",
+     "detail": "Post-cliff claim clusters replay on 6/8 index cliff dates from vesting contract 0x6d00268a (80 distinct claimants; 7 off-index clusters reported)."
     }
    ],
+   "note": "ROUTE 2 — first enforcement:contract row. LockedTokenVault (13.2% of supply): post-cliff claim clusters replay on 6/8 index cliff dates under every parameterisation swept (w3-7 x r2-5: 4/8 to 7/8); 80 distinct claimants. INDEX INCOMPLETE: 7 off-index clusters show the vault emits roughly WEEKLY; the index lists fortnightly farming tranches. Stage LOGGED by pressure: each tranche is ~0.05% of supply and category farming — verified, tracked, silent.",
+   "sourceHistory": {
+    "source": "defillama",
+    "sourceFetchedAt": "2026-09-05T08:27",
+    "sourceEvents": [
+     {
+      "t": 1779062400,
+      "type": "cliff",
+      "n": 500000,
+      "cats": "farming"
+     },
+     {
+      "t": 1780272000,
+      "type": "cliff",
+      "n": 500000,
+      "cats": "farming"
+     },
+     {
+      "t": 1781481600,
+      "type": "cliff",
+      "n": 500000,
+      "cats": "farming"
+     },
+     {
+      "t": 1782691200,
+      "type": "cliff",
+      "n": 500000,
+      "cats": "farming"
+     },
+     {
+      "t": 1783900800,
+      "type": "cliff",
+      "n": 500000,
+      "cats": "farming"
+     },
+     {
+      "t": 1785110400,
+      "type": "cliff",
+      "n": 500000,
+      "cats": "farming"
+     },
+     {
+      "t": 1786320000,
+      "type": "cliff",
+      "n": 500000,
+      "cats": "farming"
+     },
+     {
+      "t": 1787529600,
+      "type": "cliff",
+      "n": 500000,
+      "cats": "farming"
+     },
+     {
+      "t": 1788739200,
+      "type": "cliff",
+      "n": 500000,
+      "cats": "farming"
+     },
+     {
+      "t": 1789948800,
+      "type": "cliff",
+      "n": 500000,
+      "cats": "farming"
+     },
+     {
+      "t": 1791158400,
+      "type": "cliff",
+      "n": 500000,
+      "cats": "farming"
+     }
+    ],
+    "supersededAt": "2026-09-05"
+   },
    "chain": "ethereum",
-   "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 3 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0xABD4C63d2616A5201454168269031355f4764337",
-   "circSupply": 472185748,
-   "totalLocked": 527814252,
-   "maxSupply": 1000000000
+   "enforcement": "contract",
+   "stage": "LOGGED",
+   "contract": "0x6d00268a47D48474f999c18210c6877491AE6FB3",
+   "clusterSpec": {
+    "windowDays": 5,
+    "minRatio": 3,
+    "minRecipients": 5,
+    "baselineDaily": 19488,
+    "n": 8,
+    "hits": 6,
+    "basis": "derived on 8 past cliffs: replays at 6/8 under w5/r3; grid w3r2:7 w3r3:6 w3r5:5 w5r2:7 w5r3:6 w5r5:5 w7r2:6 w7r3:5 w7r5:4; off-index clusters 7"
+   },
+   "cliffDates": [
+    {
+     "date": "2026-05-18",
+     "ratio": 9.25,
+     "recipients": 16,
+     "cluster": true
+    },
+    {
+     "date": "2026-06-01",
+     "ratio": 5.5,
+     "recipients": 16,
+     "cluster": true
+    },
+    {
+     "date": "2026-06-15",
+     "ratio": 0.58,
+     "recipients": 5,
+     "cluster": false
+    },
+    {
+     "date": "2026-06-29",
+     "ratio": 8.6,
+     "recipients": 11,
+     "cluster": true
+    },
+    {
+     "date": "2026-07-13",
+     "ratio": 8.01,
+     "recipients": 10,
+     "cluster": true
+    },
+    {
+     "date": "2026-07-27",
+     "ratio": 3.09,
+     "recipients": 12,
+     "cluster": true
+    },
+    {
+     "date": "2026-08-10",
+     "ratio": 2.24,
+     "recipients": 10,
+     "cluster": false
+    },
+    {
+     "date": "2026-08-24",
+     "ratio": 14.25,
+     "recipients": 17,
+     "cluster": true
+    },
+    {
+     "date": "2026-09-07",
+     "cluster": null
+    },
+    {
+     "date": "2026-09-21",
+     "cluster": null
+    },
+    {
+     "date": "2026-10-05",
+     "cluster": null
+    }
+   ],
+   "upgradeable": false
   },
   {
    "sym": "CARV",
