@@ -9,7 +9,7 @@
 // "Verify the fields, not just the date" — enforced by shape, not vigilance.
 
 // Fields a VERIFIED row may carry. Everything else from the estimated era is dropped.
-export const VERIFIED_ROW_FIELDS = ['sym', 'name', 'monthlyDay', 'date', 'verified', 'note', 'events', 'retired', 'retiredAt', 'cadence', 'enforcement', 'reviewBy', 'stage', 'alsoObserve', 'sourceHistory', 'chain', 'token', 'contract', 'clusterSpec', 'cliffDates', 'upgradeable'];
+export const VERIFIED_ROW_FIELDS = ['sym', 'name', 'monthlyDay', 'date', 'verified', 'note', 'events', 'retired', 'retiredAt', 'cadence', 'enforcement', 'reviewBy', 'stage', 'alsoObserve', 'sourceHistory', 'chain', 'token', 'contract', 'clusterSpec', 'cliffDates', 'upgradeable', 'falsifier'];
 // Estimated-era fields that must NEVER appear on a verified row (boot-asserted).
 export const ESTIMATED_ONLY_FIELDS = ['pctOfMcap'];
 
@@ -226,6 +226,41 @@ export function falsifierWeak(spec) {
   const c = chanceRate(spec);
   return c !== null && c >= 0.5;
 }
+// FALSIFIER STRENGTH on every verified row (v0.30.2). chanceRate: how often a window
+// of the watch's own width would pass by accident; replayRate: the falsifier's own
+// record; margin = replay - chance. WEAK_CHANCE is a DECLARED cut, not derived — it
+// is recorded as such; the numbers are what the row carries, the label is a summary.
+// A verified row whose falsifier has no derived strength is refused at boot: a weak
+// falsifier nobody flagged is worse than ORDER's, because ORDER's says so.
+export const WEAK_CHANCE = 0.5;
+export function falsifierProblems(t) {
+  if (!t?.verified || t.retired || !(t.cadence || t.enforcement === 'contract' || t.reviewBy)) return [];
+  const f = t.falsifier;
+  if (!f || typeof f !== 'object') return ['verified row has no derived falsifier strength (derive-falsifier-strength.js → promote-unlock.js strength=auto)'];
+  const p = [];
+  if (!['WEAK', 'STRONG', 'NONE'].includes(f.verdict)) p.push(`falsifier.verdict '${f.verdict}' unknown`);
+  if (f.verdict !== 'NONE' && !(f.chanceRate >= 0 && f.chanceRate <= 1)) p.push('falsifier.chanceRate must be in [0,1]');
+  if (f.verdict !== 'NONE' && (f.chanceRate >= WEAK_CHANCE) !== (f.verdict === 'WEAK')) p.push('falsifier.verdict disagrees with its own chanceRate');
+  if (!f.basis) p.push('falsifier.basis required');
+  return p;
+}
+export function stampStrength(row, rep) {
+  if (!rep) throw new Error(`stampStrength: ${row.sym} has no entry in data/falsifier-strength.json — run derive-falsifier-strength.js`);
+  const f = { verdict: rep.verdict, basis: rep.basis, at: rep.at, kind: rep.kind };
+  if (rep.verdict !== 'NONE') Object.assign(f, { chanceRate: rep.chanceRate, replayRate: rep.replayRate ?? null, replayN: rep.replayN ?? null, windowDays: rep.windowDays, qualifyingDays: rep.qualifyingDays, spanDays: rep.spanDays, margin: rep.replayRate != null ? +(rep.replayRate - rep.chanceRate).toFixed(2) : null });
+  const out = {};
+  for (const k of VERIFIED_ROW_FIELDS) if (row[k] !== undefined) out[k] = row[k];
+  out.falsifier = f;
+  const p = falsifierProblems(out);
+  if (p.length) throw new Error(`stampStrength: ${p.join('; ')}`);
+  return out;
+}
+export function falsifierLine(t) {
+  const f = t?.falsifier;
+  if (!f) return `${t?.sym} underived`;
+  if (f.verdict === 'NONE') return `${t.sym} none`;
+  return `${t.sym} ${Math.round(f.chanceRate * 100)}%→${f.replayRate != null ? Math.round(f.replayRate * 100) + '%' : '?'}${f.verdict === 'WEAK' ? ' WEAK' : ''}`;
+}
 export function forwardFalsifierProblems(t) {
   if (t.enforcement === 'contract') {
     const p = [];
@@ -311,6 +346,7 @@ export function verifiedRowProblems(tokens) {
     for (const f of ESTIMATED_ONLY_FIELDS) {
       if (f in t) problems.push(`unlock token '${t.sym}' is VERIFIED but carries estimated-era field '${f}' — promotion patched instead of constructing`);
     }
+    for (const p of falsifierProblems(t)) problems.push(`unlock token '${t.sym}': ${p}`);
     // Behavioural verification without its automatic falsifier is a prose trigger
     // waiting to be forgotten. Boot refuses it, same as promotion refuses it — and
     // the rule keys on ENFORCEMENT, not the provenance label (the EIGEN asymmetry:

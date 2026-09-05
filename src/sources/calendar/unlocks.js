@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { config, ROOT } from '../../config.js';
 import { dispatch } from '../../core/dispatcher.js';
 import { loadWatchState, activeDemotions, observedAround, retrospectiveLine, loadRecheckState, effectiveSourced } from './cadence-watch.js';
-import { sourceIsStale, SOURCE_STALE_DAYS, pressureStage, falsifierWeak, chanceRate, UNVERIFIABLE_MECHANISMS } from '../../core/unlock-promote.js';
+import { sourceIsStale, SOURCE_STALE_DAYS, pressureStage, falsifierWeak, chanceRate, falsifierLine, UNVERIFIABLE_MECHANISMS } from '../../core/unlock-promote.js';
 
 const FILE = join(ROOT, 'unlocks.json');
 // STAGE TIERING (coverage-session Part 3): at 25+ tracked tokens, un-tiered monthly
@@ -72,6 +72,14 @@ function nextMonthlyDate(day, from = new Date()) {
 // lead < 0 (T+3) is RETROSPECTIVE: it can report what actually happened, including
 // irregular emitters excluded from the forward falsifier. Predict the floor, report
 // the total — same row, different claim per stage, both true.
+// Falsifier strength clause, same words for every row: a window this wide passes by
+// chance X% of the time; the record is Y%. Underived is said, not skipped.
+function strengthClause(t) {
+  const f = t?.falsifier;
+  if (!f) return ' Falsifier strength: UNDERIVED.';
+  if (f.verdict === 'NONE') return ' Falsifier strength: none (dead-man switch tests freshness, not the claim).';
+  return ` Falsifier strength: a ${f.windowDays}-day window passes by chance ${Math.round(f.chanceRate * 100)}% of the time; record ${f.replayRate != null ? Math.round(f.replayRate * 100) + '%' : 'n/a'}${f.verdict === 'WEAK' ? ' — WEAK' : ''}.`;
+}
 export function claimCoverage(t, lead = 3) {
   if (t?.provenance === 'sourced' && UNVERIFIABLE_MECHANISMS.includes(t.mechanism)) return {
     date: 'no-discrete-event', amount: 'sourced', scope: 'mechanism',
@@ -85,7 +93,7 @@ export function claimCoverage(t, lead = 3) {
   };
   if (t?.enforcement === 'contract' && t?.clusterSpec) return {
     date: 'observed', amount: 'source-stated', scope: 'contract',
-    line: `Date verified on-chain — contract-enforced: post-cliff claim clusters replayed on ${t.clusterSpec.hits}/${t.clusterSpec.n} past cliffs from the vesting contract. Amount is the schedule's stated tranche (claims vary by beneficiary). Falsifier: the next cliff's cluster${falsifierWeak(t.clusterSpec) ? ` — WEAK: the contract clusters ${t.clusterSpec.hits + t.clusterSpec.offIndex}x in ${t.clusterSpec.spanDays} days, so a random ${t.clusterSpec.windowDays}-day window catches one ${Math.round(chanceRate(t.clusterSpec) * 100)}% of the time; ${t.clusterSpec.hits}/${t.clusterSpec.n} on-index is barely above chance` : ''}; upgradeable proxy ${t.upgradeable ? 'YES — re-read scheduled' : 'no'}.`,
+    line: `Date verified on-chain — contract-enforced: post-cliff claim clusters replayed on ${t.clusterSpec.hits}/${t.clusterSpec.n} past cliffs from the vesting contract. Amount is the schedule's stated tranche (claims vary by beneficiary). Falsifier: the next cliff's cluster; ${falsifierWeak(t.clusterSpec) ? `WEAK — the contract clusters ${t.clusterSpec.hits + t.clusterSpec.offIndex}x in ${t.clusterSpec.spanDays} days, so a random ${t.clusterSpec.windowDays}-day window catches one ${Math.round(chanceRate(t.clusterSpec) * 100)}% of the time and ${t.clusterSpec.hits}/${t.clusterSpec.n} on-index is barely above chance; ` : ''}upgradeable proxy ${t.upgradeable ? 'YES — re-read scheduled' : 'no'}.${strengthClause(t)}`,
   };
   if (lead < 0 && (t?.cadence || t?.alsoObserve)) return {
     date: 'observed', amount: 'observed-actual', scope: 'retrospective',
@@ -94,15 +102,15 @@ export function claimCoverage(t, lead = 3) {
   const fam = Array.isArray(t?.cadence?.wallets) ? t.cadence.wallets.length : 0;
   if (fam) return {
     date: 'observed', amount: 'observed', scope: 'family',
-    line: `Date and amount both observed on-chain — ${fam} custody wallets, each required to emit and the family total to land within ±${Math.round((t.cadence.tolerance ?? 0.25) * 100)}%, over ${t.cadence.monthsObserved} months. Auto-demotes if the pattern breaks.`,
+    line: `Date and amount both observed on-chain — ${fam} custody wallets, each required to emit and the family total to land within ±${Math.round((t.cadence.tolerance ?? 0.25) * 100)}%, over ${t.cadence.monthsObserved} months. Auto-demotes if the pattern breaks.${strengthClause(t)}`,
   };
   if (t?.cadence) return {
     date: 'observed', amount: 'observed-partial', scope: 'tranche',
-    line: `Date and amount observed on-chain for ONE custody wallet (${t.cadence.monthsObserved} months). Other holders may emit on the same date and are NOT covered by this figure — treat it as a floor, not a total. Auto-demotes if that wallet's pattern breaks.`,
+    line: `Date and amount observed on-chain for ONE custody wallet (${t.cadence.monthsObserved} months). Other holders may emit on the same date and are NOT covered by this figure — treat it as a floor, not a total. Auto-demotes if that wallet's pattern breaks.${strengthClause(t)}`,
   };
   if (t?.reviewBy) return {
     date: 'announced', amount: 'unchecked', scope: 'announcement',
-    line: `Date is project-announced and re-attested by ${t.reviewBy} (the row demotes itself if that passes). The AMOUNT is announcement-stated — nothing observes it on-chain.`,
+    line: `Date is project-announced and re-attested by ${t.reviewBy} (the row demotes itself if that passes). The AMOUNT is announcement-stated — nothing observes it on-chain.${strengthClause(t)}`,
   };
   return { date: 'unknown', amount: 'unchecked', scope: 'unknown', line: 'Coverage unstated — this row should not be alerting.' };
 }
@@ -130,7 +138,9 @@ export function unlockCoverage(tokens = null) {
     sourcedUnverifiable: sourced.filter((t) => UNVERIFIABLE_MECHANISMS.includes(t.mechanism)).length,
     continuousClaim: sourced.filter((t) => t.mechanism === 'continuous-claim').length,
     indexContradicted: sourced.filter((t) => t.mechanism === 'index-contradicted').length,
-    weakFalsifier: verified.filter((t) => falsifierWeak(t.clusterSpec)).length,
+    weakFalsifier: verified.filter((t) => t.falsifier?.verdict === 'WEAK').length,
+    underived: verified.filter((t) => (t.cadence || t.enforcement === 'contract' || t.reviewBy) && !t.falsifier).length,
+    strength: verified.filter((t) => t.cadence || t.enforcement === 'contract' || t.reviewBy).map(falsifierLine).join(' · '),
     estimated: tokens.filter((t) => !t.retired && !t.events?.length && t.provenance !== 'sourced').length,
     retired: tokens.filter((t) => t.retired).length,
     cadence: verified.filter((t) => t.cadence).length,
@@ -139,7 +149,7 @@ export function unlockCoverage(tokens = null) {
     stages,
   };
   c.sourceDemoted = sourceDemoted;
-  c.line = `Unlock coverage: ${c.tracked} tracked · ${c.verified} verified (${c.cadence} cadence-watched · ${c.contractCliff} contract-cliff${c.weakFalsifier ? ` [${c.weakFalsifier} weak falsifier]` : ''} · ${c.reviewBy} review-dated) · ${c.sourced} sourced (${c.sourcedPending} pending verification · ${c.sourcedUnverifiable} unverifiable by mechanism: ${c.continuousClaim} continuous-claim, ${c.indexContradicted} index-contradicted)${c.staleSourced ? ` (${c.staleSourced} STALE, silent)` : ''}${c.belowFloor ? ` (${c.belowFloor} below pressure floor, silent)` : ''}${sourceDemoted ? ` (${sourceDemoted} retracted by source)` : ''} · ${c.estimated} estimated (silent) · ${c.retired} retired · stages ${Object.entries(stages).map(([k, v]) => k + ':' + v).join(' ')} · verified reads are Ethereum/EVM only — sourced rows cite a named calendar and are not independently checked`;
+  c.line = `Unlock coverage: ${c.tracked} tracked · ${c.verified} verified (${c.cadence} cadence-watched · ${c.contractCliff} contract-cliff · ${c.reviewBy} review-dated) · falsifier chance→replay: ${c.strength}${c.underived ? ` (${c.underived} UNDERIVED)` : ''} · ${c.sourced} sourced (${c.sourcedPending} pending verification · ${c.sourcedUnverifiable} unverifiable by mechanism: ${c.continuousClaim} continuous-claim, ${c.indexContradicted} index-contradicted)${c.staleSourced ? ` (${c.staleSourced} STALE, silent)` : ''}${c.belowFloor ? ` (${c.belowFloor} below pressure floor, silent)` : ''}${sourceDemoted ? ` (${sourceDemoted} retracted by source)` : ''} · ${c.estimated} estimated (silent) · ${c.retired} retired · stages ${Object.entries(stages).map(([k, v]) => k + ':' + v).join(' ')} · verified reads are Ethereum/EVM only — sourced rows cite a named calendar and are not independently checked`;
   return c;
 }
 

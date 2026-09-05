@@ -1,12 +1,14 @@
 {
  "comment": "Token unlock watchlist. Two entry types: 'monthlyDay' = recurring cliff on that day each month (most vesting contracts release monthly); 'date' = one-off YYYY-MM-DD. Bot pings 7 days and 3 days before. verified:true = confirmed against cryptorank.io/token-unlock on 2026-08-01; others are recurring-schedule estimates — check the date on cryptorank before acting.",
  "source": "https://cryptorank.io/token-unlock (free public page)",
- "lastReviewed": "2026-09-05 (contract-cliff ORDER via promote-unlock.js)",
+ "lastReviewed": "2026-09-05 (falsifier strength ZRO via promote-unlock.js)",
  "tokens": [
   {
    "sym": "EIGEN",
    "name": "EigenCloud",
+   "monthlyDay": 30,
    "verified": true,
+   "note": "Custody-held (BitGo WalletSimple x21, 484M family) — behavioural: announcement described the schedule, custody enforces nothing. TWO metronomes watched (0x34BcF805 ~7.82M/mo + 0x3De6b6b1 ~1.69M/mo, family ~9.5M): every wallet must emit AND the family total must land inside a band DERIVED FROM THIS ROW'S OWN 11 windows — the band exceeds the worst shortfall the row has actually exhibited, and is STATIC until a re-attestation re-derives it. Largest wallet (176.7M) mostly dormant = later tranches.",
    "events": [
     {
      "date": "2026-08-28",
@@ -19,8 +21,6 @@
      "detail": "Monthly custody distribution, ~9.5M EIGEN observed last cycle. Backtest: eth wallets 0x3De6b6b1/0x34BcF805 outbound transfers, monthly on the 30th (28th/29th short months) since 2025-10-30."
     }
    ],
-   "note": "Custody-held (BitGo WalletSimple x21, 484M family) — behavioural: announcement described the schedule, custody enforces nothing. TWO metronomes watched (0x34BcF805 ~7.82M/mo + 0x3De6b6b1 ~1.69M/mo, family ~9.5M): every wallet must emit AND the family total must land inside a band DERIVED FROM THIS ROW'S OWN 11 windows — the band exceeds the worst shortfall the row has actually exhibited, and is STATIC until a re-attestation re-derives it. Largest wallet (176.7M) mostly dormant = later tranches.",
-   "monthlyDay": 30,
    "cadence": {
     "wallets": [
      {
@@ -42,7 +42,20 @@
     "monthsObserved": 11,
     "graceDays": 3
    },
-   "stage": "FULL"
+   "stage": "FULL",
+   "falsifier": {
+    "verdict": "STRONG",
+    "basis": "17 days ≥50% of mean in 354d (since 2025-09-17), w5 → chance 0.24; replay 11/11",
+    "at": "2026-09-05T22:04",
+    "kind": "cadence-family",
+    "chanceRate": 0.24,
+    "replayRate": 1,
+    "replayN": 11,
+    "windowDays": 5,
+    "qualifyingDays": 17,
+    "spanDays": 354,
+    "margin": 0.76
+   }
   },
   {
    "sym": "ZETA",
@@ -161,7 +174,9 @@
   {
    "sym": "STRK",
    "name": "Starknet",
+   "monthlyDay": 15,
    "verified": true,
+   "note": "Vesting on Starknet L2 (no eth_call path in our stack): up to 127M STRK on the 15th monthly through Mar 2027 per docs.starknet.io. Enforcement unverifiable from here — reviewBy dead-man's switch; re-attest by the date or the row demotes itself.",
    "events": [
     {
      "date": "2026-09-15",
@@ -169,15 +184,21 @@
      "detail": "127M STRK monthly on the 15th per Starknet documentation (core contributors + investors), through 2027-03-15."
     }
    ],
-   "note": "Vesting on Starknet L2 (no eth_call path in our stack): up to 127M STRK on the 15th monthly through Mar 2027 per docs.starknet.io. Enforcement unverifiable from here — reviewBy dead-man's switch; re-attest by the date or the row demotes itself.",
-   "monthlyDay": 15,
    "reviewBy": "2026-11-30",
-   "stage": "STANDARD"
+   "stage": "STANDARD",
+   "falsifier": {
+    "verdict": "NONE",
+    "basis": "reviewBy 2026-11-30 tests freshness, not the claim — no chance rate exists because nothing on chain is checked",
+    "at": "2026-09-05T22:04",
+    "kind": "dead-man"
+   }
   },
   {
    "sym": "ARB",
    "name": "Arbitrum",
+   "monthlyDay": 16,
    "verified": true,
+   "note": "Team+investor linear vesting, 92.65M ARB monthly on the 16th, through 2027. Announcement path; hundreds of on-chain vesting wallets (bucket C) not enumerated by us, so NOT claimed contract-enforced — reviewBy dead-man's switch instead. Re-attest by the date or the row demotes itself.",
    "events": [
     {
      "date": "2026-09-16",
@@ -185,10 +206,14 @@
      "detail": "92.65M ARB monthly (team/advisors/investors), 16th of each month per Arbitrum published schedule; Aug 16 2026 event occurred as scheduled (multiple public confirmations)."
     }
    ],
-   "note": "Team+investor linear vesting, 92.65M ARB monthly on the 16th, through 2027. Announcement path; hundreds of on-chain vesting wallets (bucket C) not enumerated by us, so NOT claimed contract-enforced — reviewBy dead-man's switch instead. Re-attest by the date or the row demotes itself.",
-   "monthlyDay": 16,
    "reviewBy": "2026-11-30",
-   "stage": "STANDARD"
+   "stage": "STANDARD",
+   "falsifier": {
+    "verdict": "NONE",
+    "basis": "reviewBy 2026-11-30 tests freshness, not the claim — no chance rate exists because nothing on chain is checked",
+    "at": "2026-09-05T22:04",
+    "kind": "dead-man"
+   }
   },
   {
    "sym": "OP",
@@ -571,7 +596,10 @@
   {
    "sym": "MOVE",
    "name": "Movement",
+   "monthlyDay": 9,
+   "date": "2026-09-05",
    "verified": true,
+   "note": "Behavioural (habit, not commitment): cadence-watch auto-demotes if a window on the 9th passes with no qualifying outflow. SCOPE — one metronome watched; forward stages quote it as a FLOOR. The wallet is an active treasury with large off-schedule moves (73M across Jul 26-27, ~7x the monthly figure) — irregular, so not in the falsifier. Found by the 2026-09-05 hand-curated index rescan; first promotion from the temporal-leg population.",
    "events": [
     {
      "date": "2026-09-05",
@@ -579,9 +607,6 @@
      "detail": "detect-cadence.js: 8 consecutive FIXED-DAY distributions on the 9th, Dec 2025-Jul 2026, from custody 0xE67A9E94bf (786.6M held), mean 9.46M MOVE/mo, cv 0.31. August 2026 emission also observed (3.8M on the 9th + 5.1M on the 10th, ~8.9M) but hidden from the detector by a 52.8M off-schedule move on Jul 26 raising its significance floor — nine months in practice."
     }
    ],
-   "note": "Behavioural (habit, not commitment): cadence-watch auto-demotes if a window on the 9th passes with no qualifying outflow. SCOPE — one metronome watched; forward stages quote it as a FLOOR. The wallet is an active treasury with large off-schedule moves (73M across Jul 26-27, ~7x the monthly figure) — irregular, so not in the falsifier. Found by the 2026-09-05 hand-curated index rescan; first promotion from the temporal-leg population.",
-   "monthlyDay": 9,
-   "date": "2026-09-05",
    "cadence": {
     "wallet": "0xE67A9E94bf21551EDCB8008AAE29823E87610D9b",
     "expectDay": 9,
@@ -589,7 +614,20 @@
     "monthsObserved": 8,
     "graceDays": 3
    },
-   "stage": "STANDARD"
+   "stage": "STANDARD",
+   "falsifier": {
+    "verdict": "STRONG",
+    "basis": "20 days ≥50% of mean in 275d (since 2025-12-05), w5 → chance 0.36; replay 8/8",
+    "at": "2026-09-05T22:04",
+    "kind": "cadence",
+    "chanceRate": 0.36,
+    "replayRate": 1,
+    "replayN": 8,
+    "windowDays": 5,
+    "qualifyingDays": 20,
+    "spanDays": 275,
+    "margin": 0.64
+   }
   },
   {
    "sym": "INJ",
@@ -695,7 +733,9 @@
   {
    "sym": "ENA",
    "name": "Ethena",
+   "monthlyDay": 6,
    "verified": true,
+   "note": "Behavioural (habit, not commitment): cadence-watch auto-demotes if a monthly window passes with no qualifying outflow. SCOPE — the FALSIFIER watches ONE metronome (0x54B8, ~12.07M/mo); forward stages quote that as a FLOOR. Irregular co-emitters 0x2146 (1.185B holder, 2.91M on 2026-08-06) and 0xdeDc are deliberately NOT in the cadence band — an irregular emitter would false-demote every quiet month — but ARE summed at T+3, which is retrospective and carries no falsification risk. Predict the floor, report the total.",
    "events": [
     {
      "date": "2026-08-28",
@@ -703,8 +743,6 @@
      "detail": "13 consecutive monthly distributions from custody 0x54B8c65f0635fD91C8729Dd3269C630d9AED54e5 (Aug 2025-Aug 2026), mean 12.07M ENA, cv 0.26; emits on the 6th, rolls to Monday when the 6th is a weekend (observed 3/3 weekend cases)"
     }
    ],
-   "note": "Behavioural (habit, not commitment): cadence-watch auto-demotes if a monthly window passes with no qualifying outflow. SCOPE — the FALSIFIER watches ONE metronome (0x54B8, ~12.07M/mo); forward stages quote that as a FLOOR. Irregular co-emitters 0x2146 (1.185B holder, 2.91M on 2026-08-06) and 0xdeDc are deliberately NOT in the cadence band — an irregular emitter would false-demote every quiet month — but ARE summed at T+3, which is retrospective and carries no falsification risk. Predict the floor, report the total.",
-   "monthlyDay": 6,
    "cadence": {
     "wallet": "0x54B8c65f0635fD91C8729Dd3269C630d9AED54e5",
     "expectDay": 6,
@@ -716,7 +754,20 @@
    "alsoObserve": [
     "0x2146AA5807D96E6B2922a149CeE870F17347F1d0",
     "0xdeDc15Fa923D4e147875C63C0a97F85F178dfE96"
-   ]
+   ],
+   "falsifier": {
+    "verdict": "STRONG",
+    "basis": "30 days ≥50% of mean in 449d (since 2025-06-14), w5 → chance 0.33; replay 13/13",
+    "at": "2026-09-05T22:04",
+    "kind": "cadence",
+    "chanceRate": 0.33,
+    "replayRate": 1,
+    "replayN": 13,
+    "windowDays": 5,
+    "qualifyingDays": 30,
+    "spanDays": 449,
+    "margin": 0.67
+   }
   },
   {
    "sym": "ALT",
@@ -727,7 +778,10 @@
   {
    "sym": "ZRO",
    "name": "LayerZero",
+   "monthlyDay": 20,
+   "date": "2026-09-20",
    "verified": true,
+   "note": "Bucket D: 27-contract custody family (BitGo WalletSimple + GnosisSafes), NO observable emission cadence on Ethereum (omnichain token — cadence spec would false-demote by construction). Schedule rests on the Foundation's published rule alone. STRUCTURAL TRIGGER (was prose): reviewBy 2026-09-22 — if the Sep 20 unlock shows no market-visible event, do not re-promote; the row demotes itself.",
    "events": [
     {
      "date": "2026-09-20",
@@ -735,11 +789,14 @@
      "detail": "Monthly on the 20th, derived from the LayerZero Foundation's published rule (info.layerzero.foundation 'Introducing ZRO': TGE 2024-06-20, 1-year lock, then monthly over 2 years; fully vested 2027-05-20). Day follows from the project-published rule, not aggregators."
     }
    ],
-   "note": "Bucket D: 27-contract custody family (BitGo WalletSimple + GnosisSafes), NO observable emission cadence on Ethereum (omnichain token — cadence spec would false-demote by construction). Schedule rests on the Foundation's published rule alone. STRUCTURAL TRIGGER (was prose): reviewBy 2026-09-22 — if the Sep 20 unlock shows no market-visible event, do not re-promote; the row demotes itself.",
-   "monthlyDay": 20,
-   "date": "2026-09-20",
    "reviewBy": "2026-09-22",
-   "stage": "STANDARD"
+   "stage": "STANDARD",
+   "falsifier": {
+    "verdict": "NONE",
+    "basis": "reviewBy 2026-09-22 tests freshness, not the claim — no chance rate exists because nothing on chain is checked",
+    "at": "2026-09-05T22:04",
+    "kind": "dead-man"
+   }
   },
   {
    "sym": "PYTH",
@@ -981,6 +1038,7 @@
    "sym": "ORDER",
    "name": "Orderly",
    "verified": true,
+   "note": "ROUTE 2 — first enforcement:contract row. LockedTokenVault (13.2% of supply): post-cliff claim clusters replay on 6/8 index cliff dates under every parameterisation swept (w3-7 x r2-5: 4/8 to 7/8); 80 distinct claimants. INDEX INCOMPLETE: 7 off-index clusters show the vault emits roughly WEEKLY; the index lists fortnightly farming tranches. Stage LOGGED by pressure: each tranche is ~0.05% of supply and category farming — verified, tracked, silent.",
    "events": [
     {
      "date": "2026-09-05",
@@ -988,7 +1046,8 @@
      "detail": "Post-cliff claim clusters replay on 6/8 index cliff dates from vesting contract 0x6d00268a (80 distinct claimants; 7 off-index clusters reported)."
     }
    ],
-   "note": "ROUTE 2 — first enforcement:contract row. LockedTokenVault (13.2% of supply): post-cliff claim clusters replay on 6/8 index cliff dates under every parameterisation swept (w3-7 x r2-5: 4/8 to 7/8); 80 distinct claimants. INDEX INCOMPLETE: 7 off-index clusters show the vault emits roughly WEEKLY; the index lists fortnightly farming tranches. Stage LOGGED by pressure: each tranche is ~0.05% of supply and category farming — verified, tracked, silent.",
+   "enforcement": "contract",
+   "stage": "LOGGED",
    "sourceHistory": {
     "source": "defillama",
     "sourceFetchedAt": "2026-09-05T08:27",
@@ -1064,8 +1123,6 @@
    },
    "chain": "ethereum",
    "token": "ethereum:0xABD4C63d2616A5201454168269031355f4764337",
-   "enforcement": "contract",
-   "stage": "LOGGED",
    "contract": "0x6d00268a47D48474f999c18210c6877491AE6FB3",
    "clusterSpec": {
     "windowDays": 5,
@@ -1140,7 +1197,20 @@
      "cluster": null
     }
    ],
-   "upgradeable": false
+   "upgradeable": false,
+   "falsifier": {
+    "verdict": "WEAK",
+    "basis": "13 clusters in 113d, w5 → chance 0.58; replay 0.75 of 8",
+    "at": "2026-09-05T22:04",
+    "kind": "contract-cliff",
+    "chanceRate": 0.58,
+    "replayRate": 0.75,
+    "replayN": 8,
+    "windowDays": 5,
+    "qualifyingDays": 13,
+    "spanDays": 113,
+    "margin": 0.17
+   }
   },
   {
    "sym": "CARV",

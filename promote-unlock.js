@@ -35,7 +35,7 @@ if (!sym) {
   process.exit(1);
 }
 const args = Object.fromEntries(kvs.map((s) => { const i = s.indexOf('='); return [s.slice(0, i), s.slice(i + 1)]; }));
-if (!args.keepEvents && !args.mechanism && !['sourced', 'contract-cliff'].includes(args.provenance) && (!args.source || !args.detail)) { console.error('source= and detail= are required — provenance is what "verified" means. (keepEvents=1 reuses existing provenance.)'); process.exit(1); }
+if (!args.keepEvents && !args.mechanism && !args.strength && !['sourced', 'contract-cliff'].includes(args.provenance) && (!args.source || !args.detail)) { console.error('source= and detail= are required — provenance is what "verified" means. (keepEvents=1 reuses existing provenance.)'); process.exit(1); }
 
 const j = JSON.parse(readFileSync('unlocks.json', 'utf8'));
 let idx = j.tokens.findIndex((t) => t.sym === sym.toUpperCase());
@@ -72,6 +72,23 @@ if (args.provenance === 'sourced') {
   writeFileSync('unlocks.json.tmp', JSON.stringify(j, null, 1));
   renameSync('unlocks.json.tmp', 'unlocks.json');
   console.log(`${row.sym} SOURCED (${args.source}, ${sourceEvents.length} batch events, chain ${chain}, stage ${row.stage}${args.stage ? ' (explicit)' : ` (pressure rule: ${defaultStage})`}).`);
+  process.exit(0);
+}
+
+// v0.30.2: strength=auto — stamp the derived falsifier strength from
+// data/falsifier-strength.json onto a verified row. The number is computed by
+// derive-falsifier-strength.js (network); this path only copies it, whitelist-style.
+if (args.strength) {
+  if (args.strength !== 'auto') { console.error('strength=auto is the only form — strength is derived, never typed'); process.exit(1); }
+  const t = j.tokens[idx];
+  if (!t?.verified) { console.error(`${sym}: strength=auto applies to a VERIFIED row`); process.exit(1); }
+  const rep = JSON.parse(readFileSync('data/falsifier-strength.json', 'utf8'))[sym.toUpperCase()];
+  const { stampStrength } = await import('./src/core/unlock-promote.js');
+  const row = stampStrength(t, rep);
+  j.tokens[idx] = row;
+  j.lastReviewed = new Date().toISOString().slice(0, 10) + ` (falsifier strength ${row.sym} via promote-unlock.js)`;
+  writeFileSync('unlocks.json.tmp', JSON.stringify(j, null, 1)); renameSync('unlocks.json.tmp', 'unlocks.json');
+  console.log(`${row.sym} falsifier ${row.falsifier.verdict}${row.falsifier.chanceRate != null ? ` chance ${row.falsifier.chanceRate} replay ${row.falsifier.replayRate} margin ${row.falsifier.margin}` : ''}`);
   process.exit(0);
 }
 
@@ -127,6 +144,7 @@ if (args.provenance === 'contract-cliff') {
   j.lastReviewed = new Date().toISOString().slice(0, 10) + ` (contract-cliff ${row.sym} via promote-unlock.js)`;
   writeFileSync('unlocks.json.tmp', JSON.stringify(j, null, 1)); renameSync('unlocks.json.tmp', 'unlocks.json');
   console.log(`${row.sym} promoted CONTRACT-CLIFF (enforcement:contract, ${res.hits}/${res.n} cliffs replay, upgradeable ${upgradeable}, stage ${row.stage}, ${future.length} future cliffs).`);
+  console.log(`   NEXT: node derive-falsifier-strength.js ${row.sym} && node promote-unlock.js ${row.sym} strength=auto — boot refuses a verified row without derived strength.`);
   process.exit(0);
 }
 
@@ -223,5 +241,6 @@ j.lastReviewed = new Date().toISOString().slice(0, 10) + ` (promoted ${row.sym} 
 writeFileSync('unlocks.json.tmp', JSON.stringify(j, null, 1));
 renameSync('unlocks.json.tmp', 'unlocks.json');
 console.log(`${row.sym} promoted (constructed, not patched).`);
+if (row.cadence || row.reviewBy) console.log(`   NEXT: node derive-falsifier-strength.js ${row.sym} && node promote-unlock.js ${row.sym} strength=auto — boot refuses a verified row without derived strength.`);
 if (dropped.length) console.log(`estimated-era fields dropped: ${dropped.join(', ')}`);
 console.log('Boot assertion will verify no estimated-only fields remain on verified rows.');

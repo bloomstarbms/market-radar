@@ -582,7 +582,10 @@ console.log('28. promotion CONSTRUCTS, never patches (the 4.97% lesson)');
   // Boot assertion: patched-not-constructed rows fail.
   check('verified row carrying pctOfMcap FAILS boot',
     verifiedRowProblems([{ sym: 'EIGEN', events: [{ date: '2026-08-30', source: 's' }], reviewBy: '2026-12-31', pctOfMcap: 4.97 }]).length === 1);
-  check('constructed row passes', verifiedRowProblems([row]).length === 0);
+  // v0.30.2: a constructed row is not yet BOOTABLE — it needs derived falsifier
+  // strength, stamped through strength=auto. The gate names exactly that and nothing else.
+  check('constructed row lacks only its derived strength', verifiedRowProblems([row]).length === 1 && /no derived falsifier strength/.test(verifiedRowProblems([row])[0]));
+  check('constructed row passes once strength is stamped', verifiedRowProblems([{ ...row, falsifier: { verdict: 'NONE', basis: 'b' } }]).length === 0);
   check('LIVE unlocks.json has no patched promotions', checkTierRoutes().ok === true);
 }
 
@@ -886,6 +889,46 @@ console.log('36. every prompt document declares its premises (documents get obey
   check('empty-assumptions check can fail', !/Assumes:\s*\n\s*-\s*\S/.test('Written against: v1.0.0\nAssumes:\n'));
 }
 
+console.log('49. FALSIFIER STRENGTH is derived on EVERY verified row (chance rate → replay), not just the suspicious one');
+{
+  const { falsifierProblems, stampStrength, falsifierLine, WEAK_CHANCE, verifiedRowProblems } = await import('./src/core/unlock-promote.js');
+  const { strengthFromSeries, strengthFromClusterSpec } = await import('./derive-falsifier-strength.js');
+  const { claimCoverage, unlockCoverage } = await import('./src/sources/calendar/unlocks.js');
+  const day = (i) => new Date(Date.now() - i * 86400e3).toISOString().slice(0, 10);
+  // Synthetic metronome: 12 monthly emissions in 365 days, nothing else -> 12x5/365 = 0.16.
+  const metro = {}; for (let m = 0; m < 12; m++) metro[day(5 + m * 30)] = 1e6; metro[day(364)] = 1e6;
+  const s1 = strengthFromSeries({ wallet: '0xw', meanAmount: 1e6, graceDays: 3 }, { '0xw': metro });
+  check('window width is the watch\'s own (grace 3 -> 5 days)', s1.windowDays === 5);
+  check('metronome: 13 qualifying days / 365 -> chance 0.18', s1.qualifyingDays === 13 && s1.spanDays >= 364 && Math.abs(s1.chanceRate - 0.18) <= 0.01);
+  // Busy wallet: the same 12 emissions plus 40 ad-hoc days above 50% of mean -> chance climbs.
+  const busy = { ...metro }; for (let i = 0; i < 40; i++) busy[day(7 + i * 8)] = 6e5;
+  const s2 = strengthFromSeries({ wallet: '0xw', meanAmount: 1e6, graceDays: 3 }, { '0xw': busy });
+  check('ad-hoc moves above the CONFIRM bar raise the chance rate (busy > metronome)', s2.chanceRate > s1.chanceRate && s2.qualifyingDays > 40);
+  check('moves BELOW the confirm bar do not count (they could not confirm a window either)', strengthFromSeries({ wallet: '0xw', meanAmount: 1e6 }, { '0xw': { ...metro, [day(100)]: 4e5 } }).qualifyingDays === 13);
+  check('family: any wallet clearing its own bar qualifies the day', strengthFromSeries({ wallets: [{ addr: 'a', meanAmount: 1e6 }, { addr: 'b', meanAmount: 2e5 }] }, { a: { [day(10)]: 1e6 }, b: { [day(40)]: 1.5e5 } }).qualifyingDays === 2);
+  check('empty series -> null (we did not look is not strong)', strengthFromSeries({ wallet: '0xw', meanAmount: 1 }, { '0xw': {} }) === null);
+  check('contract: derived from clusterSpec (ORDER 0.58 / replay 0.75)', (() => { const c = strengthFromClusterSpec({ windowDays: 5, hits: 6, offIndex: 7, spanDays: 113, n: 8 }); return c.chanceRate === 0.58 && c.replayRate === 0.75; })());
+  // Stamp + gate.
+  const row = { sym: 'T', name: 'T', verified: true, events: [{ date: '2026-09-01', source: 'x' }], cadence: { wallet: '0xw', meanAmount: 1 }, foreign: 1 };
+  const st = stampStrength(row, { verdict: 'STRONG', chanceRate: 0.24, replayRate: 1, replayN: 11, windowDays: 5, qualifyingDays: 17, spanDays: 354, basis: 'b', at: 'now', kind: 'cadence-family' });
+  check('stampStrength whitelist-copies (foreign field dropped) and records margin', st.foreign === undefined && st.falsifier.margin === 0.76);
+  check('stamp refuses a verdict that disagrees with its own chance rate', (() => { try { stampStrength(row, { verdict: 'STRONG', chanceRate: 0.7, replayRate: 1, basis: 'b' }); return false; } catch { return true; } })());
+  check('stamp refuses a missing report entry (never typed)', (() => { try { stampStrength(row, null); return false; } catch { return true; } })());
+  check('a verified cadence row WITHOUT derived strength fails the boot gate', verifiedRowProblems([row]).some((p) => /no derived falsifier strength/.test(p)));
+  check('a reviewBy row needs verdict NONE, not a number', falsifierProblems({ sym: 'R', verified: true, reviewBy: '2026-12-01', events: [{}], falsifier: { verdict: 'NONE', basis: 'b' } }).length === 0);
+  check('the WEAK cut is a declared constant, visible', WEAK_CHANCE === 0.5);
+  check('falsifierLine says underived rather than skipping', /underived/.test(falsifierLine({ sym: 'U' })));
+  // Live: all seven carry it; the line shows all seven.
+  const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens.filter((t) => t.verified && !t.retired && (t.cadence || t.enforcement === 'contract' || t.reviewBy));
+  check('LIVE: every verified row carries derived strength', live.length === 7 && live.every((t) => t.falsifier?.verdict));
+  check('LIVE: EIGEN/ENA/MOVE have NUMBERS, not an implicit "strong"', ['EIGEN', 'ENA', 'MOVE'].every((s) => { const f = live.find((t) => t.sym === s).falsifier; return f.chanceRate > 0 && f.replayRate === 1 && /days ≥50% of mean/.test(f.basis); }));
+  check('LIVE: ORDER is the only WEAK; dead-man rows are NONE', live.filter((t) => t.falsifier.verdict === 'WEAK').map((t) => t.sym).join() === 'ORDER' && ['ARB', 'STRK', 'ZRO'].every((s) => live.find((t) => t.sym === s).falsifier.verdict === 'NONE'));
+  const cov = unlockCoverage();
+  check('coverage line shows chance→replay for all seven', /falsifier chance→replay: .*EIGEN \d+%→100%.*ORDER 58%→75% WEAK/.test(cov.line) && (cov.strength.match(/·/g) || []).length === 6 && !cov.underived);
+  check('every verified claimCoverage line states its strength (cadence, contract, dead-man)', live.every((t) => /Falsifier strength: /.test(claimCoverage(t, 3).line)));
+  check('claimCoverage can say UNDERIVED', /UNDERIVED/.test(claimCoverage({ verified: true, cadence: { monthsObserved: 3, wallet: 'x' }, events: [{}] }, 3).line));
+}
+
 console.log('48. MECHANISM — a sourced date can name no discrete event; weak falsifiers are stated');
 {
   const { mechanismEvidence, mechanismProblems, sourceRow, sourcedRowProblems, pressureStage, chanceRate, falsifierWeak, promoteRow, UNVERIFIABLE_MECHANISMS } = await import('./src/core/unlock-promote.js');
@@ -933,7 +976,7 @@ console.log('48. MECHANISM — a sourced date can name no discrete event; weak f
   check('claimCoverage for a contradicted index says the chain contradicts it', /Index contradicted by chain/.test(claimCoverage(rez, 3).line));
   const cov = unlockCoverage();
   check('coverage line splits sourced into pending vs unverifiable-by-mechanism', /\d+ pending verification · 2 unverifiable by mechanism: 1 continuous-claim, 1 index-contradicted/.test(cov.line) && cov.sourcedPending + cov.sourcedUnverifiable === cov.sourced);
-  check('coverage line flags the weak falsifier next to the contract-cliff count', /1 contract-cliff \[1 weak falsifier\]/.test(cov.line));
+  check('coverage line flags ORDER weak with its numbers', /ORDER 58%→75% WEAK/.test(cov.line) && cov.weakFalsifier === 1);
   check('heartbeat carries the weak flag with the chance rate', /ORDER cliff .* falsifier WEAK \(chance 58%\)/.test(cadenceStatus().line));
 }
 

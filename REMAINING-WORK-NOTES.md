@@ -2688,3 +2688,49 @@ still reach it) and "unverifiable by mechanism" (no discrete event exists), so t
 difference is visible rather than inferred: 29 sourced = 27 pending · 2 unverifiable.
 Next candidates for mechanism stamps need a cluster run first — the label is
 never applied from an impression.
+
+## 2026-09-05 — FALSIFIER STRENGTH ON EVERY VERIFIED ROW (v0.30.2)
+
+Reviewer: every falsifier has a chance rate; only ORDER's was on record, so the
+others were IMPLICITLY strong because nobody computed the number. Same move as
+tolerance bands — a derived field on the row.
+
+derive-falsifier-strength.js (report) → promote-unlock.js SYM strength=auto (stamp).
+  chanceRate = qualifying days x windowDays / spanDays, where a qualifying day is one
+  on which the watch's OWN confirm bar would have been met regardless of date
+  (cadence: outflow >= 50% of the wallet's mean; family: any wallet clears its bar;
+  contract: a cluster). windowDays is the width the watch actually accepts (grace+2).
+  replayRate = the falsifier's own record. margin = replay - chance.
+  Boot now REFUSES a verified row without derived strength (a weak falsifier nobody
+  flagged is worse than ORDER's, because ORDER's says so).
+
+MEASURED — and the "implicitly strong" rows are not negligible:
+  EIGEN  24% → 100%  (17 qualifying days in 354: 11 month-ends + ~6 ad-hoc treasury
+                      moves that clear the 50% bar; margin 0.76)
+  ENA    33% → 100%  (30 in 449; the ops wallet is busier; margin 0.67)
+  MOVE   36% → 100%  (20 in 275; the 52.8M off-schedule class counts against it;
+                      margin 0.64)
+  ORDER  58% →  75%  WEAK (margin 0.17)
+  ARB / STRK / ZRO   none — a dead-man switch tests freshness, not the claim.
+The coverage line shows all seven as chance→replay; every claimCoverage line ends
+with its strength clause, or the word UNDERIVED.
+
+UNDISCHARGED CONSTANT, DECLARED: WEAK_CHANCE = 0.5 is a chosen cut, not derived.
+The numbers on the row are the fact; the label is a summary. A better statistic is
+the margin (replay - chance) against what a random date would score; not built —
+three of four rows sit at 100% replay so the margin ranks them the same way.
+
+FUNDING vs CLAIM (REZ, for the mechanism notes): the off-index clusters the detector
+found on REZ's vesting contract were the plans being FUNDED (one May burst: Apr 30
+14x/23 recipients, then May 5/10/25), not beneficiaries claiming. Funding events and
+claim events are different shapes on the same contract — many recipients receiving
+plan balances at once vs many beneficiaries pulling after a date — and the detector
+saw one while looking for the other. Its cluster test is shape-agnostic by design;
+the mechanism stamp (index-contradicted) is still right, because the index dates
+matched neither shape. A future refinement, if a second case appears: split
+clusters by whether recipients are NEW to the contract (funding) or returning
+(claims). Logged, not built.
+
+Week ahead: ENA window opens Monday 09-07 (evaluated ~11th); ORDER's first live
+cluster check, 09-07 cliff, closes 09-12 — with a 58% chance rate a CONFIRM there is
+weak evidence and is labelled so; MOVE 09-09..12.
