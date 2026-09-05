@@ -54,7 +54,9 @@
     "windowDays": 5,
     "qualifyingDays": 17,
     "spanDays": 354,
-    "margin": 0.76
+    "margin": 0.76,
+    "replayHits": 11,
+    "compound": 1.5e-7
    }
   },
   {
@@ -626,7 +628,9 @@
     "windowDays": 5,
     "qualifyingDays": 20,
     "spanDays": 275,
-    "margin": 0.64
+    "margin": 0.64,
+    "replayHits": 8,
+    "compound": 0.00028
    }
   },
   {
@@ -766,7 +770,9 @@
     "windowDays": 5,
     "qualifyingDays": 30,
     "spanDays": 449,
-    "margin": 0.67
+    "margin": 0.67,
+    "replayHits": 13,
+    "compound": 5.5e-7
    }
   },
   {
@@ -1209,7 +1215,9 @@
     "windowDays": 5,
     "qualifyingDays": 13,
     "spanDays": 113,
-    "margin": 0.17
+    "margin": 0.17,
+    "replayHits": 6,
+    "compound": 0.28
    }
   },
   {

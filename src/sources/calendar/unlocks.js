@@ -78,7 +78,9 @@ function strengthClause(t) {
   const f = t?.falsifier;
   if (!f) return ' Falsifier strength: UNDERIVED.';
   if (f.verdict === 'NONE') return ' Falsifier strength: none (dead-man switch tests freshness, not the claim).';
-  return ` Falsifier strength: a ${f.windowDays}-day window passes by chance ${Math.round(f.chanceRate * 100)}% of the time; record ${f.replayRate != null ? Math.round(f.replayRate * 100) + '%' : 'n/a'}${f.verdict === 'WEAK' ? ' — WEAK' : ''}.`;
+  const series = f.replayHits != null ? `${f.replayHits}/${f.replayN}${f.replayHits === f.replayN ? ' consecutive' : ''}` : 'n/a';
+  const comp = f.compound != null ? ` (that series by chance alone: p≈${f.compound.toExponential(1)})` : '';
+  return ` Falsifier strength: each ${f.windowDays}-day window passes by chance ${Math.round(f.chanceRate * 100)}% of the time; record ${series}${comp}${f.verdict === 'WEAK' ? ' — WEAK on both' : ''}.`;
 }
 export function claimCoverage(t, lead = 3) {
   if (t?.provenance === 'sourced' && UNVERIFIABLE_MECHANISMS.includes(t.mechanism)) return {

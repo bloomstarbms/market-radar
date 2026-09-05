@@ -924,8 +924,17 @@ console.log('49. FALSIFIER STRENGTH is derived on EVERY verified row (chance rat
   check('LIVE: EIGEN/ENA/MOVE have NUMBERS, not an implicit "strong"', ['EIGEN', 'ENA', 'MOVE'].every((s) => { const f = live.find((t) => t.sym === s).falsifier; return f.chanceRate > 0 && f.replayRate === 1 && /days ≥50% of mean/.test(f.basis); }));
   check('LIVE: ORDER is the only WEAK; dead-man rows are NONE', live.filter((t) => t.falsifier.verdict === 'WEAK').map((t) => t.sym).join() === 'ORDER' && ['ARB', 'STRK', 'ZRO'].every((s) => live.find((t) => t.sym === s).falsifier.verdict === 'NONE'));
   const cov = unlockCoverage();
-  check('coverage line shows chance→replay for all seven', /falsifier chance→replay: .*EIGEN \d+%→100%.*ORDER 58%→75% WEAK/.test(cov.line) && (cov.strength.match(/·/g) || []).length === 6 && !cov.underived);
+  check('coverage line shows chance/window for all seven', /falsifier chance→replay: .*EIGEN \d+%\/window.*ORDER 58%\/window · 6\/8 .* WEAK/.test(cov.line) && ['EIGEN', 'STRK', 'ARB', 'MOVE', 'ENA', 'ZRO', 'ORDER'].every((s) => new RegExp('\\b' + s + ' ').test(cov.strength)) && !cov.underived);
   check('every verified claimCoverage line states its strength (cadence, contract, dead-man)', live.every((t) => /Falsifier strength: /.test(claimCoverage(t, 3).line)));
+  // COMPOUND: the row's weight is the replay series, not the per-window figure.
+  const { compoundChance } = await import('./src/core/unlock-promote.js');
+  check('compound: 11 consecutive at 24% -> 1.5e-7 (binomial tail)', Math.abs(compoundChance(0.24, 11, 11) / 1.5e-7 - 1) < 0.02);
+  check('compound: ORDER 6/8 at 58% -> ~0.28 (misses counted, not consecutive)', Math.abs(compoundChance(0.58, 6, 8) - 0.275) < 0.005);
+  check('compound: 0/0 windows -> null (no series, no weight)', compoundChance(0.24, 0, 0) === null);
+  check('compound: more consecutive stamps at the same chance rate always weigh more', compoundChance(0.3, 5, 5) > compoundChance(0.3, 8, 8));
+  check('stamp carries compound + replayHits', st.falsifier.replayHits === 11 && Math.abs(st.falsifier.compound / 1.5e-7 - 1) < 0.1);
+  check('coverage line shows per-window AND series AND compound (EIGEN 24%/window · 11/11 consecutive · p≈1.5e-7)', /EIGEN 24%\/window · 11\/11 consecutive · p≈1\.5e-7/.test(cov.line) && /ORDER 58%\/window · 6\/8 · p≈2\.8e-1 WEAK/.test(cov.line));
+  check('claimCoverage says "that series by chance alone" with the compound', /record 11\/11 consecutive \(that series by chance alone: p≈1\.5e-7\)/.test(claimCoverage(live.find((t) => t.sym === 'EIGEN'), 3).line));
   check('claimCoverage can say UNDERIVED', /UNDERIVED/.test(claimCoverage({ verified: true, cadence: { monthsObserved: 3, wallet: 'x' }, events: [{}] }, 3).line));
 }
 
@@ -976,7 +985,7 @@ console.log('48. MECHANISM — a sourced date can name no discrete event; weak f
   check('claimCoverage for a contradicted index says the chain contradicts it', /Index contradicted by chain/.test(claimCoverage(rez, 3).line));
   const cov = unlockCoverage();
   check('coverage line splits sourced into pending vs unverifiable-by-mechanism', /\d+ pending verification · 2 unverifiable by mechanism: 1 continuous-claim, 1 index-contradicted/.test(cov.line) && cov.sourcedPending + cov.sourcedUnverifiable === cov.sourced);
-  check('coverage line flags ORDER weak with its numbers', /ORDER 58%→75% WEAK/.test(cov.line) && cov.weakFalsifier === 1);
+  check('coverage line flags ORDER weak with its numbers', /ORDER 58%\/window · 6\/8 · p≈2\.8e-1 WEAK/.test(cov.line) && cov.weakFalsifier === 1);
   check('heartbeat carries the weak flag with the chance rate', /ORDER cliff .* falsifier WEAK \(chance 58%\)/.test(cadenceStatus().line));
 }
 

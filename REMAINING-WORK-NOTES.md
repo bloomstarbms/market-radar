@@ -2734,3 +2734,15 @@ clusters by whether recipients are NEW to the contract (funding) or returning
 Week ahead: ENA window opens Monday 09-07 (evaluated ~11th); ORDER's first live
 cluster check, 09-07 cliff, closes 09-12 — with a 58% chance rate a CONFIRM there is
 weak evidence and is labelled so; MOVE 09-09..12.
+
+## 2026-09-05 — COMPOUND: THE SERIES IS THE WEIGHT (v0.30.3)
+
+Reviewer: a 24% per-window chance makes any single EIGEN stamp modest evidence,
+but eleven consecutive at 24% is ~1.5e-7 by chance. The field as displayed invited
+reading the weaker number. Reading rule, now on the row: CHANCE RATE = how much each
+new stamp adds; REPLAY SERIES = how much the row has earned. compound = binomial
+tail P(>= hits of n by chance alone) — covers misses, so ORDER's 6/8 at 58% reads
+p≈0.28: weak on both. EIGEN 11/11 at 24%: 1.5e-7. ENA 13/13 at 33%: 5.5e-7. MOVE
+8/8 at 36%: 2.8e-4. Line format: `EIGEN 24%/window · 11/11 consecutive · p≈1.5e-7`.
+WEAK cut stays declared at 0.5 — deriving a threshold from seven points would be a
+constant wearing a derivation's clothes.

@@ -244,10 +244,24 @@ export function falsifierProblems(t) {
   if (!f.basis) p.push('falsifier.basis required');
   return p;
 }
+// COMPOUND: chance rate is per window — how much each new stamp adds. The row's
+// evidentiary weight is the replay SERIES: P(>= hits of n windows pass by chance
+// alone) = binomial tail at chanceRate. EIGEN 11/11 at 0.24 -> 1.5e-7; ORDER 6/8 at
+// 0.58 -> 0.42. Shown next to the per-window figure so a strong row is not
+// discounted because its per-window number looks soft.
+export function compoundChance(chanceRate, hits, n) {
+  if (!(n > 0) || !(chanceRate >= 0 && chanceRate <= 1)) return null;
+  const C = (nn, k) => { let r = 1; for (let i = 1; i <= k; i++) r = r * (nn - k + i) / i; return r; };
+  let p = 0;
+  for (let k = hits; k <= n; k++) p += C(n, k) * chanceRate ** k * (1 - chanceRate) ** (n - k);
+  return Math.min(1, p);
+}
 export function stampStrength(row, rep) {
   if (!rep) throw new Error(`stampStrength: ${row.sym} has no entry in data/falsifier-strength.json — run derive-falsifier-strength.js`);
   const f = { verdict: rep.verdict, basis: rep.basis, at: rep.at, kind: rep.kind };
-  if (rep.verdict !== 'NONE') Object.assign(f, { chanceRate: rep.chanceRate, replayRate: rep.replayRate ?? null, replayN: rep.replayN ?? null, windowDays: rep.windowDays, qualifyingDays: rep.qualifyingDays, spanDays: rep.spanDays, margin: rep.replayRate != null ? +(rep.replayRate - rep.chanceRate).toFixed(2) : null });
+  if (rep.verdict !== 'NONE') Object.assign(f, { chanceRate: rep.chanceRate, replayRate: rep.replayRate ?? null, replayN: rep.replayN ?? null, windowDays: rep.windowDays, qualifyingDays: rep.qualifyingDays, spanDays: rep.spanDays, margin: rep.replayRate != null ? +(rep.replayRate - rep.chanceRate).toFixed(2) : null,
+    replayHits: rep.replayHits ?? (rep.replayRate != null && rep.replayN ? Math.round(rep.replayRate * rep.replayN) : null) });
+  if (f.replayHits != null && f.replayN) f.compound = +compoundChance(f.chanceRate, f.replayHits, f.replayN).toPrecision(2);
   const out = {};
   for (const k of VERIFIED_ROW_FIELDS) if (row[k] !== undefined) out[k] = row[k];
   out.falsifier = f;
@@ -259,7 +273,8 @@ export function falsifierLine(t) {
   const f = t?.falsifier;
   if (!f) return `${t?.sym} underived`;
   if (f.verdict === 'NONE') return `${t.sym} none`;
-  return `${t.sym} ${Math.round(f.chanceRate * 100)}%→${f.replayRate != null ? Math.round(f.replayRate * 100) + '%' : '?'}${f.verdict === 'WEAK' ? ' WEAK' : ''}`;
+  const series = f.replayHits != null ? `${f.replayHits}/${f.replayN}${f.replayHits === f.replayN ? ' consecutive' : ''}` : '?';
+  return `${t.sym} ${Math.round(f.chanceRate * 100)}%/window · ${series}${f.compound != null ? ` · p≈${f.compound.toExponential(1).replace('e-', 'e-').replace('e+0', '')}` : ''}${f.verdict === 'WEAK' ? ' WEAK' : ''}`;
 }
 export function forwardFalsifierProblems(t) {
   if (t.enforcement === 'contract') {

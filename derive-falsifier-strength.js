@@ -56,7 +56,7 @@ if (IS_CLI) (async () => {
     if (t.enforcement === 'contract' && t.clusterSpec) {
       const s = strengthFromClusterSpec(t.clusterSpec);
       if (!s) { console.log(`${t.sym}: clusterSpec lacks spanDays/offIndex — re-promote`); continue; }
-      out[t.sym] = { kind: 'contract-cliff', ...s, verdict: s.chanceRate >= 0.5 ? 'WEAK' : 'STRONG', basis: `${s.qualifyingDays} clusters in ${s.spanDays}d, w${s.windowDays} → chance ${s.chanceRate}; replay ${s.replayRate} of ${s.replayN}`, at: new Date().toISOString().slice(0, 16) };
+      out[t.sym] = { kind: 'contract-cliff', ...s, replayHits: t.clusterSpec.hits, verdict: s.chanceRate >= 0.5 ? 'WEAK' : 'STRONG', basis: `${s.qualifyingDays} clusters in ${s.spanDays}d, w${s.windowDays} → chance ${s.chanceRate}; replay ${s.replayRate} of ${s.replayN}`, at: new Date().toISOString().slice(0, 16) };
       console.log(`${t.sym}: ${out[t.sym].verdict} chance ${s.chanceRate} replay ${s.replayRate}`); continue;
     }
     if (!t.cadence) continue;
@@ -76,7 +76,7 @@ if (IS_CLI) (async () => {
     const confirmed = stamps.filter((v) => v.action === 'CONFIRM').length;
     const replayN = (spec.monthsObserved || 0) + stamps.length, replayHits = (spec.monthsObserved || 0) + confirmed;
     const replayRate = replayN ? +(replayHits / replayN).toFixed(2) : null;
-    out[t.sym] = { kind: Array.isArray(spec.wallets) ? 'cadence-family' : 'cadence', ...s, replayRate, replayN, verdict: s.chanceRate >= 0.5 ? 'WEAK' : 'STRONG',
+    out[t.sym] = { kind: Array.isArray(spec.wallets) ? 'cadence-family' : 'cadence', ...s, replayRate, replayN, replayHits, verdict: s.chanceRate >= 0.5 ? 'WEAK' : 'STRONG',
       basis: `${s.qualifyingDays} days ≥50% of mean in ${s.spanDays}d (since ${s.oldest}), w${s.windowDays} → chance ${s.chanceRate}; replay ${replayHits}/${replayN}`, at: new Date().toISOString().slice(0, 16) };
     console.log(`${t.sym}: ${out[t.sym].verdict} chance ${s.chanceRate} (${s.qualifyingDays} qualifying days / ${s.spanDays}d) replay ${replayHits}/${replayN}`);
   }
