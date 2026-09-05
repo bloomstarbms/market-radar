@@ -34,7 +34,10 @@ const EXCHANGE_RX = /binance|okx|kraken|bybit|gate\.?io|bitget|upbit|bithumb|coi
 // polluted every verdict; bridged tokens show their ESCROW as a 50% holder.
 const POOL_RX = /uniswapv[23]|pancake|curve|balancer.*vault|sushiswap|pool$|pair$/i;
 const STAKING_RX = /staked|staking|stEIGEN|sENA|escrowed|xToken/i;
-const BRIDGE_RX = /oftadapter|bridge|peggy|portal|wormhole|l1standard|anyswap|multichain|canonical/i;
+// 2026-09-05: StakeStoneLayerZeroAdapter produced a false CADENCE hit (bridge flow
+// read as custody emission) and ZetaConnectorEth read as a 10% custom holder. Bridge
+// adapters/connectors are ESCROW, never locked supply — widened to the class.
+const BRIDGE_RX = /oftadapter|layerzeroadapter|adapter$|connector|bridge|peggy|portal|wormhole|l1standard|anyswap|multichain|canonical/i;
 
 // AUTHORITATIVE ADDRESSES for tokens we already know — DexScreener resolution sent
 // EIGEN to a symbol-squatter on the validation run. Resolution by search is a

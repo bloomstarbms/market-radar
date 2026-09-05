@@ -811,8 +811,12 @@ console.log('34. enforcement, not provenance label, decides the falsifier (the E
 console.log('35. stage tiering — tier BEFORE bulk promotion, not after');
 {
   const { STAGES, leadsFor, lastMonthlyDate } = await import('./src/sources/calendar/unlocks.js');
-  check('FULL emits four stages incl. post-event', JSON.stringify(STAGES.FULL) === '[14,3,0,-3]');
+  check('FULL emits five stages incl. T-7 and post-event', JSON.stringify(STAGES.FULL) === '[14,7,3,0,-3]');
   check('LOGGED emits nothing (tracked, never pushed)', STAGES.LOGGED.length === 0);
+  // T-7 is the operator's minimum notice. It was dropped when tiers were first cut;
+  // this pins it into every stage that pushes at all.
+  check('every non-LOGGED stage contains T-7', Object.entries(STAGES).every(([k, v]) => k === 'LOGGED' || v.includes(7)));
+  check('STANDARD is T-7/T-3/T-0 and nothing backward', JSON.stringify(STAGES.STANDARD) === '[7,3,0]');
   check('unstaged rows default STANDARD (existing five unchanged in kind)', JSON.stringify(leadsFor({})) === JSON.stringify(STAGES.STANDARD));
   check('unknown stage falls back to STANDARD, not silence', JSON.stringify(leadsFor({ stage: 'TYPO' })) === JSON.stringify(STAGES.STANDARD));
   // T+3 needs a BACKWARD-looking date: the forward-only helper made negative leads
@@ -877,6 +881,67 @@ console.log('36. every prompt document declares its premises (documents get obey
   // Self-tests: the checks must be capable of failing.
   check('premise check can fail', !/<!--\s*PREMISE[\s\S]*?-->/.test('# Doc\n\nno header here'));
   check('empty-assumptions check can fail', !/Assumes:\s*\n\s*-\s*\S/.test('Written against: v1.0.0\nAssumes:\n'));
+}
+
+console.log('45. SOURCED tier — a named source pushes, labelled; its falsifier is the source');
+{
+  const { sourceRow, sourcedRowProblems, sourceIsStale, promoteRow, SOURCE_STALE_DAYS } = await import('./src/core/unlock-promote.js');
+  const { sourceRecheckDecision, effectiveSourced } = await import('./src/sources/calendar/cadence-watch.js');
+  const { sourcedMessage, claimCoverage, unlockCoverage, STAGES } = await import('./src/sources/calendar/unlocks.js');
+  const now = Date.now();
+  const t7 = Math.floor((now + 7 * 86400e3) / 1000), t40 = Math.floor((now + 40 * 86400e3) / 1000);
+  const base = { source: 'defillama', sourceFetchedAt: new Date(now).toISOString().slice(0, 16), chain: 'ethereum', token: 'ethereum:0x' + 'a'.repeat(40), maxSupply: 1e9, circSupply: 5.5e8,
+    sourceEvents: [{ t: t7, type: 'cliff', n: 1e6, cats: 'insiders' }, { t: t40, type: 'cliff', n: 1e6, cats: 'insiders' }] };
+  const row = sourceRow({ sym: 'TST', name: 'Test' }, base);
+  // Shape discipline: the gate refuses what a sourced row must not be.
+  check('a sourced row constructs with provenance/source/fetchedAt', row.provenance === 'sourced' && row.source === 'defillama' && !!row.sourceFetchedAt);
+  check('REFUSED without a source name', sourcedRowProblems({ ...row, source: undefined }).length > 0);
+  check('REFUSED without a fetch timestamp', sourcedRowProblems({ ...row, sourceFetchedAt: undefined }).length > 0);
+  check('REFUSED if it also carries events[] (that field means VERIFIED)', sourcedRowProblems({ ...row, events: [{}] }).length > 0);
+  check('REFUSED at FULL — T-14/T+3 assume observation it cannot make', sourcedRowProblems({ ...row, stage: 'FULL' }).length > 0);
+  check('REFUSED without a chain (wrong chain reads as no-locked-supply, silently)', sourcedRowProblems({ ...row, chain: undefined }).length > 0);
+  check('a verified row cannot be downgraded to sourced by this path', (() => { try { sourceRow({ sym: 'V', name: 'V', events: [{ date: '2026-09-01', source: 's' }] }, base); return false; } catch { return true; } })());
+  // Stale rule: a source not re-read in three weeks is a memory, not a source.
+  check('fresh source is not stale', !sourceIsStale(row, now));
+  check(`a ${SOURCE_STALE_DAYS + 1}-day-old source IS stale and stops pushing`, sourceIsStale({ ...row, sourceFetchedAt: new Date(now - (SOURCE_STALE_DAYS + 1) * 86400e3).toISOString() }, now));
+  check('day 20 is still fresh (boundary)', !sourceIsStale({ ...row, sourceFetchedAt: new Date(now - 20 * 86400e3).toISOString() }, now));
+  // The falsifier: re-asking the source. Four outcomes, each producing the stated
+  // result and nothing else.
+  const idx = (events) => ({ fetchedAt: '2026-09-12T00:00', protocols: [{ symbol: 'TST', events }] });
+  check('fetch failed → NO-LOOK, nothing changes', sourceRecheckDecision(row, null).action === 'NO-LOOK');
+  check('token gone from index → DEMOTE', sourceRecheckDecision(row, { fetchedAt: 'x', protocols: [] }).action === 'DEMOTE');
+  check('no upcoming events → DEMOTE (source retracted)', sourceRecheckDecision(row, idx([{ t: t7 - 30 * 86400, type: 'cliff', n: 1 }])).action === 'DEMOTE');
+  check('same dates → REFRESH with the new fetch time', (() => { const d = sourceRecheckDecision(row, idx(base.sourceEvents)); return d.action === 'REFRESH' && d.fetchedAt === '2026-09-12T00:00'; })());
+  const movedIdx = idx([{ t: t7 + 2 * 86400, type: 'cliff', n: 1e6, cats: 'insiders' }, { t: t40, type: 'cliff', n: 1e6, cats: 'insiders' }]);
+  const rev = sourceRecheckDecision(row, movedIdx);
+  check('date moved → REVISE, naming the old and new dates', rev.action === 'REVISE' && rev.moved.length === 1 && rev.added.length === 1 && /revised by source from/.test(rev.reason));
+  // Overlay merge — the bot writes data/, never unlocks.json.
+  const eff = effectiveSourced(row, { rows: { TST: { fetchedAt: '2099-01-01T00:00', events: movedIdx.protocols[0].events, revision: { at: '2099-01-01', note: 'x' } } } });
+  check('overlay refreshes the fetch time and replaces events', eff.sourceFetchedAt === '2099-01-01T00:00' && eff.sourceEvents.length === 2 && !!eff.sourceRevision);
+  const dem = effectiveSourced(row, { rows: { TST: { demoted: { at: '2099-01-01T00:00', reason: 'gone' } } } });
+  check('overlay demotion silences the row', !!dem.sourceDemoted);
+  check('re-ingest AFTER the demotion supersedes it', !effectiveSourced({ ...row, sourceFetchedAt: '2099-02-01T00:00' }, { rows: { TST: { demoted: { at: '2099-01-01T00:00' } } } }).sourceDemoted);
+  // Message: visibly weaker than verified, no direction, source named, age stated.
+  const m = sourcedMessage(row, row.sourceEvents[0], 7, new Date(now));
+  check('header icon is 📅 UNLOCK LISTED, not 🔓', /^📅 UNLOCK LISTED/.test(m.title));
+  check('first line names the source and says NOT independently verified', /per DefiLlama/.test(m.lines[0]) && /NOT independently verified/.test(m.lines[0]));
+  check('amount is labelled as the source figure', /source figure/.test(m.lines.join(' ')));
+  check('message states when the source was last confirmed', /Source last confirmed/.test(m.lines.join(' ')));
+  check('no directional language in the sourced template', !/(close now|drift|sell|buy|dump|bearish|bullish)/i.test(m.title + m.lines.join(' ')));
+  check('claim coverage for sourced rows says so', claimCoverage(row).amount === 'sourced' && /not independently verified/.test(claimCoverage(row).line));
+  check('sourced rows never look backward (no T+3)', STAGES.STANDARD.every((l) => l >= 0));
+  // Supersession keeps the source as history on the verified row.
+  const up = promoteRow(row, { events: [{ date: '2026-09-05', source: 'onchain-cadence', detail: 'd' }], cadence: { wallet: '0x' + 'b'.repeat(40), expectDay: 9, meanAmount: 1e6, monthsObserved: 8 }, monthlyDay: 9 });
+  check('promotion of a sourced row keeps sourceHistory and drops provenance', up.sourceHistory?.source === 'defillama' && up.provenance === undefined && up.chain === 'ethereum');
+  // Coverage line: sourced and stale counts are visible.
+  const cov = unlockCoverage([row, { ...row, sym: 'OLD', sourceFetchedAt: new Date(now - 30 * 86400e3).toISOString() }, { sym: 'E' }]);
+  check('coverage counts sourced and STALE separately', cov.sourced === 2 && cov.staleSourced === 1 && /STALE/.test(cov.line));
+  // Live file: all 30 pass the gate.
+  const { verifiedRowProblems } = await import('./src/core/unlock-promote.js');
+  const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
+  check('LIVE: 30 sourced rows present', live.filter((t) => t.provenance === 'sourced').length === 30);
+  check('LIVE: every sourced row passes the boot gate', verifiedRowProblems(live).length === 0);
+  check('LIVE: the six formerly-unconfirmed chains are resolved and recorded', ['ASTER', 'FF', 'LISTA', 'STO', 'SOLV', 'RE'].every((s) => live.find((t) => t.sym === s)?.chain !== 'unconfirmed'));
 }
 
 console.log('44. band width is DERIVED per row, not a global constant');

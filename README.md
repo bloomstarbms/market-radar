@@ -1,10 +1,10 @@
 <!-- PREMISE
-Written against: v0.28.4
+Written against: v0.29.0
 Reviewed: 2026-08-29
 Assumes:
 - Describes SHIPPED behaviour only; anything aspirational belongs in REMAINING-WORK.md.
 - FACTS push immediately (no score/budget/direction); CALLS carry the full apparatus.
-- Unlock coverage is Ethereum/EVM only — absence of a row is not "no unlocks".
+- Verified unlock reads are Ethereum/EVM only; SOURCED rows (v0.29.0) cite a named calendar and push labelled as not independently verified. Absence of a row is not "no unlocks".
 -->
 
 # Market Radar

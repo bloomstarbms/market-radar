@@ -352,6 +352,93 @@ export function driftStatus(months, { minRun = 3, threshold = 0.10 } = {}) {
     pct: Math.round((mean - 1) * 100), last: confirms[confirms.length - 1][1].ratio, n: confirms.length };
 }
 
+// SOURCE RECHECK — the sourced tier's falsifier. A sourced row's claim is "DefiLlama
+// says X"; its falsifier is re-asking DefiLlama. PURE decision per row against a
+// freshly fetched index (or null when the fetch failed):
+//   fetch failed                        → NOTHING changes ("we did not look" — feedWasLooking)
+//   token absent from index / no events → DEMOTE (source retracted)
+//   every event still present, same day → REFRESH (sourceFetchedAt advances)
+//   some event dates moved              → REVISE (row events replaced; message notes it)
+export function sourceRecheckDecision(row, index) {
+  if (!index) return { action: 'NO-LOOK', reason: 'index fetch failed — not evidence' };
+  const p = (index.protocols || []).find((x) => x.symbol === row.sym);
+  if (!p) return { action: 'DEMOTE', reason: 'token no longer in the source index' };
+  const now = Math.floor(Date.now() / 1000);
+  const fresh = (p.events || []).filter((e) => e.t > now);
+  if (!fresh.length) return { action: 'DEMOTE', reason: 'source lists no upcoming batch events' };
+  const day = (t) => new Date(t * 1000).toISOString().slice(0, 10);
+  const oldFuture = (row.sourceEvents || []).filter((e) => e.t > now).map((e) => day(e.t)).sort();
+  const newFuture = fresh.map((e) => day(e.t)).sort();
+  const same = oldFuture.length === newFuture.length && oldFuture.every((d, i) => d === newFuture[i]);
+  if (same) return { action: 'REFRESH', fetchedAt: index.fetchedAt };
+  const moved = oldFuture.filter((d) => !newFuture.includes(d));
+  const added = newFuture.filter((d) => !oldFuture.includes(d));
+  return { action: 'REVISE', fetchedAt: index.fetchedAt, events: p.events, moved, added,
+    reason: `date${moved.length === 1 ? '' : 's'} revised by source${moved.length ? ` from ${moved.join(', ')}` : ''}${added.length ? ` to ${added.join(', ')}` : ''}` };
+}
+
+// Overlay for sourced rows (data/source-recheck.json) — the bot never edits
+// unlocks.json. effectiveSourced() merges: a refreshed fetch time, revised events,
+// or a demotion. Pure.
+const RECHECK_FILE = join(ROOT, 'data', 'source-recheck.json');
+export function loadRecheckState() {
+  try { return existsSync(RECHECK_FILE) ? JSON.parse(readFileSync(RECHECK_FILE, 'utf8')) : { lastRun: null, rows: {} }; } catch { return { lastRun: null, rows: {} }; }
+}
+export function effectiveSourced(row, state) {
+  const o = state?.rows?.[row.sym];
+  if (!o) return row;
+  const out = { ...row };
+  if (o.fetchedAt && o.fetchedAt > (row.sourceFetchedAt || '')) out.sourceFetchedAt = o.fetchedAt;
+  if (o.events) out.sourceEvents = o.events;
+  if (o.revision) out.sourceRevision = o.revision;
+  if (o.demoted && !(row.sourceFetchedAt > o.demoted.at)) out.sourceDemoted = o.demoted; // re-ingest after demotion supersedes it
+  return out;
+}
+
+const RECHECK_EVERY = 7 * 86400e3;
+export async function pollSourceRecheck(loadTokens) {
+  const st = loadRecheckState();
+  if (st.lastRun && Date.now() - new Date(st.lastRun).getTime() < RECHECK_EVERY) return;
+  let tokens = null;
+  try { tokens = loadTokens ? loadTokens() : JSON.parse(readFileSync(join(ROOT, 'unlocks.json'), 'utf8')).tokens; } catch { return; }
+  const sourced = (tokens || []).filter((t) => t?.provenance === 'sourced' && !t.retired);
+  if (!sourced.length) return;
+  // The bot's OWN fetch. If it fails (403 from this network, embed moved, etc.),
+  // nothing changes: rows age toward the 21-day stale rule, and staleness — not a
+  // false demotion — is what surfaces in the heartbeat.
+  let index = null;
+  try {
+    const mod = await import('../../../fetch-unlock-index.js');
+    const { data, generatedAtSec } = await mod.fetchIndex();
+    index = mod.trim(data, generatedAtSec, new Set(sourced.map((t) => t.sym)));
+  } catch (e) {
+    console.error('[unlocks][OPERATOR] source recheck: index fetch failed — nothing changed:', e.message);
+    st.lastRun = new Date().toISOString(); st.lastResult = 'NO-LOOK: ' + e.message;
+    writeFileSync(RECHECK_FILE + '.tmp', JSON.stringify(st, null, 1)); renameSync(RECHECK_FILE + '.tmp', RECHECK_FILE);
+    return;
+  }
+  const counts = {};
+  for (const t of sourced) {
+    const eff = effectiveSourced(t, st);
+    const d = sourceRecheckDecision(eff, index);
+    counts[d.action] = (counts[d.action] || 0) + 1;
+    const cur = st.rows[t.sym] || {};
+    if (d.action === 'REFRESH') st.rows[t.sym] = { ...cur, fetchedAt: d.fetchedAt, demoted: undefined };
+    else if (d.action === 'REVISE') {
+      st.rows[t.sym] = { ...cur, fetchedAt: d.fetchedAt, events: d.events, revision: { at: d.fetchedAt, note: d.reason }, demoted: undefined };
+      await broadcast(formatAlert({ source: 'SYS', type: 'CADENCE', severity: 'LOW', title: `${t.sym} sourced schedule revised by ${t.source}`, lines: [`Coverage note, not a market event: ${d.reason}. The row keeps pushing on the revised dates and says so.`] }), { toChannel: false }).catch(() => []);
+    } else if (d.action === 'DEMOTE') {
+      if (!cur.demoted) {
+        st.rows[t.sym] = { ...cur, demoted: { at: index.fetchedAt, reason: d.reason } };
+        await broadcast(formatAlert({ source: 'SYS', type: 'CADENCE', severity: 'MEDIUM', title: `${t.sym} sourced row demoted — source retracted`, lines: [`Coverage change, not a market event: ${d.reason}. The row is silent until the source lists it again or it is re-ingested.`] }), { toChannel: false }).catch(() => []);
+      }
+    }
+  }
+  st.lastRun = new Date().toISOString(); st.lastResult = JSON.stringify(counts);
+  writeFileSync(RECHECK_FILE + '.tmp', JSON.stringify(st, null, 1)); renameSync(RECHECK_FILE + '.tmp', RECHECK_FILE);
+  console.log('[unlocks] source recheck:', JSON.stringify(counts));
+}
+
 // Heartbeat line. A watch that silently stops watching is the failure mode this module
 // exists to prevent — so its own liveness is on the operator channel.
 export function cadenceStatus(tokens = null, state = loadWatchState(), now = new Date()) {

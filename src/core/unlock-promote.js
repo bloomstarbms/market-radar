@@ -9,9 +9,49 @@
 // "Verify the fields, not just the date" — enforced by shape, not vigilance.
 
 // Fields a VERIFIED row may carry. Everything else from the estimated era is dropped.
-export const VERIFIED_ROW_FIELDS = ['sym', 'name', 'monthlyDay', 'date', 'verified', 'note', 'events', 'retired', 'retiredAt', 'cadence', 'enforcement', 'reviewBy', 'stage', 'alsoObserve'];
+export const VERIFIED_ROW_FIELDS = ['sym', 'name', 'monthlyDay', 'date', 'verified', 'note', 'events', 'retired', 'retiredAt', 'cadence', 'enforcement', 'reviewBy', 'stage', 'alsoObserve', 'sourceHistory', 'chain', 'token'];
 // Estimated-era fields that must NEVER appear on a verified row (boot-asserted).
 export const ESTIMATED_ONLY_FIELDS = ['pctOfMcap'];
+
+// SOURCED tier (2026-09-05): a NAMED third party publishes the schedule and the
+// message says so. Not verified — it never carries events[] (that field means
+// "independently confirmed") — and not estimated (it pushes, labelled). Its
+// falsifier is the source itself: re-read weekly, stale at 21 days. A sourced row
+// without source + sourceFetchedAt is refused at promotion and at boot, the same
+// shape discipline as a verified row without a forward falsifier.
+export const SOURCED_ROW_FIELDS = ['sym', 'name', 'provenance', 'source', 'sourceFetchedAt', 'sourceEvents', 'chain', 'token', 'stage', 'note', 'circSupply', 'totalLocked', 'maxSupply'];
+export const SOURCE_STALE_DAYS = 21;
+
+export function sourcedRowProblems(t) {
+  const p = [];
+  if (!t.source) p.push('sourced row has no source name');
+  if (!t.sourceFetchedAt || !Number.isFinite(Date.parse(t.sourceFetchedAt))) p.push('sourced row has no parseable sourceFetchedAt');
+  if (!Array.isArray(t.sourceEvents) || !t.sourceEvents.length) p.push('sourced row has no sourceEvents');
+  if (Array.isArray(t.events) && t.events.length) p.push('sourced row carries events[] — that field means VERIFIED; a row cannot be both');
+  if (t.verified === true) p.push('sourced row is marked verified:true');
+  if (!t.chain) p.push('sourced row has no chain (use "unconfirmed" until resolved — a wrong chain reads as "no locked supply", silently)');
+  if (t.stage === 'FULL') p.push('sourced rows cannot be FULL: T-14 and T+3 assume observation a sourced row cannot make');
+  return p;
+}
+export function sourceIsStale(t, now = Date.now()) {
+  const at = Date.parse(t.sourceFetchedAt);
+  return !Number.isFinite(at) || (now - at) > SOURCE_STALE_DAYS * 86400e3;
+}
+
+// Pure constructor for a sourced row — whitelist copy, same discipline as promoteRow.
+export function sourceRow(oldRow, { source, sourceFetchedAt, sourceEvents, chain, token = null, stage = 'STANDARD', note = '', circSupply = null, totalLocked = null, maxSupply = null }) {
+  if (!oldRow?.sym) throw new Error('sourceRow: no sym');
+  if (oldRow.retired) throw new Error(`sourceRow: ${oldRow.sym} is RETIRED`);
+  if (Array.isArray(oldRow.events) && oldRow.events.length) throw new Error(`sourceRow: ${oldRow.sym} is VERIFIED — a verified row is not downgraded to sourced by this path`);
+  const row = { sym: oldRow.sym, name: oldRow.name, provenance: 'sourced', source, sourceFetchedAt, sourceEvents, chain, stage, note };
+  if (token) row.token = token;
+  if (circSupply != null) row.circSupply = circSupply;
+  if (totalLocked != null) row.totalLocked = totalLocked;
+  if (maxSupply != null) row.maxSupply = maxSupply;
+  const p = sourcedRowProblems(row);
+  if (p.length) throw new Error(`sourceRow: ${p.join('; ')}`);
+  return row;
+}
 
 // CADENCE PROVENANCE IS INDUCTIVE: a vesting contract is a COMMITMENT (enforced);
 // a 13-month metronome is a HABIT (nothing binds custody to continue it). It is the
@@ -113,6 +153,13 @@ export function promoteRow(oldRow, { events, monthlyDay = null, date = null, not
     if (p.length) throw new Error(`promoteRow: onchain-cadence provenance requires a machine-checkable cadence spec (auto-demote is not optional for behavioural verification): ${p.join('; ')}`);
   }
   const row = { sym: oldRow.sym, name: oldRow.name, verified: true, events, note };
+  // A sourced row promoted to verified is SUPERSEDED, not deleted: the source's
+  // events travel as history, and the chain/token resolution survives.
+  if (oldRow.provenance === 'sourced') {
+    row.sourceHistory = { source: oldRow.source, sourceFetchedAt: oldRow.sourceFetchedAt, sourceEvents: oldRow.sourceEvents, supersededAt: new Date().toISOString().slice(0, 10) };
+  }
+  if (oldRow.chain) row.chain = oldRow.chain;
+  if (oldRow.token) row.token = oldRow.token;
   if (monthlyDay) row.monthlyDay = monthlyDay;
   if (date) row.date = date;
   if (cadence) row.cadence = cadence;
@@ -130,6 +177,11 @@ export function promoteRow(oldRow, { events, monthlyDay = null, date = null, not
 export function verifiedRowProblems(tokens) {
   const problems = [];
   for (const t of tokens || []) {
+    // Sourced rows have their own gate: source + fetch time, or boot refuses.
+    if (t?.provenance === 'sourced') {
+      for (const p of sourcedRowProblems(t)) problems.push(`unlock token '${t.sym}' (sourced): ${p}`);
+      continue;
+    }
     if (!Array.isArray(t?.events) || !t.events.length) continue;
     for (const f of ESTIMATED_ONLY_FIELDS) {
       if (f in t) problems.push(`unlock token '${t.sym}' is VERIFIED but carries estimated-era field '${f}' — promotion patched instead of constructing`);

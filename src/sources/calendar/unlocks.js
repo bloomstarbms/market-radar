@@ -9,7 +9,8 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { config, ROOT } from '../../config.js';
 import { dispatch } from '../../core/dispatcher.js';
-import { loadWatchState, activeDemotions, observedAround, retrospectiveLine } from './cadence-watch.js';
+import { loadWatchState, activeDemotions, observedAround, retrospectiveLine, loadRecheckState, effectiveSourced } from './cadence-watch.js';
+import { sourceIsStale, SOURCE_STALE_DAYS } from '../../core/unlock-promote.js';
 
 const FILE = join(ROOT, 'unlocks.json');
 // STAGE TIERING (coverage-session Part 3): at 25+ tracked tokens, un-tiered monthly
@@ -17,7 +18,11 @@ const FILE = join(ROOT, 'unlocks.json');
 // promotion. Negative lead = days AFTER the event (T+3 post-check). LOGGED rows are
 // tracked, heartbeat-visible, never pushed. Stage assignments are PROVISIONAL until
 // ADV matures (~Sep 7) — the row's note says so.
-export const STAGES = { FULL: [14, 3, 0, -3], STANDARD: [3, 0], LOGGED: [] };
+// T-7 IS THE MINIMUM every pushing row gets (operator ask: a week's notice). It was
+// dropped when the tiers were first cut and restored on 2026-09-05; fixture asserts
+// every non-LOGGED stage contains it. Sourced rows are STANDARD regardless of
+// pressure — T-14 and T+3 assume observation a sourced row cannot make.
+export const STAGES = { FULL: [14, 7, 3, 0, -3], STANDARD: [7, 3, 0], LOGGED: [] };
 export const leadsFor = (row) => STAGES[row?.stage ?? 'STANDARD'] ?? STAGES.STANDARD;
 const CHECK_EVERY = 6 * 3600e3;    // re-evaluate every 6h
 let lastPoll = 0;
@@ -68,6 +73,10 @@ function nextMonthlyDate(day, from = new Date()) {
 // irregular emitters excluded from the forward falsifier. Predict the floor, report
 // the total — same row, different claim per stage, both true.
 export function claimCoverage(t, lead = 3) {
+  if (t?.provenance === 'sourced') return {
+    date: 'sourced', amount: 'sourced', scope: 'source',
+    line: `Date and amount are ${t.source}'s published figures — not independently verified. Falsifier: the source itself, re-read weekly; silent after ${SOURCE_STALE_DAYS} days unrefreshed.`,
+  };
   if (lead < 0 && (t?.cadence || t?.alsoObserve)) return {
     date: 'observed', amount: 'observed-actual', scope: 'retrospective',
     line: 'Retrospective: the figures below are on-chain observations of what moved, not a forward estimate.',
@@ -95,19 +104,78 @@ export function claimCoverage(t, lead = 3) {
 export function unlockCoverage(tokens = null) {
   if (!tokens) { const s = loadSchedule(); tokens = s?.tokens ?? []; }
   const verified = tokens.filter((t) => !t.retired && t.events?.length);
+  const rc = loadRecheckState();
+  const sourced = tokens.filter((t) => !t.retired && t.provenance === 'sourced').map((t) => effectiveSourced(t, rc));
+  const stale = sourced.filter((t) => !t.sourceDemoted && sourceIsStale(t));
+  const sourceDemoted = sourced.filter((t) => t.sourceDemoted).length;
   const stages = {};
-  for (const t of verified) stages[t.stage ?? 'STANDARD'] = (stages[t.stage ?? 'STANDARD'] || 0) + 1;
+  for (const t of [...verified, ...sourced]) stages[t.stage ?? 'STANDARD'] = (stages[t.stage ?? 'STANDARD'] || 0) + 1;
   const c = {
     tracked: tokens.length,
     verified: verified.length,
-    estimated: tokens.filter((t) => !t.retired && !t.events?.length).length,
+    sourced: sourced.length,
+    staleSourced: stale.length,
+    estimated: tokens.filter((t) => !t.retired && !t.events?.length && t.provenance !== 'sourced').length,
     retired: tokens.filter((t) => t.retired).length,
     cadence: verified.filter((t) => t.cadence).length,
     reviewBy: verified.filter((t) => t.reviewBy && !t.cadence).length,
     stages,
   };
-  c.line = `Unlock coverage: ${c.tracked} tracked · ${c.verified} verified (${c.cadence} cadence-watched · ${c.reviewBy} review-dated) · ${c.estimated} estimated (silent) · ${c.retired} retired · stages ${Object.entries(stages).map(([k, v]) => k + ':' + v).join(' ')} · Ethereum/EVM only — tokens vesting on their own chains are out of scope, not unlocked`;
+  c.sourceDemoted = sourceDemoted;
+  c.line = `Unlock coverage: ${c.tracked} tracked · ${c.verified} verified (${c.cadence} cadence-watched · ${c.reviewBy} review-dated) · ${c.sourced} sourced${c.staleSourced ? ` (${c.staleSourced} STALE, silent)` : ''}${sourceDemoted ? ` (${sourceDemoted} retracted by source)` : ''} · ${c.estimated} estimated (silent) · ${c.retired} retired · stages ${Object.entries(stages).map(([k, v]) => k + ':' + v).join(' ')} · verified reads are Ethereum/EVM only — sourced rows cite a named calendar and are not independently checked`;
   return c;
+}
+
+// SOURCED MESSAGE — visibly weaker than verified, by design. Different header icon
+// (📅 vs 🔓) so the tier reads at a glance in a chat list; the source is NAMED in
+// the title line; the amount is the SOURCE'S figure and says so; and the message
+// states how long ago the source was last confirmed. Same prose discipline as every
+// fact: no direction, no imperative, no frequency claim without n.
+const EXPLORER = { ethereum: 'https://etherscan.io/token/', base: 'https://basescan.org/token/', bsc: 'https://bscscan.com/token/', arbitrum: 'https://arbiscan.io/token/', optimism: 'https://optimistic.etherscan.io/token/' };
+export function sourcedMessage(t, ev, lead, now = new Date()) {
+  const dateKey = new Date(ev.t * 1000).toISOString().slice(0, 10);
+  const ageD = Math.max(0, Math.round((now - new Date(t.sourceFetchedAt)) / 86400e3));
+  const pctUnlocked = t.maxSupply && t.circSupply != null ? Math.round(100 * t.circSupply / t.maxSupply) : null;
+  const pctOfMax = t.maxSupply && ev.n ? (100 * ev.n / t.maxSupply) : null;
+  const future = (t.sourceEvents || []).filter((e) => e.t * 1000 > now.getTime());
+  const cats = [...new Set(future.flatMap((e) => String(e.cats || '').split('+')))].filter(Boolean);
+  const kind = ev.type === 'linear' ? `linear tranche (${Math.round(ev.rd || 0)}d)` : 'cliff';
+  const when = lead === 0 ? 'today' : `in ${lead} days`;
+  const [chain, addr] = String(t.token || '').split(':');
+  const explorer = EXPLORER[chain] && addr ? `${EXPLORER[chain]}${addr}` : null;
+  const sourceName = t.source === 'defillama' ? 'DefiLlama' : t.source;
+  return {
+    title: `📅 UNLOCK LISTED · ${t.sym} — ${kind} ${when} (${dateKey})`,
+    lines: [
+      `fact · per ${sourceName}'s schedule — NOT independently verified`,
+      `Source lists ${future.length} upcoming batch event${future.length === 1 ? '' : 's'}${cats.length ? ` (${cats.join(' / ')})` : ''}`,
+      `This tranche: ~${Math.round(ev.n).toLocaleString()} ${t.sym} (source figure${pctOfMax != null ? `, ${pctOfMax.toFixed(2)}% of max supply` : ''})${pctUnlocked != null ? ` · ${pctUnlocked}% of supply unlocked to date` : ''}`,
+      t.chain === 'unconfirmed' ? 'Chain: unconfirmed — no on-chain read has been attempted' : `Chain: ${t.chain}`,
+      `Source last confirmed ${ageD === 0 ? 'today' : `${ageD} day${ageD === 1 ? '' : 's'} ago`} · goes silent if not re-confirmed within ${SOURCE_STALE_DAYS} days`,
+      ...(t.sourceRevision ? [`Schedule ${t.sourceRevision.note} (recheck ${t.sourceRevision.at})`] : []),
+    ],
+    url: explorer ?? 'https://defillama.com/unlocks',
+    dateKey,
+  };
+}
+
+async function pushSourced(t, now) {
+  let fired = 0;
+  for (const ev of t.sourceEvents || []) {
+    const target = new Date(ev.t * 1000);
+    const daysOut = Math.round((target - now) / 86400e3);
+    for (const lead of leadsFor(t)) {
+      if (lead < 0 || daysOut !== lead) continue; // sourced rows never look backward
+      const msg = sourcedMessage(t, ev, lead, now);
+      if (await dispatch({
+        source: 'CAL', type: 'UNLOCK',
+        severity: 'MEDIUM',               // one band: a sourced notice carries no severity ladder
+        key: `${t.sym}:${msg.dateKey}:${lead}:sourced`, cooldownMin: 2 * 24 * 60,
+        title: msg.title, lines: msg.lines, url: msg.url,
+      })) fired++;
+    }
+  }
+  return fired;
 }
 
 export async function pollUnlocks() {
@@ -117,11 +185,12 @@ export async function pollUnlocks() {
   if (!sched?.tokens?.length) return;
 
   const now = new Date();
-  let fired = 0;
+  let fired = 0, staleSourced = 0;
   // Cadence overlay: a behavioural row whose watch window passed empty is demoted by
   // OBSERVATION, recorded in bot-owned data/ — unlocks.json keeps its single human
   // writer. A demotion is superseded only by a re-promotion with newer evidence.
   const demoted = activeDemotions(sched.tokens, loadWatchState());
+  const recheck = loadRecheckState();
   let cadenceDemoted = 0;
   for (const t of sched.tokens) {
     if (demoted[t.sym]) { cadenceDemoted++; estimatedSkipped++; continue; } // alerts as nothing until re-verified
@@ -132,6 +201,16 @@ export async function pollUnlocks() {
     // to silence, not to guessing — a 🔴 directive on an admitted guess was the
     // original defect here.
     if (t.retired) continue; // positive state, asserted at boot — never alert
+    // SOURCED tier: a named third party's schedule, pushed as a fact ABOUT THE
+    // SOURCE, labelled, at STANDARD. Stops when the source has not been re-read in
+    // 21 days — a stale source is a memory, not a source.
+    if (t.provenance === 'sourced') {
+      const eff = effectiveSourced(t, recheck);      // overlay: refreshed/revised/demoted
+      if (eff.sourceDemoted) { estimatedSkipped++; continue; } // source retracted — silent
+      if (sourceIsStale(eff, now.getTime())) { staleSourced++; continue; }
+      fired += await pushSourced(eff, now);
+      continue;
+    }
     if (!Array.isArray(t.events) || !t.events.length) { estimatedSkipped++; continue; }
     const when = t.date ? new Date(t.date + 'T00:00:00Z') : (t.monthlyDay ? nextMonthlyDate(t.monthlyDay, new Date()) : null);
     const prev = t.date ? new Date(t.date + 'T00:00:00Z') : (t.monthlyDay ? lastMonthlyDate(t.monthlyDay, new Date()) : null);
@@ -187,5 +266,5 @@ export async function pollUnlocks() {
       })) fired++;
     }
   }
-  if (config.debug || fired) console.log(`[unlocks] ${sched.tokens.length} tracked${fired ? ` · ${fired} reminders sent · ${estimatedSkipped} estimated-only (silent, pending contract reads)` : ''}${cadenceDemoted ? ` · ${cadenceDemoted} cadence-demoted (silent until re-verified)` : ''}`);
+  if (config.debug || fired) console.log(`[unlocks] ${sched.tokens.length} tracked${fired ? ` · ${fired} reminders sent · ${estimatedSkipped} estimated-only (silent, pending contract reads)` : ''}${cadenceDemoted ? ` · ${cadenceDemoted} cadence-demoted (silent until re-verified)` : ''}${staleSourced ? ` · ${staleSourced} sourced rows STALE (>${SOURCE_STALE_DAYS}d, silent until refreshed)` : ''}`);
 }

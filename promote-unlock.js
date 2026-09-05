@@ -35,10 +35,43 @@ if (!sym) {
   process.exit(1);
 }
 const args = Object.fromEntries(kvs.map((s) => { const i = s.indexOf('='); return [s.slice(0, i), s.slice(i + 1)]; }));
-if (!args.keepEvents && (!args.source || !args.detail)) { console.error('source= and detail= are required — provenance is what "verified" means. (keepEvents=1 reuses existing provenance.)'); process.exit(1); }
+if (!args.keepEvents && args.provenance !== 'sourced' && (!args.source || !args.detail)) { console.error('source= and detail= are required — provenance is what "verified" means. (keepEvents=1 reuses existing provenance.)'); process.exit(1); }
 
 const j = JSON.parse(readFileSync('unlocks.json', 'utf8'));
 let idx = j.tokens.findIndex((t) => t.sym === sym.toUpperCase());
+// SOURCED path: provenance=sourced source=defillama — the row is constructed from
+// data/unlock-index.json (the named source's own file, dated), same-day events
+// merged, chain taken from the token prefix or data/chain-resolution.json, else
+// 'unconfirmed'. REFUSED without a source name; the fetch timestamp comes from the
+// index file itself so it cannot be typed.
+if (args.provenance === 'sourced') {
+  if (!args.source) { console.error('provenance=sourced requires source=<name> — a sourced row without a named source is an estimate wearing a label.'); process.exit(1); }
+  const indexFile = JSON.parse(readFileSync('data/unlock-index.json', 'utf8'));
+  const p = indexFile.protocols.find((x) => x.symbol === sym.toUpperCase());
+  if (!p) { console.error(`${sym} is not in data/unlock-index.json — refresh the index (node fetch-unlock-index.js) or add it there first.`); process.exit(1); }
+  const byDay = {};
+  for (const e of p.events) { const d = new Date(e.t * 1000).toISOString().slice(0, 10); const k = d + '|' + e.type; if (!byDay[k]) byDay[k] = { ...e, cats: new Set(String(e.cats).split('+')) }; else { byDay[k].n += e.n; String(e.cats).split('+').forEach((c) => byDay[k].cats.add(c)); } }
+  const sourceEvents = Object.values(byDay).sort((a, b) => a.t - b.t).map((e) => ({ t: e.t, type: e.type, n: Math.round(e.n), cats: [...e.cats].join('+'), ...(e.rd ? { rd: e.rd } : {}) }));
+  let chain = 'unconfirmed', token = null;
+  if (p.token && !p.token.startsWith('coingecko:')) { chain = p.token.split(':')[0]; token = p.token; }
+  else if (existsSync('data/chain-resolution.json')) {
+    const res = JSON.parse(readFileSync('data/chain-resolution.json', 'utf8'))[sym.toUpperCase()];
+    if (res?.asset_platform_id) { chain = res.asset_platform_id === 'binance-smart-chain' ? 'bsc' : res.asset_platform_id; const a = res.platforms?.[res.asset_platform_id]; if (a) token = `${chain}:${a}`; }
+  }
+  const { sourceRow } = await import('./src/core/unlock-promote.js');
+  const row = sourceRow(j.tokens[idx] ?? { sym: sym.toUpperCase(), name: args.name ?? p.name }, {
+    source: args.source, sourceFetchedAt: indexFile.fetchedAt, sourceEvents, chain, token,
+    stage: args.stage ?? 'STANDARD', note: args.note ?? `Sourced from ${args.source}'s unlock schedule; ${sourceEvents.filter((e) => e.t * 1000 > Date.now()).length} upcoming batch events at ingest. Not independently verified.`,
+    circSupply: p.circSupply ?? null, totalLocked: p.totalLocked ?? null, maxSupply: p.maxSupply ?? null,
+  });
+  if (idx < 0) j.tokens.push(row); else j.tokens[idx] = row;
+  j.lastReviewed = new Date().toISOString().slice(0, 10) + ` (sourced ${row.sym} via promote-unlock.js)`;
+  writeFileSync('unlocks.json.tmp', JSON.stringify(j, null, 1));
+  renameSync('unlocks.json.tmp', 'unlocks.json');
+  console.log(`${row.sym} SOURCED (${args.source}, ${sourceEvents.length} batch events, chain ${chain}, stage ${row.stage}).`);
+  process.exit(0);
+}
+
 // A token discovered by the scan has no row yet. The identity row (sym + name) is
 // constructed HERE, through the one sanctioned path, so promotion still never
 // hand-edits unlocks.json. name= is required for a new row: identity is explicit.

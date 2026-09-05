@@ -1,5 +1,5 @@
 <!-- PREMISE
-Written against: v0.28.4
+Written against: v0.29.0
 Reviewed: 2026-09-01
 Status: EXECUTED TWICE. 2026-09-04 on the mcap FALLBACK (3/65, line fired, refined to the temporal leg). 2026-09-05 on the INTENDED population (hand-curated, names only): cadence 3/12 = 25%, method line did NOT fire, MOVE promoted. Resolution line fired instead (36%): the index is mostly non-EVM. Spent; the finding lives in the notes. This is the corrected successor to
   UNLOCK-BULK-SCAN.md, which is EXECUTED and whose POPULATION premise was refuted

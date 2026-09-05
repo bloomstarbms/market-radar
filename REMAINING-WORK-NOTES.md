@@ -2329,3 +2329,168 @@ count. Growing past ~10 verified rows means either per-chain readers (rejected o
 29 Aug for lack of evidence — that evidence now exists) or the announcement path at
 scale. Decide that deliberately next; do not re-run scans expecting a different
 answer.
+
+## 2026-09-05 — DECISION: a `sourced` provenance tier (recorded as a decision, not a loosening)
+
+The operator wants 30 tokens in the bot with a week's notice. The project rule is
+that ESTIMATED never alerts. Both are right; they are reconciled by a distinction the
+system had not needed until now:
+  VERIFIED   we independently confirmed the schedule (on-chain cadence, or an
+             announcement backtested against the chain)
+  SOURCED    a NAMED third party publishes the date, and the message says so
+  ESTIMATED  a recurrence guess with no external source — silent, unchanged
+
+The never-alert rule was written against the original bot's "🔴 Close now — the
+days before an unlock are where the drift shows": an IMPERATIVE on a GUESS. A
+sourced notice is a different object — "DefiLlama's schedule lists a cliff unlock
+for X on [date]. Not independently verified." That is a TRUE statement about what a
+calendar says. Under FACTS/CALLS it is a fact about the SOURCE, not about the chain,
+and it carries no imperative, no severity band, no directional claim.
+
+Sourced rows: push at STANDARD (T-7/T-3/T-0) with the source named in every message
+and a visibly different header (📅 UNLOCK LISTED vs 🔓 UNLOCK). They carry their own
+falsifier — the source itself: a weekly recheck refreshes, revises, or demotes; a
+source not re-read in 21 days is STALE and stops pushing (a source you have not
+re-read in three weeks is a memory, not a source). Boot refuses a sourced row
+without source + sourceFetchedAt, exactly as it refuses a verified row without a
+forward falsifier.
+
+Index provenance for this session: DefiLlama's __NEXT_DATA__, captured via the
+browser pane because the sandbox gets HTTP 403. fetch-unlock-index.js is the
+repeatable path and fails LOUD (exit 2, nothing written) rather than emit an empty
+index that would demote every sourced row at once.
+
+THE APPROVAL FILE (UNLOCK-CANDIDATES-FOR-APPROVAL.md) DID NOT REACH THIS SESSION —
+same transfer gap as the briefs. The 30 were RECONSTRUCTED from the same DefiLlama
+index by the brief's own tiering: the 14 `ethereum:` entries with active batch
+schedules (FORT HFT ORDER CARV CYBER YB FXN H L3 REZ MAV ACX CFG ZETA), the 6 named
+unconfirmed (ASTER FF LISTA STO SOLV RE — all present with coingecko: IDs, which
+confirms the approval list came from this index), and 10 own-chain by salience
+(ZORA KAITO TIA SUI SEI APT ZK W WAL XPL). The list is in data/unlock-index.json and
+is open to veto; any removal is one demotion through the sanctioned path.
+
+PRE-REGISTERED VOLUME: 30 sourced rows × STANDARD (3 pushes per batch event) × ~1
+batch event per token per month ≈ 90/month ≈ 3/day at peak. If unlock facts exceed
+5/day SUSTAINED, the fix is same-day dedup or a pressure floor on sourced rows —
+never a cap. Same-day events are merged at ingest (HFT lists three within one day).
+
+## 2026-09-05 — TIER-1 PRE-REGISTRATION (onboarding brief Part 4, written before the run)
+
+Population: the 17 Ethereum-primary sourced rows — the 14 `ethereum:` index entries
+(FORT HFT ORDER CARV CYBER YB FXN H L3 REZ MAV ACX CFG ZETA) plus FF, STO, RE, which
+Part 8 resolved to Ethereum-primary. Every one has an ACTIVE batch schedule per the
+index, so the temporal leg is satisfied by construction. The queue excuse is gone.
+
+BINDING:
+ - LOCKED SUPPLY found on >=70% (they are mid-schedule; locked supply should exist).
+ - CADENCE found on >=25% of Tier-1 tokens WITH locked supply.
+   **Under 10% indicts the METHOD, not the queue.**
+ - PROMOTIONS to VERIFIED: 2–4 (the >=8-clean-months bar still applies; several of
+   these launched in 2025 and may have fewer than 8 windows — that is a bar
+   limitation to be recorded, not a method failure).
+ - HFT is a known prior: D-custody, no cadence on 27 Aug. It stays in the denominator.
+
+## 2026-09-05 — ONBOARDING SESSION RESULT: 30 sourced rows live; Tier-1 line FIRED (0/14)
+
+DELIVERED (brief Parts 1, 8, 3, 2, 6, 7):
+ - fetch-unlock-index.js — repeatable, fails LOUD (exit 2, nothing written) on 403 /
+   missing embed / implausible data. Sandbox gets 403; index captured via browser
+   pane and written to data/unlock-index.json (30 protocols, 220 batch events).
+ - Six chains resolved (data/chain-resolution.json, CoinGecko /coins/{id}): FF, STO,
+   RE are Ethereum-primary (join Tier 1); ASTER, LISTA are BSC; SOLV is BSC-primary
+   with a BRIDGED Ethereum address that must never be read as locked supply.
+ - STAGES: FULL [14,7,3,0,-3] · STANDARD [7,3,0] · LOGGED []. Fixture asserts every
+   non-LOGGED stage contains T-7.
+ - SOURCED tier: sourceRow() whitelist constructor; boot gate refuses without
+   source + sourceFetchedAt, refuses events[] on a sourced row, refuses FULL, refuses
+   a missing chain. promote-unlock.js provenance=sourced reads the index file (fetch
+   time comes from the file, never typed), merges same-day events, resolves chain.
+   ALL 30 INGESTED. Coverage: 53 tracked · 6 verified · 30 sourced · 16 estimated.
+ - Source recheck: sourceRecheckDecision() pure — NO-LOOK / DEMOTE / REFRESH / REVISE,
+   fixtured for all four. pollSourceRecheck() weekly, writes an OVERLAY
+   (data/source-recheck.json) — unlocks.json keeps its single human writer.
+   Stale at 21 days ⇒ silent; fixtured at the 20/22-day boundary. Heartbeat coverage
+   line carries sourced, STALE and retracted counts.
+ - Message: 📅 UNLOCK LISTED · SYM — cliff in 7 days (date) / "fact · per DefiLlama's
+   schedule — NOT independently verified" / source figure / chain / "Source last
+   confirmed N days ago · goes silent if not re-confirmed within 21 days" / explorer
+   link. Prose lint passes. Sourced rows never look backward.
+ Fixture 45: 32 checks. Suite green.
+
+TIER 1 (Part 4) — pre-registered: locked >=70% · cadence >=25% of locked · <10%
+indicts the METHOD · promotions 2–4.
+  ACTUAL: locked 17/17 (100%) · **cadence 0/14 (0%) — THE LINE FIRED** · promotions 0.
+  The single detector hit (STO, day 3, 6 months, cv 0.09) was StakeStoneLayerZero-
+  Adapter — a BRIDGE ADAPTER. Bridge flow read as custody emission: the INJ
+  bridged-escrow class producing a WRONG verdict, therefore a blocker, therefore
+  fixed (BRIDGE_RX widened to adapter$/connector/layerzeroadapter; STO re-discovers
+  with the adapter as skip-bridge). ZETA's 10% holder ZetaConnectorEth is the same
+  class. Instrument check on REZ and L3 at full depth: still IRREGULAR/INSUFFICIENT.
+  The reads are real.
+
+  RESULTS TABLE (token · locked · cadence · promoted):
+   FORT A-READABLE(continuous) · — · no   CYBER A-READABLE · — · no
+   HFT D · IRREGULAR · no                 ORDER D · IRREGULAR · no
+   CARV D · INSUFFICIENT · no             YB D · IRREGULAR · no
+   FXN D · IRREGULAR · no                 H C · INSUFFICIENT · no
+   L3 D · INSUFFICIENT · no               REZ D · IRREGULAR · no
+   MAV D · INSUFFICIENT · no              ACX D · IRREGULAR · no
+   CFG D · INSUFFICIENT · no              ZETA D(connector) · IRREGULAR · no
+   FF B-STREAM · — · no                   STO D · bridge artifact · no
+   RE D · INSUFFICIENT · no
+
+THE MECHANISM FINDING — sharper than the temporal leg: DefiLlama lists REZ at
+83.3M every month, L3 at 45.4M, ZETA at 44.3M, ACX at 3.1M — clean monthly cliffs
+that EXIST. Their custody wallets show no batch cadence. Because for most 2024–25
+launches insider/investor vesting is enforced by VESTING CONTRACTS where each
+beneficiary CLAIMS individually and irregularly — the schedule is real, the
+distribution is not a custody batch. The triple's leg (c) "batch-distributing" is
+the true discriminator and it is RARER than mid-schedule: EIGEN, ENA, MOVE are
+treasuries that push batches; most projects let claimants pull.
+
+CONSEQUENCE: the cadence method's addressable set is custody-batch distributors, a
+minority even among tokens with active schedules. That is exactly why the SOURCED
+tier is the right instrument and not a compromise — for the majority whose schedule
+is contract-claimable, the named calendar IS the best available claim, labelled as
+such, and the chain cannot improve on it without per-contract claim tracking (a
+per-chain-reader-class build, rejected for this session and probably next).
+
+TIER 2 (Part 5) — DEFERRED, DELIBERATELY: 0 of 10 own-chain tokens attempted this
+session. Reason: all ten already push at T-7/T-3/T-0 as SOURCED, which delivers the
+operator's ask; an announcement-path promotion needs a project-published DAY plus a
+reviewBy switch and cannot be backtested on-chain from here, so its marginal value
+over sourced is the provenance label, not the notice. Worth ten minutes each in a
+quiet session; not worth rushing at the end of this one.
+
+LOGGED, NOT FIXED: contract 0xA9D1e08C77 appears as a "custom, unverified" holder
+across L3, ZETA and CHZ — a shared custodian/exchange contract; candidate for the
+EXCHANGE skip class once identified. The A-READABLE finding recurs (FORT, CYBER):
+continuous release, no dated event — sourced rows are the right tier for them too.
+
+PRE-REGISTERED VOLUME (~3/day at peak) — compare against actuals after 7 days
+(2026-09-12). First sourced pushes: check the log for "UNLOCK LISTED".
+
+## 2026-09-05 (v0.29.0 live) — first sourced pushes, and two operational facts
+
+Restart at v0.29.0: within the first poll the sourced tier pushed FORT (today), FORT
+(T-7) and HFT (T-3). 53 tracked · 6 verified · 30 sourced. Working as built.
+
+1. PRESSURE FLOOR, applied by hand for the one obvious case: FORT's index events are
+   WEEKLY 50,000-token farming cliffs (0.005% of max supply each). At STANDARD that is
+   three pushes a week for a ~$700 drip — noise. Re-ingested at stage LOGGED
+   (tracked, never pushed). The general rule the brief anticipated — a pressure floor
+   on sourced rows, never a cap — is now a concrete need, not a hypothetical: derive
+   it from the index's own figures (tranche ÷ max supply) with a floor recorded per
+   row, in a non-coverage session. Until then: volume watch against the
+   pre-registered ~3/day, compare on 2026-09-12.
+
+2. THE RECHECK CANNOT FETCH FROM THE DESKTOP EITHER. The first weekly recheck ran at
+   boot and got HTTP 403 from defillama.com — the same Cloudflare block as the
+   sandbox. It did exactly what it should (nothing changed, operator line logged),
+   but the consequence is hard: **with no working fetch, every sourced row goes STALE
+   on 2026-09-26 and the tier goes silent** — honestly, by design, and visibly in the
+   heartbeat. Before then the index must be refreshed by the browser-pane capture
+   (the path used today) or a fetch that passes Cloudflare. This is the sourced
+   tier's real dependency and it is not yet automated. Flagged as the next blocker.
+
+Labelling quirk, logged: an event ~9h ahead reads "today" (Math.round on days). Fine.
