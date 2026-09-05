@@ -1,7 +1,7 @@
 {
  "comment": "Token unlock watchlist. Two entry types: 'monthlyDay' = recurring cliff on that day each month (most vesting contracts release monthly); 'date' = one-off YYYY-MM-DD. Bot pings 7 days and 3 days before. verified:true = confirmed against cryptorank.io/token-unlock on 2026-08-01; others are recurring-schedule estimates — check the date on cryptorank before acting.",
  "source": "https://cryptorank.io/token-unlock (free public page)",
- "lastReviewed": "2026-09-01 (promoted EIGEN via promote-unlock.js)",
+ "lastReviewed": "2026-09-05 (promoted MOVE via promote-unlock.js)",
  "tokens": [
   {
    "sym": "EIGEN",
@@ -206,8 +206,25 @@
   {
    "sym": "MOVE",
    "name": "Movement",
+   "verified": true,
+   "events": [
+    {
+     "date": "2026-09-05",
+     "source": "onchain-cadence",
+     "detail": "detect-cadence.js: 8 consecutive FIXED-DAY distributions on the 9th, Dec 2025-Jul 2026, from custody 0xE67A9E94bf (786.6M held), mean 9.46M MOVE/mo, cv 0.31. August 2026 emission also observed (3.8M on the 9th + 5.1M on the 10th, ~8.9M) but hidden from the detector by a 52.8M off-schedule move on Jul 26 raising its significance floor — nine months in practice."
+    }
+   ],
+   "note": "Behavioural (habit, not commitment): cadence-watch auto-demotes if a window on the 9th passes with no qualifying outflow. SCOPE — one metronome watched; forward stages quote it as a FLOOR. The wallet is an active treasury with large off-schedule moves (73M across Jul 26-27, ~7x the monthly figure) — irregular, so not in the falsifier. Found by the 2026-09-05 hand-curated index rescan; first promotion from the temporal-leg population.",
    "monthlyDay": 9,
-   "note": "new L1, heavy vesting"
+   "date": "2026-09-05",
+   "cadence": {
+    "wallet": "0xE67A9E94bf21551EDCB8008AAE29823E87610D9b",
+    "expectDay": 9,
+    "meanAmount": 9461497,
+    "monthsObserved": 8,
+    "graceDays": 3
+   },
+   "stage": "STANDARD"
   },
   {
    "sym": "INJ",

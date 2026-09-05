@@ -2248,3 +2248,84 @@ re-run this exact pipeline. The pre-registration for THAT run: cadence >=25% amo
 locked-supply tokens, because mid-schedule is now the stated necessary condition
 and the index selects for it directly. Under 10% there would indict the method
 without the fallback caveat.
+
+## 2026-09-05 — PRE-REGISTRATION for the INTENDED population (hand-curated index)
+
+The addressable-set claim is now precise and testable: **custody-held, batch-
+distributing, and inside an active tranche schedule today.** The temporal leg
+retroactively explains the original 5-for-5 — those twelve came from a list of tokens
+with UPCOMING unlocks, the temporal filter applied by accident. SNX/GNO/CVX are as
+large and custodied as EIGEN and have nothing to detect because their schedules ended.
+
+POPULATION: ~30 names hand-curated from public unlock calendar pages. NAMES ONLY —
+no date is read, copied, or stored. This is the one population that tests the
+hypothesis directly, because it is selected for the temporal leg.
+
+PRE-REGISTERED (binding):
+ 1. RESOLUTION: >=70% resolve to an Ethereum ERC-20 (the list skews to 2024-25
+    launches, which are mostly EVM). Under 50% ⇒ the curated list, not the method.
+ 2. LOCKED SUPPLY among resolved: >=60%.
+ 3. CADENCE among locked-supply tokens: **>=25%**. This is the number the whole
+    hypothesis rests on. **Under 10% ⇒ THE METHOD DOES NOT GENERALISE, with NO
+    population caveat available this time** — the population is selected for exactly
+    the property the hypothesis names.
+ 4. PROMOTIONS: 2–5, each with a replaying backtest of >=8 clean months.
+ 5. If it lands between 10% and 25%: the method works but the addressable set is
+    smaller than "mid-schedule" alone predicts — examine which mid-schedule tokens
+    fail and why, before touching anything.
+
+## 2026-09-05 — RESCAN ON THE INTENDED POPULATION: the temporal leg holds. MOVE promoted.
+
+INDEX: hand-curated from DefiLlama's unlocks list (mcap-sorted), taking rows with an
+upcoming event PRESENT and skipping rows at 100% unlocked with none. NAMES ONLY — no
+date, amount or percentage read. 48 names; minus 4 verified = 44 queued. Estimated
+rows kept (upgrading them is the point); already-scanned names deliberately
+re-scanned (hypothesis test — prior verdicts stay in the denominator).
+
+The index itself exhibits the temporal leg: Synthetix, Convex, Compound, ENS, Pendle,
+Lido, Curve, Aave, Uniswap, NEAR sit at 100% with no next event. That is the
+fully-vested class the method correctly finds nothing in.
+
+PRE-REGISTERED vs ACTUAL:
+ 1. RESOLUTION  >=70%, line <50%  → **16/44 = 36%. LINE FIRED — "the list, not the
+    method."** Diagnosis: 25 of 44 are non-EVM BY CONSTRUCTION (Solana, Sui, Aptos,
+    TON, Cosmos, own-chain L1s). Mid-schedule tokens in 2026 mostly do not live on
+    Ethereum. This is the binding constraint on coverage now — see below.
+ 2. LOCKED SUPPLY >=60% of resolved → 15/16 = 94%. Met.
+ 3. CADENCE >=25% of locked-supply tokens; line <10% →
+    **3/12 = 25%. MET EXACTLY. THE METHOD LINE DID NOT FIRE.**
+    Versus 3/65 = 4.6% on the mcap fallback the day before: a ~5x lift from
+    selecting on the temporal leg alone. n=12 is small and stated as such, but the
+    direction is unambiguous and matches the hypothesis written before the run.
+ 4. PROMOTIONS 2–5 → **1** (MOVE). Below range. Reason: the >=8-clean-months bar.
+    Two more hits are parked at n=4 (ONDO, GMT) and qualify around December if
+    their runs hold. The bar is not lowered to hit the number.
+
+**MOVE promoted — first promotion from the temporal-leg population.** Custody
+0xE67A9E94bf (786.6M held): 8 consecutive months on the 9th, Dec 2025–Jul 2026,
+mean 9.46M, cv 0.31. August ALSO emitted (3.8M on the 9th + 5.1M on the 10th) but
+was hidden from the detector — see defect below — so nine months in practice.
+Single-wallet spec (floor, not total), stage STANDARD, forward falsifier armed,
+first live window Sep 9 (grace to the 12th). Same shape as ENA: a busy treasury
+with large off-schedule moves (73M across Jul 26–27), recorded in the row note.
+
+PARKED (n=4, coincidence not pattern): ONDO 0xEA5785E172 day~18 — notable because
+ONDO was the ORIGINAL false-negative example (NO-LOCKED-SUPPLY on 27 Aug); the
+rescan's holder read now surfaces its custody. GMT 0x2D8880Bc day~11-12, cv 0.71.
+Re-check both when n>=8.
+
+DEFECT LOGGED, NOT FIXED (it did not block or falsify a verdict, but it hid one
+month): the SIGNIFICANCE FLOOR in detectCadence is 10% of the single largest daily
+outflow. One giant off-schedule move (MOVE's 52.8M on Jul 26) lifts the floor above
+the regular emission (5.1M), which then reads as absent. A percentile-based or
+median-based floor would be robust to a single outlier — the same MAD lesson as the
+tolerance band, one level down. Fix in a non-coverage session.
+
+STRATEGIC FINDING (the real output): the DETECTOR is not the constraint on coverage
+any more — 25% on the right population says the method works where it can look.
+THE CHAIN IS. Two-thirds of the tokens with active schedules vest off-Ethereum, and
+the Part-5 L1 decision (accept + announcement path) is now what bounds the verified
+count. Growing past ~10 verified rows means either per-chain readers (rejected on
+29 Aug for lack of evidence — that evidence now exists) or the announcement path at
+scale. Decide that deliberately next; do not re-run scans expecting a different
+answer.

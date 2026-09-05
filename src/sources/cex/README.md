@@ -1,5 +1,5 @@
 <!-- PREMISE
-Written against: v0.28.3
+Written against: v0.28.4
 Reviewed: 2026-08-29
 Assumes:
 - Module-local doc: describes the files in this directory only.

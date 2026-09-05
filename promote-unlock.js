@@ -38,8 +38,16 @@ const args = Object.fromEntries(kvs.map((s) => { const i = s.indexOf('='); retur
 if (!args.keepEvents && (!args.source || !args.detail)) { console.error('source= and detail= are required — provenance is what "verified" means. (keepEvents=1 reuses existing provenance.)'); process.exit(1); }
 
 const j = JSON.parse(readFileSync('unlocks.json', 'utf8'));
-const idx = j.tokens.findIndex((t) => t.sym === sym.toUpperCase());
-if (idx < 0) { console.error(`${sym} not in unlocks.json — add the token first, then promote.`); process.exit(1); }
+let idx = j.tokens.findIndex((t) => t.sym === sym.toUpperCase());
+// A token discovered by the scan has no row yet. The identity row (sym + name) is
+// constructed HERE, through the one sanctioned path, so promotion still never
+// hand-edits unlocks.json. name= is required for a new row: identity is explicit.
+if (idx < 0) {
+  if (!args.name) { console.error(`${sym} not in unlocks.json — pass name="..." to create its identity row through this path (never hand-edit).`); process.exit(1); }
+  j.tokens.push({ sym: sym.toUpperCase(), name: args.name });
+  idx = j.tokens.length - 1;
+  console.log(`identity row created for ${sym.toUpperCase()} (${args.name})`);
+}
 
 const eventDate = args.date ?? null;
 // onchain-cadence promotions must carry the machine-checkable spec that lets
