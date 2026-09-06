@@ -37,6 +37,7 @@ export async function broadcast(text, { toChannel = true } = {}) {
   results.forEach((r, i) => {
     const mid = r.status === 'fulfilled' ? r.value?.result?.message_id : null;
     if (mid) ids.push({ chatId: targets[i], messageId: mid });
+    if (mid && targets[i] === config.telegramChannel) notePublicPush();
     else if (r.status === 'fulfilled' && targets[i] === config.telegramChannel)
       console.error('[telegram][OPERATOR] channel post failed — is the bot still admin of ' + config.telegramChannel + '?');
   });
@@ -47,6 +48,19 @@ export async function broadcast(text, { toChannel = true } = {}) {
   if (targets.length && !ids.length)
     console.error(`[telegram][OPERATOR] broadcast: 0/${targets.length} sends succeeded — delivery FAILED (network or Telegram down)`);
   return ids;
+}
+
+// PUBLIC PUSH LEDGER (v0.31.0). Telemetry now lives in the operator DM, so the
+// reading rule "silence + healthy funnel = correctly quiet" applies to a channel the
+// operator no longer watches for silence. The DM heartbeat carries "public pushes
+// 24h: N" from this ledger — channel deliveries only, pruned to 24h, persisted.
+export function notePublicPush(now = Date.now()) {
+  const st = getState();
+  st.publicPushes = (st.publicPushes || []).filter((t) => now - t < 86400e3);
+  st.publicPushes.push(now);
+}
+export function publicPushes24h(now = Date.now(), st = getState()) {
+  return (st.publicPushes || []).filter((t) => now - t < 86400e3).length;
 }
 
 // True when a send has someone to reach — distinguishes "delivery failed" (retry)

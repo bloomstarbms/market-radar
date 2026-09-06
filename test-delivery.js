@@ -889,6 +889,40 @@ console.log('36. every prompt document declares its premises (documents get obey
   check('empty-assumptions check can fail', !/Assumes:\s*\n\s*-\s*\S/.test('Written against: v1.0.0\nAssumes:\n'));
 }
 
+console.log('50. CHANNEL SPLIT — public channel carries facts and calls only; telemetry and watch verdicts go to the operator DM');
+{
+  const { publicPushes24h } = await import('./src/core/telegram.js');
+  const { buildHeartbeat } = await import('./src/core/telemetry.js');
+  // Destination invariant, read from source (same instrument as the prose lint):
+  // every broadcast() in telemetry.js and cadence-watch.js is DM-only.
+  const dmOnly = (file) => {
+    const src = readFileSync(file, 'utf8');
+    const calls = [...src.matchAll(/broadcast\(([\s\S]*?)\)\s*(?:\.catch|;|\n)/g)].map((m) => m[0]);
+    return { n: calls.length, bad: calls.filter((c) => !/toChannel:\s*false/.test(c)) };
+  };
+  const tele = readFileSync('src/core/telemetry.js', 'utf8');
+  check('telemetry.js routes every send through sendTelemetry (DM-only)', (tele.match(/\bbroadcast\(/g) || []).length === 1 && /const sendTelemetry = \(text\) => broadcast\(text, \{ toChannel: false \}\)/.test(tele) && (tele.match(/sendTelemetry\(/g) || []).length === 2 /* digest + heartbeat */);
+  const cw = dmOnly('src/sources/calendar/cadence-watch.js');
+  check('cadence-watch.js: every verdict broadcast is DM-only (CONFIRM/PARTIAL/DEMOTE/review/source)', cw.n >= 6 && cw.bad.length === 0, cw.bad.map((b) => b.slice(0, 60)).join(' | '));
+  check('CONFIRM verdicts are now sent (cadence and cliff), not only summarised', /cadence window \$\{mKey\} CONFIRMED/.test(readFileSync('src/sources/calendar/cadence-watch.js', 'utf8')) && /cliff \$\{c\.date\} CONFIRMED/.test(readFileSync('src/sources/calendar/cadence-watch.js', 'utf8')));
+  check('the digest marks itself sent against DM recipients, not channel', /hasRecipients\(false\)/.test(tele.split('Daily digest')[1].slice(0, 400)));
+  // Public-push ledger: channel deliveries only, 24h, injected into the heartbeat.
+  const now = Date.now();
+  const st = { publicPushes: [now - 1000, now - 3600e3, now - 25 * 3600e3] };
+  check('publicPushes24h counts channel deliveries inside 24h only', publicPushes24h(now, st) === 2);
+  check('empty ledger reads zero, not undefined', publicPushes24h(now, {}) === 0);
+  const hb = buildHeartbeat(now, { rows: [], drops: { total: 0, byReason: {} }, bugs: 0, pulse: 'none yet', startedAt: now, digest: { line: 'Digest: pool 0' }, publicPushes: 7 });
+  check('DM heartbeat carries "public pushes 24h: N" so channel health is readable from the DM', hb.lines.some((l) => /public pushes 24h: 7/.test(l)));
+  check('reading rule still present alongside it', hb.lines.some((l) => l.includes('correctly quiet')));
+  // Boot: the DIGEST tier keeps a reader (rerouted, not removed).
+  const { checkTierRoutes } = await import('./src/core/routes.js');
+  check('tier-route assertion passes after the reroute (no tier without a reader)', checkTierRoutes().ok === true);
+  // Delivery accounting unaffected: telemetry never counted as facts/calls.
+  const { messageCounts } = await import('./src/core/dispatcher.js');
+  const before = messageCounts();
+  check('messageCounts() is fact/call only — a telemetry send is not budgeted', typeof before.facts === 'number' && typeof before.calls === 'number' && !('telemetry' in before));
+}
+
 console.log('49. FALSIFIER STRENGTH is derived on EVERY verified row (chance rate → replay), not just the suspicious one');
 {
   const { falsifierProblems, stampStrength, falsifierLine, WEAK_CHANCE, verifiedRowProblems } = await import('./src/core/unlock-promote.js');

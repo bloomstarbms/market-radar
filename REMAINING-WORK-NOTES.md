@@ -2746,3 +2746,29 @@ p≈0.28: weak on both. EIGEN 11/11 at 24%: 1.5e-7. ENA 13/13 at 33%: 5.5e-7. MO
 8/8 at 36%: 2.8e-4. Line format: `EIGEN 24%/window · 11/11 consecutive · p≈1.5e-7`.
 WEAK cut stays declared at 0.5 — deriving a threshold from seven points would be a
 constant wearing a derivation's clothes.
+
+## 2026-09-06 — CHANNEL SPLIT: public facts only, telemetry to operator DM (v0.31.0)
+
+WHAT MOVED (confirmed in code, not assumed):
+ - Heartbeat was ALREADY DM-only (toChannel:false since its introduction). Unchanged.
+ - Digest went to the CHANNEL — now DM via sendTelemetry; its sent-marker checks DM
+   recipients (hasRecipients(false)), so a channel-only config no longer marks a
+   digest "sent" that nobody received.
+ - DEMOTE / PARTIAL / review-expired / source-retracted were already DM.
+ - CONFIRM verdicts (cadence window, cliff cluster) were never SENT anywhere — only
+   summarised in the heartbeat. Now DM'd as LOW SYS with the ratio and the row's
+   chance rate ("this window passes by chance 24% of the time"); a cliff CONFIRM
+   on a WEAK row says so in the message.
+ - Stale-source and review-date escalations ride the heartbeat's cadence line, which
+   is DM — satisfied without new message types.
+ - "public pushes 24h: N" added to the DM heartbeat from a persisted channel-delivery
+   ledger (telegram.js notePublicPush/publicPushes24h, pruned to 24h) — the only place
+   the public channel's health is readable now that its silence is unwatched.
+ - Tier-route boot assertion: DIGEST tier still has a reader (rerouted, not removed);
+   passes without config edits. messageCounts() unaffected (telemetry was never a
+   fact or a call) — checked, fixture 50.
+ - Fixtures 3/4 were pure (no delivery asserted); untouched. Section 50 asserts the
+   destination invariant from source, same instrument as the prose lint: every
+   broadcast() in telemetry.js and cadence-watch.js is DM-only.
+ACCEPTANCE pending observation: next 18:00Z heartbeat + digest in DM, nothing in
+public; a full day of facts-only on @radaralert22.

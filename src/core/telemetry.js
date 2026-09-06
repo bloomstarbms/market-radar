@@ -7,7 +7,12 @@
 import { readdirSync, statSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { config } from '../config.js';
-import { broadcast, hasRecipients } from './telegram.js';
+import { broadcast, hasRecipients, publicPushes24h } from './telegram.js';
+
+// CHANNEL SPLIT (v0.31.0): the public channel carries FACTS and CALLS only. Every
+// telemetry send — digest, heartbeat — goes through here, DM-only. A telemetry
+// message that reaches the channel is a fixture failure (section 50), not a taste.
+const sendTelemetry = (text) => broadcast(text, { toChannel: false });
 import { formatAlert, dispatchBugCount, messageCounts } from './dispatcher.js';
 import { dropStats } from './budget.js';
 import { allOutcomes } from './outcomes.js';
@@ -111,12 +116,12 @@ export async function dailyDigest() {
   }
   lines.push('Digest = context, not pushes; nothing here carries a recommendation.');
   lines.push('C-tier price signals are recorded-only and deliberately absent — measured, not messaged.');
-  const ids = await broadcast(formatAlert({
+  const ids = await sendTelemetry(formatAlert({
     source: 'SYS', type: 'DIGEST', severity: 'LOW',
     title: `Daily digest ${day} — ${items.length + calItems.length} item(s) · window ${new Date(start).toISOString().slice(5, 16)}Z → ${new Date(end).toISOString().slice(5, 16)}Z`,
     lines,
   }));
-  const done = ids.length || !hasRecipients();
+  const done = ids.length || !hasRecipients(false);
   if (done) { st.lastDigestDay = day; save(); }
   console.log(`[digest] ${done ? 'sent' : 'DELIVERY FAILED, will retry'}: ${items.length} signal + ${calItems.length} calendar item(s)`);
 }
@@ -226,7 +231,7 @@ export function buildHeartbeat(now = Date.now(), deps = {}) {
   return {
     title: `alive ${aliveH}h · row-coverage uptime ${Math.min(100, Math.round((hoursCovered / 24) * 100))}% (24h)`,
     lines: [
-      `Candidates: ${rows.length} in · ${pushed} pushed (24h)`,
+      `Candidates: ${rows.length} in · ${pushed} pushed (24h) · public pushes 24h: ${deps.publicPushes ?? publicPushes24h(now)} (channel deliveries — the only place the public channel's health is readable from here)`,
       (() => {
         const m = deps.counts ?? messageCounts();
         const factRows = rows.filter((r) => r.kind === 'FACT' && !r.suppressed).length;
@@ -278,8 +283,8 @@ export async function heartbeat(startedAt) {
   const st = getState();
   if (st.lastHeartbeatTs && Date.now() - st.lastHeartbeatTs < config.heartbeatHours * 3600e3) return;
   const hb = buildHeartbeat(Date.now(), { startedAt });
-  const ids = await broadcast(formatAlert({
+  const ids = await sendTelemetry(formatAlert({
     source: 'SYS', type: 'HEARTBEAT', severity: 'LOW', title: hb.title, lines: hb.lines,
-  }), { toChannel: false });
+  }));
   if (ids.length || !hasRecipients(false)) { st.lastHeartbeatTs = Date.now(); save(); }
 }

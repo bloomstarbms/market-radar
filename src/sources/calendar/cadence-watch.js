@@ -228,6 +228,14 @@ export async function pollCadence(loadTokens) {
       if (dec.action === 'DEMOTE' || dec.action === 'PARTIAL') {
         st.demotions[t.sym] = { at: now.toISOString().slice(0, 16), month: mKey, window: dec.window, kind: dec.action };
       }
+      // CONFIRM goes to the operator DM too (v0.31.0): a verdict the operator only
+      // meets in the heartbeat summary is a verdict with no timestamp of its own.
+      if (dec.action === 'CONFIRM') {
+        const strength = t.falsifier?.chanceRate != null ? ` · this window passes by chance ${Math.round(t.falsifier.chanceRate * 100)}% of the time` : '';
+        await broadcast(formatAlert({ source: 'SYS', type: 'CADENCE', severity: 'LOW',
+          title: `${t.sym} cadence window ${mKey} CONFIRMED · ratio ${dec.ratio}`,
+          lines: [`Watch verdict, not a market event: ${dec.amount.toLocaleString()} ${t.sym} emitted on ${dec.date} (${Math.round(dec.ratio * 100)}% of the spec mean)${strength}.`] }), { toChannel: false }).catch(() => []);
+      }
       dirty = true;
     }
     const cur = st.months[t.sym][mKey];
@@ -486,6 +494,12 @@ export async function pollCliffWatch(loadTokens) {
       if (dec.action === 'PENDING') continue;
       st.cliffs[`${t.sym}:${c.date}`] = { ...dec, at: now.toISOString().slice(0, 16) };
       dirty = true;
+      if (dec.action === 'CONFIRM') {
+        const weak = t.falsifier?.verdict === 'WEAK' ? ` WEAK test: a random ${t.clusterSpec.windowDays}-day window catches a cluster ${Math.round(t.falsifier.chanceRate * 100)}% of the time, so this adds little.` : '';
+        await broadcast(formatAlert({ source: 'SYS', type: 'CADENCE', severity: 'LOW',
+          title: `${t.sym} cliff ${c.date} CONFIRMED · ${dec.ratio}x baseline · ${dec.recipients} claimants`,
+          lines: [`Watch verdict, not a market event: ${dec.inWindow.toLocaleString()} ${t.sym} claimed in the ${t.clusterSpec.windowDays}-day window.${weak}`] }), { toChannel: false }).catch(() => []);
+      }
       if (dec.action === 'DEMOTE') {
         st.demotions[t.sym] = { at: now.toISOString().slice(0, 16), type: 'cliff-cluster-absent', cliff: c.date, ratio: dec.ratio, recipients: dec.recipients };
         await broadcast(formatAlert({ source: 'SYS', type: 'CADENCE', severity: 'MEDIUM',
