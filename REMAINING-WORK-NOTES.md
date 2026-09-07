@@ -2883,3 +2883,31 @@ fails until you do — which is the point of it.
 
 STILL OPEN from this brief: Part 3 (CryptoRank as a second index) and Part 4
 (sourceAgreement). Neither is deadline-bound now that the refresh is done.
+
+## 2026-09-07 — PUSH-TO-GITHUB.bat REPORTED SUCCESS ON A PUSH THAT NEVER HAPPENED
+
+Found while verifying the v0.31.1 push. A git process crashed on 6 Sep 14:20 and
+left `.git/index.lock` behind. Every push after that failed at `git commit` with
+"Another git process seems to be running" — but nothing in the script checked an
+exit code after `commit` or `push`, so it printed "Pushed as v0.31.1 (tagged)" and
+"DONE" regardless. The tag WAS pushed (tagging needs no index), so GitHub showed a
+v0.31.1 tag pointing at the v0.31.0 commit, with the actual changes uncommitted.
+Only the local files were right, which is why the bot ran the new version fine.
+
+THE SAME CLASS AS THE 2026-09-06 ENTRY, from the other side: there, the branch that
+AGREED with the prior had no destination. Here the branch that DISAGREED had none —
+the script could only say success. Both are "a decision with one reachable
+outcome". Test: for every step that can fail, ask what the script prints when it
+does; if the answer is the same thing it prints on success, it is not a check.
+
+FIXED, and deliberately not by checking exit codes: `commit` legitimately returns 1
+for "nothing to commit", so exit codes here are ambiguous. The script now ASSERTS
+THE OUTCOME — re-fetches after pushing and compares origin/main to local HEAD,
+printing "PUSH FAILED: origin/main does not match local HEAD" when they differ.
+Same principle as the fixtures: assert the invariant, not the mechanism. Also added
+a pre-flight guard that ABORTS LOUD if `.git/index.lock` exists rather than deleting
+it — a lock is sometimes real, and a script that silently removes other processes'
+locks is a worse failure than a refused push.
+
+Re-pushed clean: 166d067 v0.31.1, tag force-moved to it. Verified from outside the
+script (origin/main == HEAD, no .env or data/ in the commit).

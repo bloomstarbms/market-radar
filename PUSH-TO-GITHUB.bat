@@ -63,6 +63,10 @@ git push -u origin main >> push-result.txt 2>&1
 git tag -f "v%RADAR_VER%" >nul 2>nul
 git push -f origin "v%RADAR_VER%" >> push-result.txt 2>&1
 
+REM NO PARENTHESES IN ANY ECHO INSIDE THIS BLOCK. A literal ")" closes the if-block
+REM early and cmd then abandons the rest of the script SILENTLY - the first version
+REM of this check printed nothing at all and left its temp files behind. Square
+REM brackets instead. ("stop writing clever batch", as the comment above says.)
 REM VERIFY THE OUTCOME, not the exit codes. Exit codes here are ambiguous (commit
 REM returns 1 for "nothing to commit", which is fine) and were not checked at all.
 REM What matters is one thing: does the remote branch now point at our HEAD?
@@ -74,7 +78,7 @@ if errorlevel 1 (
   echo PUSH FAILED: origin/main does not match local HEAD - nothing was published. >> push-result.txt
   echo Read the git output above; the tag may now point at the WRONG commit. >> push-result.txt
 ) else (
-  echo Pushed as v%RADAR_VER% (tagged) - verified: origin/main == local HEAD >> push-result.txt
+  echo Pushed as v%RADAR_VER% [tagged] - verified: origin/main == local HEAD >> push-result.txt
   echo DONE >> push-result.txt
 )
 del local-head.tmp remote-head.tmp 2>nul
