@@ -16,6 +16,7 @@
 //
 // feedWasLooking applies: an uncovered window is NOT an empty window. Pagination must
 // reach every cliff under test or the verdict is UNVERIFIED, never FAILED.
+import { spanCovered } from './src/core/pagination.js';
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
@@ -59,7 +60,7 @@ export async function outflowsWithRecipients(addr, sym, untilDate, { maxPages = 
       if (again === null) { persist(false); return { byDay, covered: false, oldest, pages, reason: 'page fetch failed twice' }; }
       for (const t of (again.items || [])) { const d = (t.timestamp || '').slice(0, 10); if (d && (!oldest || d < oldest)) oldest = d; if ((t.token?.symbol || '').toUpperCase() !== sym.toUpperCase()) continue; const dec = Number(t.total?.decimals ?? 18); const amt = Number(t.total?.value || 0) / 10 ** dec; byDay[d] = byDay[d] || { amt: 0, to: new Set() }; byDay[d].amt += amt; byDay[d].to.add((t.to?.hash || '').toLowerCase()); }
       if (!again.next_page_params) { persist(true); return { byDay, covered: true, oldest, pages }; }
-      if (oldest && oldest < untilDate) { persist(true); return { byDay, covered: true, oldest, pages }; }
+      if (spanCovered(oldest, untilDate)) { persist(true); return { byDay, covered: true, oldest, pages }; }
       next = '&' + Object.entries(again.next_page_params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
       await sleep(250); continue;
     }
@@ -73,7 +74,7 @@ export async function outflowsWithRecipients(addr, sym, untilDate, { maxPages = 
       byDay[d].amt += amt; byDay[d].to.add((t.to?.hash || '').toLowerCase());
     }
     if (!j?.next_page_params) { persist(true); return { byDay, covered: true, oldest, pages }; }
-    if (oldest && oldest < untilDate) { persist(true); return { byDay, covered: true, oldest, pages }; }
+    if (spanCovered(oldest, untilDate)) { persist(true); return { byDay, covered: true, oldest, pages }; }
     next = '&' + Object.entries(j.next_page_params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
     if (pages % 5 === 0) persist(false);
     await sleep(250);

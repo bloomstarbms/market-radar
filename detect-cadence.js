@@ -20,6 +20,7 @@
 // call anything a schedule. Derived schedules are ANNOUNCEMENT-GRADE-PLUS evidence for
 // promoteRow(source: 'onchain-cadence'), never auto-promoted — a human confirms.
 // READ-ONLY except its own report (data/cadence-report.json).
+import { spanCovered } from './src/core/pagination.js';
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -46,7 +47,7 @@ export async function outflowsByDay(addr, tokenSym, maxPages = 30, deadlineTs = 
       const dec = Number(t.total?.decimals ?? 18);
       if (d) byDay[d] = (byDay[d] || 0) + Number(t.total?.value || 0) / 10 ** dec;
     }
-    if (oldest && oldest < cutoff) break; // span covered — enough history for 12-month cadence
+    if (spanCovered(oldest, cutoff)) break; // span covered — enough history for 12-month cadence
     if (!j?.next_page_params) break;
     next = '&' + Object.entries(j.next_page_params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
     await sleep(280);

@@ -16,6 +16,7 @@
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { ROOT, config } from '../../config.js';
+import { spanCovered } from '../../core/pagination.js';
 import { broadcast } from '../../core/telegram.js';
 import { formatAlert } from '../../core/dispatcher.js';
 
@@ -147,7 +148,7 @@ async function fetchOutflows(wallet, sym, untilDate, maxPages = 20) {
       if (d) byDay[d] = (byDay[d] || 0) + Number(t.total?.value || 0) / 10 ** Number(t.total?.decimals ?? 18);
     }
     if (!j?.next_page_params) return { byDay, covered: true }; // full history exhausted
-    if (oldest && oldest < untilDate) return { byDay, covered: true };
+    if (spanCovered(oldest, untilDate)) return { byDay, covered: true };
     next = '&' + Object.entries(j.next_page_params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
     await new Promise((r) => setTimeout(r, 250));
   }

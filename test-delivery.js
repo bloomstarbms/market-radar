@@ -1066,32 +1066,44 @@ console.log('53. CROSS-SOURCE AGREEMENT — a second index changes the MESSAGE, 
   check('LIVE: the second index is on disk and dated', (() => { const s2 = loadSecondIndex(); return !!s2 && /^\d{4}-\d\d-\d\dT/.test(s2.fetchedAt) && s2.protocols.length >= 20; })());
 }
 
-console.log('54. the TRUNCATION BOUNDARY day is partial — and must never sit inside an evaluated window');
+console.log('54. the TRUNCATION BOUNDARY day is partial — every paginated reader is guarded, by DISCOVERY not by a list');
 {
-  // Probed 2026-09-07: a Blockscout fetch stopped after 3 pages holds a PARTIAL sum
-  // for its oldest day (150 transfers vs 400 at 8 pages; 2026-06-30 differed). That
-  // is correct — the fetch stopped mid-day. It is only safe because every reader
-  // pages until its oldest day is STRICTLY older than the window it will evaluate.
-  // Nothing asserted that, and flipping one "<" to "<=" would put a half-counted day
-  // at the start of a cadence window and manufacture a DEMOTE. Asserted here.
-  const cw = readFileSync('src/sources/calendar/cadence-watch.js', 'utf8');
-  const cc = readFileSync('detect-cliff-cluster.js', 'utf8');
-  const dc = readFileSync('detect-cadence.js', 'utf8');
-  check('cadence reader stops STRICTLY past the window start, not at it', /oldest\s*&&\s*oldest\s*<\s*untilDate/.test(cw) && !/oldest\s*<=\s*untilDate/.test(cw));
-  check('cadence-history reader stops STRICTLY past its cutoff', /oldest\s*&&\s*oldest\s*<\s*cutoff/.test(dc) && !/oldest\s*<=\s*cutoff/.test(dc));
-  check('cliff reader stops strictly past its target too', /oldest\s*<\s*untilDate/.test(cc) && !/oldest\s*<=\s*untilDate/.test(cc));
-  // The cliff reader additionally starts its fetch 2 days BEFORE the earliest cliff,
-  // so even the boundary day is outside the first window it scores.
-  check('cliff reader asks for a margin before the earliest cliff it scores', /-\s*2\s*\*\s*86400e3/.test(cw) || /-\s*2\s*\*\s*86400e3/.test(cc));
-  // Why it matters, demonstrated rather than asserted: a half-counted first day
-  // drops a family window below its floor and flips CONFIRM to DEMOTE.
+  const { spanCovered, checkPaginationGuards, paginatedReaders, PAGINATION_MARKERS } = await import('./src/core/pagination.js');
   const { cadenceDecision } = await import('./src/sources/calendar/cadence-watch.js');
+  // THE GUARD ITSELF. Strict: reaching the target day is not covering it, because
+  // the fetch may have stopped inside that day.
+  check('spanCovered is STRICT — reaching the target day is not covering it', spanCovered('2026-06-29', '2026-06-30') && !spanCovered('2026-06-30', '2026-06-30'));
+  check('no oldest, or no target, is never "covered" (we did not look)', !spanCovered(null, '2026-06-30') && !spanCovered('2026-06-29', null));
+  // WHY IT MATTERS, demonstrated rather than asserted. Probed 2026-09-07: 3 pages of
+  // the EIGEN wallet gave 150 transfers, 8 pages gave 400, differing on exactly the
+  // boundary day.
   const spec = { wallet: '0xw', meanAmount: 1e6, expectDay: 10, graceDays: 3 };
-  const full = { '2026-09-09': 1.2e6 };
-  const partial = { '2026-09-09': 4e5 }; // same day, half-counted because the fetch stopped in it
   const now = new Date(Date.UTC(2026, 8, 20));
-  check('a fully-counted boundary day CONFIRMs', cadenceDecision(spec, 2026, 9, now, full).action === 'CONFIRM');
-  check('the SAME day half-counted DEMOTEs — so the boundary must stay outside the window', cadenceDecision(spec, 2026, 9, now, partial).action === 'DEMOTE');
+  check('a fully-counted boundary day CONFIRMs', cadenceDecision(spec, 2026, 9, now, { '2026-09-09': 1.2e6 }).action === 'CONFIRM');
+  check('the SAME day half-counted DEMOTEs — which is what the guard prevents', cadenceDecision(spec, 2026, 9, now, { '2026-09-09': 4e5 }).action === 'DEMOTE');
+  // COVERAGE BY DISCOVERY. The first version of this fixture NAMED three readers;
+  // a fourth (discover-vesting) already existed and was unlisted. Now the readers
+  // are found by marker, and each must call the guard or declare why not.
+  const g = checkPaginationGuards();
+  check('every discovered paginated reader is guarded or explicitly exempt', g.ok, g.problems.join(' | '));
+  check('discovery finds MORE than the three originally listed', g.readers.length >= 4);
+  check('the exemption is a stated reason, never silence', g.readers.filter((r) => r.exempt).every((r) => r.exempt !== 'unstated' && r.exempt.length > 20));
+  check('the date-span readers are the guarded ones', ['detect-cadence.js', 'detect-cliff-cluster.js', 'src/sources/calendar/cadence-watch.js'].every((f) => g.readers.find((r) => r.file === f)?.guarded));
+  // SELF-TEST: the check must be able to fail. A synthetic reader that walks a
+  // paginated feed with neither guard nor exemption is detected.
+  const { mkdtempSync, writeFileSync: wf, mkdirSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join: j2 } = await import('node:path');
+  const dir = mkdtempSync(j2(tmpdir(), 'pgguard-'));
+  wf(j2(dir, 'rogue-reader.js'), 'while (j.next_page_params) { next = j.next_page_params; }\n');
+  const rogue = checkPaginationGuards(dir);
+  check('SELF-TEST: an unguarded new reader is CAUGHT (the check can go red)', !rogue.ok && /rogue-reader/.test(rogue.problems.join()));
+  wf(j2(dir, 'rogue-reader.js'), '// PAGINATION-EXEMPT: synthetic, walks nothing that is ever scored by date\nwhile (j.next_page_params) {}\n');
+  check('SELF-TEST: the same reader passes once it declares why', checkPaginationGuards(dir).ok);
+  mkdirSync(j2(dir, 'empty'), { recursive: true });
+  check('SELF-TEST: discovering NOTHING is a failure, not a pass (the marker moving is a defect)', !checkPaginationGuards(j2(dir, 'empty')).ok);
+  check('the marker set is declared, so a new feed shape is an edit not a silence', PAGINATION_MARKERS.length >= 1 && PAGINATION_MARKERS.includes('next_page_params'));
+  check('paginatedReaders skips the test and probe files (or it would find itself)', !paginatedReaders().some((r) => /test-delivery|probe-pagination/.test(r.file)));
 }
 
 console.log('48. MECHANISM — a sourced date can name no discrete event; weak falsifiers are stated');

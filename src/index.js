@@ -5,6 +5,7 @@ import { startBot } from './core/telegram.js';
 import { dispatch, recordSuppressedRug, checkPendingListings } from './core/dispatcher.js';
 import { dailyDigest, heartbeat } from './core/telemetry.js';
 import { assertTierRoutes, checkClassifiersWired } from './core/routes.js';
+import { checkPaginationGuards } from './core/pagination.js';
 import { notePulse } from './core/pulse.js';
 import { loadOutcomes, checkOutcomes, statsSummary, recordAlert, backupOutcomes } from './core/outcomes.js';
 import { getPairsForTokens, bestPairPerToken } from './sources/dex/dexscreener.js';
@@ -179,6 +180,17 @@ async function main() {
     process.exit(1);
   }
   console.log('[boot] classifiers-wired assertion: OK');
+  // A paginated reader whose truncation boundary can land inside a scored window
+  // produces WRONG VERDICTS silently (fixture 54: a half-counted day flips CONFIRM
+  // to DEMOTE). Discovered by marker, not by a list, so a reader added later is
+  // covered the moment it exists.
+  const pg = checkPaginationGuards();
+  if (!pg.ok) {
+    console.error('[OPERATOR][BOOT] pagination guard missing: ' + pg.problems.join(' ; ')
+      + ' — refusing to start with a reader that can score a half-counted day.');
+    process.exit(1);
+  }
+  console.log(`[boot] pagination-guard assertion: OK (${pg.readers.length} paginated readers, ${pg.readers.filter((r) => r.exempt).length} declared exempt)`);
   purgeExcludedFromAdv();
   const whaleMode = (config.etherscanKey ? 'evm ' : '') + (config.heliusKey ? 'solana' : '') || 'OFF (no keys)';
   console.log(`Market Radar v${VERSION} starting · poll ${config.pollIntervalSec}s · minSev ${config.minSeverity} · telegram ${config.telegramToken ? 'ON' : 'OFF (console-only)'} · cex [${config.cexExchanges.join(', ')}] · whale ${whaleMode}`);

@@ -3014,3 +3014,46 @@ What would actually resolve it, unexplored: a third aggregator with better cover
 of our population; per-project vesting pages (per-chain work, out of scope); or
 accepting that the sourced tier is inherently single-sourced and making the 21-day
 silence the honest failure mode it already is. NOT a $0 problem with a known answer.
+
+## 2026-09-07 (later still) — PAGINATION GUARD BY DISCOVERY; THE PROBE CLASS (v0.31.4)
+
+FIXTURE 54 ENUMERATED ITS READERS — the hardcoded-list shape, caught by review one
+version after it shipped. It named three; `discover-vesting.js` already existed and
+was not in the list. This project has auto-discovered its way out of the same shape
+three times (doc premises, prose lint, classifier wiring) and still wrote it a
+fourth. The list is not the defect — writing one when discovery is available is.
+
+NOW: `src/core/pagination.js` holds ONE `spanCovered(oldest, target)` — strict, so
+reaching the target day is never covering it — and all three date-span readers call
+it instead of open-coding `oldest < untilDate`. Readers are DISCOVERED by marker
+(`next_page_params`), and `checkPaginationGuards()` requires each to either call the
+guard or carry `// PAGINATION-EXEMPT: <why>` in the file. Wired into boot beside the
+tier-route and classifier-wiring assertions: a reader added later either uses the
+guard or the bot refuses to start. The fixture pins the BEHAVIOUR (a half-counted
+day flips CONFIRM to DEMOTE); the boot check pins the COVERAGE.
+`discover-vesting.js` is the one exemption and states its reason: holder traversal
+is BALANCE-ordered, not date-bounded, so it has no boundary day that any window
+scores. An exemption that must be written down is worth far more than silence.
+
+## BUG CLASS — "the test is the thing under test" (2026-09-07)
+
+Next to "a green check that cannot go red is decoration". Three instances now, two
+of them this month:
+ - probe-pagination.js printed "PAGE SIZE DOES NOT CHANGE THE ANSWER" while one side
+   had returned ZERO rows and the other probe had been SKIPPED for a missing key. A
+   probe that passes on an empty side is the decoration defect one level up.
+ - the same probe then compared the truncation BOUNDARY day, where a difference is
+   expected by construction, and reported a defect that was its own.
+ - checkPaginationGuards()'s self-test — the check that proves the check can go red —
+   went GREEN for the wrong reason: `walk()` measured relative paths against the
+   module's ROOT rather than the directory being scanned, so scanning a temp dir
+   found nothing, and "nothing found" happened to also be a failure. The self-test
+   passed while testing nothing.
+THE TEST: every probe needs a case where it MUST fail, run in the same breath as the
+case where it must pass. "Skipped" and "empty" are failures, never passes. If a
+self-test can only be satisfied one way, it is not a self-test.
+
+SEP 26 MOVED, IT DID NOT CLEAR. The refresh reset the clock: sourceFetchedAt is
+2026-09-07T15:59, so the next cliff is 2026-09-28 with ⚠️ on 09-21 and 🚨 on 09-25.
+This is a RECURRING deadline, not a resolved one — the 14/18-day ladder exists so it
+announces itself instead of being remembered. NEXT-SESSION.md carries the chore.
