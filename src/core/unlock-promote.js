@@ -83,22 +83,35 @@ export function sourcedRowProblems(t) {
 // Re-derive with derivePressureFloor() when the index is refreshed; record the new
 // value, do not let the floor move under the rows at runtime.
 export const SOURCED_PRESSURE_FLOOR = {
-  pctOfMaxSupply: 0.061,
-  percentile: 25,
-  n: 180,
-  basis: '25th percentile of tranche/maxSupply across 180 sourced batch events in 30 DefiLlama rows, index 2026-09-05T08:27; p10 0.005 p50 0.539 p75 1.511',
+  pctOfMaxSupply: 0.0688,
+  percentile: 15,
+  n: 29,
+  basis: '15th percentile of PER-ROW MEDIAN tranche/maxSupply across 29 sourced rows, index 2026-09-07T15:59 (p5 0.0137 p25 0.2775 p50 0.824); statistic is per-row because the floor is APPLIED to a row median',
 };
 export const NON_PRESSURE_CATS = ['farming', 'staking'];
-export function derivePressureFloor(tokens, percentile = 25) {
-  const pcts = [];
+// PER-ROW, not per-event. The first derivation (v0.30.0) took the percentile over
+// every sourced EVENT, which meant a protocol listing 155 daily drips (TIA) counted
+// 155 times and a protocol listing 5 quarterly cliffs counted 5. The 2026-09-07
+// index refresh exposed it: the per-event floor moved 0.061 -> 0.014 on a snapshot
+// whose population had not changed, while the per-row figure was identical on both
+// snapshots (p25 0.2775, p50 0.824, n=29). The deeper reason it was wrong: the floor
+// is APPLIED to a row's median tranche, so it must be DERIVED from the distribution
+// of row medians — the old version compared two different quantities.
+// The PERCENTILE (15) is a declared choice, not a derived one: it was picked to hold
+// the reviewed silence set constant across the statistic change (FORT, TIA, ASTER,
+// CFG by size; FXN by category). Same status as WEAK_CHANCE — the numbers are the
+// fact, the cut is a decision.
+export function derivePressureFloor(tokens, percentile = 15) {
+  const meds = [];
   for (const t of tokens || []) {
     const evs = t.sourceEvents || t.sourceHistory?.sourceEvents || [];
-    if (!t.maxSupply) continue;
-    for (const e of evs) if (e.n > 0) pcts.push(100 * e.n / t.maxSupply);
+    if (!t.maxSupply || !evs.length) continue;
+    const pcts = evs.filter((e) => e.n > 0).map((e) => 100 * e.n / t.maxSupply).sort((a, b) => a - b);
+    if (pcts.length) meds.push(pcts[Math.floor(pcts.length / 2)]);
   }
-  pcts.sort((a, b) => a - b);
-  if (!pcts.length) return null;
-  return { pctOfMaxSupply: +pcts[Math.floor(pcts.length * percentile / 100)].toFixed(3), percentile, n: pcts.length };
+  meds.sort((a, b) => a - b);
+  if (!meds.length) return null;
+  return { pctOfMaxSupply: +meds[Math.floor(meds.length * percentile / 100)].toFixed(4), percentile, n: meds.length };
 }
 // Pure: the stage the pressure rule assigns to a sourced row. LOGGED when the row's
 // median tranche is below the floor, or when every tranche is farming/staking-only
@@ -118,9 +131,28 @@ export function pressureStage(t, floor = SOURCED_PRESSURE_FLOOR) {
   return median < floor.pctOfMaxSupply ? 'LOGGED' : (t.stage ?? 'STANDARD');
 }
 
+// STALENESS LADDER (v0.31.1). The 21-day cliff is correct but silent until it bites:
+// on day 20 the heartbeat says nothing and on day 22 twenty-nine rows have gone
+// quiet. Warn BEFORE biting, same shape as the reviewBy ⚠️T-14/🚨T-3 ladder. The
+// refresh is a manual browser-pane operation (defillama.com 403s from both the
+// sandbox and the desktop), so the warning states the action, not just the fact.
+export const SOURCE_WARN_DAYS = 14;   // ⚠️  one week of slack left
+export const SOURCE_URGENT_DAYS = 18; // 🚨  three days of slack left
+export function sourceFreshness(t, now = Date.now()) {
+  const at = Date.parse(t?.sourceFetchedAt);
+  if (!Number.isFinite(at)) return { level: 'UNPARSEABLE', ageDays: null, daysLeft: null };
+  const ageDays = Math.floor((now - at) / 86400e3);
+  const daysLeft = SOURCE_STALE_DAYS - ageDays;
+  const level = ageDays > SOURCE_STALE_DAYS ? 'STALE' : ageDays >= SOURCE_URGENT_DAYS ? 'URGENT'
+    : ageDays >= SOURCE_WARN_DAYS ? 'WARN' : 'FRESH';
+  return { level, ageDays, daysLeft };
+}
+// The cliff DELEGATES to the ladder. They were two implementations of one rule and
+// disagreed at exactly 21 days (ms-vs-whole-days), which is how a row could be
+// silenced while the heartbeat still showed URGENT. One rule, one place.
 export function sourceIsStale(t, now = Date.now()) {
-  const at = Date.parse(t.sourceFetchedAt);
-  return !Number.isFinite(at) || (now - at) > SOURCE_STALE_DAYS * 86400e3;
+  const { level } = sourceFreshness(t, now);
+  return level === 'STALE' || level === 'UNPARSEABLE';
 }
 
 // Pure constructor for a sourced row — whitelist copy, same discipline as promoteRow.

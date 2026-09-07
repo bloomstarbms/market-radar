@@ -972,6 +972,63 @@ console.log('49. FALSIFIER STRENGTH is derived on EVERY verified row (chance rat
   check('claimCoverage can say UNDERIVED', /UNDERIVED/.test(claimCoverage({ verified: true, cadence: { monthsObserved: 3, wallet: 'x' }, events: [{}] }, 3).line));
 }
 
+console.log('51. a sourced row that CANNOT fire is counted as coverage — the heartbeat now says so');
+{
+  const { sourcedFiring } = await import('./src/sources/calendar/unlocks.js');
+  const now = Date.UTC(2026, 8, 7, 12);
+  const D = 86400e3, sec = (ms) => Math.floor(ms / 1000);
+  const base = { provenance: 'sourced', source: 'defillama', chain: 'ethereum', maxSupply: 1e9,
+    sourceFetchedAt: new Date(now - 2 * D).toISOString().slice(0, 16) };
+  const ev = (days, n = 1e7) => ({ t: sec(now + days * D), n, cats: 'insiders' });
+  const rows = [
+    { ...base, sym: 'SOON', stage: 'STANDARD', sourceEvents: [ev(7)] },        // T-7 today
+    { ...base, sym: 'LATER', stage: 'STANDARD', sourceEvents: [ev(30)] },      // no lead inside 7d
+    { ...base, sym: 'DUE10', stage: 'STANDARD', sourceEvents: [ev(10)] },      // T-7 fires in 3 days
+    { ...base, sym: 'PAST', stage: 'STANDARD', sourceEvents: [ev(-30)] },      // events exhausted
+    { ...base, sym: 'QUIET', stage: 'LOGGED', sourceEvents: [ev(3)] },         // silent on purpose
+    { ...base, sym: 'OLD', stage: 'STANDARD', sourceEvents: [ev(7)], sourceFetchedAt: new Date(now - 40 * D).toISOString().slice(0, 16) },
+  ];
+  const r = sourcedFiring(now, rows);
+  check('counts rows, rows with a future event, and rows firing in 7d', r.sourced === 6 && r.withFuture === 5 && r.firing7d === 2);
+  check('a row whose next lead lands inside 7d counts, one whose lead is further out does not', r.firing.includes('SOON') && r.firing.includes('DUE10') && !r.firing.includes('LATER'));
+  check('an exhausted row is MUTE, and mute is not coverage', /PAST:no future event/.test(r.mute.join()) && r.faultMute.some((m) => m.startsWith('PAST')));
+  check('a stale row is MUTE for a different reason, and says which', r.faultMute.some((m) => m === 'OLD:stale'));
+  check('a LOGGED row is silent BY DESIGN, not a fault (the alarm must not cry wolf)', r.mute.includes('QUIET:silent-by-stage') && !r.faultMute.some((m) => m.startsWith('QUIET')));
+  check('the line names the firing rows and raises 🚨 only on fault-mute', /29|6 rows/.test(r.line) && /🚨 2 MUTE/.test(r.line) && /1 silent by design/.test(r.line));
+  check('no fault-mute -> no siren', !/🚨/.test(sourcedFiring(now, [rows[0], rows[4]]).line));
+  // Live: measured 2026-09-07, before and after the refresh — all 29 could fire.
+  const live = sourcedFiring();
+  check('LIVE: no sourced row is mute by fault', live.faultMute.length === 0, live.faultMute.join(' | '));
+  check('LIVE: every sourced row still has a future event', live.withFuture === live.sourced);
+}
+
+console.log('52. staleness LADDER — the 21-day cliff warns before it bites');
+{
+  const { sourceFreshness, sourceIsStale, SOURCE_WARN_DAYS, SOURCE_URGENT_DAYS, SOURCE_STALE_DAYS } = await import('./src/core/unlock-promote.js');
+  const { sourcedFiring } = await import('./src/sources/calendar/unlocks.js');
+  const now = Date.UTC(2026, 8, 27, 12), D = 86400e3;
+  const at = (days) => ({ sourceFetchedAt: new Date(now - days * D).toISOString().slice(0, 16) });
+  check('ladder boundaries are 14 / 18 / 21, in that order, all below the cliff', SOURCE_WARN_DAYS === 14 && SOURCE_URGENT_DAYS === 18 && SOURCE_STALE_DAYS === 21 && SOURCE_WARN_DAYS < SOURCE_URGENT_DAYS && SOURCE_URGENT_DAYS < SOURCE_STALE_DAYS);
+  check('day 13 is FRESH, day 14 WARNs (boundary is inclusive, pinned)', sourceFreshness(at(13), now).level === 'FRESH' && sourceFreshness(at(14), now).level === 'WARN');
+  check('day 17 WARN, day 18 URGENT', sourceFreshness(at(17), now).level === 'WARN' && sourceFreshness(at(18), now).level === 'URGENT');
+  check('day 21 is still URGENT (not yet silent), day 22 is STALE', sourceFreshness(at(21), now).level === 'URGENT' && sourceFreshness(at(22), now).level === 'STALE');
+  check('the cliff has ONE implementation — sourceIsStale delegates to the ladder', !/now - at\) > SOURCE_STALE_DAYS/.test(readFileSync('src/core/unlock-promote.js', 'utf8')));
+  check('the ladder agrees with the rule that actually silences rows', [13, 14, 18, 21, 22, 40].every((d) => (sourceFreshness(at(d), now).level === 'STALE') === sourceIsStale(at(d), now)));
+  check('days-left counts down to the cliff', sourceFreshness(at(18), now).daysLeft === 3 && sourceFreshness(at(14), now).daysLeft === 7);
+  check('an unparseable timestamp is its own level, never quietly FRESH', sourceFreshness({ sourceFetchedAt: 'soon' }, now).level === 'UNPARSEABLE');
+  // The warning must state the ACTION — the refresh is manual and browser-pane-only.
+  const mk = (days) => [{ provenance: 'sourced', source: 'defillama', chain: 'ethereum', maxSupply: 1e9, sym: 'X', stage: 'STANDARD',
+    sourceEvents: [{ t: Math.floor((now + 9 * D) / 1000), n: 1e7, cats: 'insiders' }], ...at(days) }];
+  check('WARN line names the action and the deadline, not just the age', /⚠️ index 14d old · 7d until every sourced row goes silent — browser-pane refresh required/.test(sourcedFiring(now, mk(14)).line));
+  check('URGENT escalates the marker, same sentence', /🚨 index 18d old · 3d/.test(sourcedFiring(now, mk(18)).line));
+  check('past the cliff it reports the consequence in the past tense, not a countdown', /🚨 index 22d old — sourced rows are SILENT/.test(sourcedFiring(now, mk(22)).line));
+  check('fresh index says only its age — no siren on a healthy day', /index age 3d/.test(sourcedFiring(now, mk(3)).line) && !/⚠️|🚨/.test(sourcedFiring(now, mk(3)).line));
+  // Partial refresh: the OLDEST row sets the level, not the newest.
+  const mixed = [...mk(2), ...mk(19)];
+  check('a partial refresh reports the OLDEST row (a fresh row must not mask a stale one)', /🚨 index 19d old/.test(sourcedFiring(now, mixed).line));
+  check('LIVE: the index is inside the ladder and the heartbeat says its age', /index (age )?\d+d/.test(sourcedFiring().line));
+}
+
 console.log('48. MECHANISM — a sourced date can name no discrete event; weak falsifiers are stated');
 {
   const { mechanismEvidence, mechanismProblems, sourceRow, sourcedRowProblems, pressureStage, chanceRate, falsifierWeak, promoteRow, UNVERIFIABLE_MECHANISMS } = await import('./src/core/unlock-promote.js');
@@ -1027,11 +1084,19 @@ console.log('47. sourced PRESSURE FLOOR is derived from the index distribution, 
 {
   const { SOURCED_PRESSURE_FLOOR: F, derivePressureFloor, pressureStage, NON_PRESSURE_CATS } = await import('./src/core/unlock-promote.js');
   const { unlockCoverage, leadsFor } = await import('./src/sources/calendar/unlocks.js');
-  check('floor is recorded with percentile, n and a basis sentence', F.pctOfMaxSupply > 0 && F.percentile === 25 && F.n >= 100 && /percentile/.test(F.basis) && /2026-09-05/.test(F.basis));
+  check('floor is recorded with percentile, n and a basis sentence', F.pctOfMaxSupply > 0 && F.percentile === 15 && F.n === 29 && /percentile/.test(F.basis) && /2026-09-07/.test(F.basis));
   // The recorded static must be what the live index derives (re-derive on refresh, record again).
   const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
   const d = derivePressureFloor(live);
   check('recorded floor equals the value the live rows derive (drift here = index refreshed, floor not re-recorded)', !!d && d.n === F.n && Math.abs(d.pctOfMaxSupply - F.pctOfMaxSupply) < 0.0005);
+  // The floor is derived PER ROW because it is applied per row. A per-EVENT
+  // percentile lets one protocol with many small events set the floor for all of
+  // them — the 2026-09-07 refresh moved the per-event figure 0.061 -> 0.014 on an
+  // unchanged population. This fixture pins the invariant, not the number: adding
+  // 200 tiny events to ONE row must not move the floor.
+  const flood = live.map((t) => (t.sym !== 'TIA' || !t.sourceEvents ? t : { ...t, sourceEvents: [...t.sourceEvents, ...Array.from({ length: 200 }, (_, i) => ({ t: i, n: t.maxSupply * 1e-6, cats: 'ecosystem' }))] }));
+  check('one row spamming tiny events cannot drag the floor down (per-row, not per-event)', derivePressureFloor(flood).pctOfMaxSupply === d.pctOfMaxSupply);
+  check('the floor is applied to the same quantity it is derived from (row median)', pressureStage({ stage: 'STANDARD', maxSupply: 1e9, sourceEvents: [{ t: 1, n: 1e5, cats: 'insiders' }, { t: 2, n: 1e5, cats: 'insiders' }, { t: 3, n: 1e9, cats: 'insiders' }] }) === 'LOGGED');
   // FORT below (weekly 0.005% farming drip); EIGEN/ENA/MOVE-scale tranches well above.
   const mk = (n, maxSupply, cats) => ({ stage: 'STANDARD', maxSupply, sourceEvents: [{ t: 1, n, cats }, { t: 2, n, cats }, { t: 3, n, cats }] });
   check('FORT-scale tranche (0.005% farming) -> LOGGED', pressureStage(mk(50000, 1e9, 'farming')) === 'LOGGED');

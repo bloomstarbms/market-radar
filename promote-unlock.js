@@ -59,19 +59,32 @@ if (args.provenance === 'sourced') {
     if (res?.asset_platform_id) { chain = res.asset_platform_id === 'binance-smart-chain' ? 'bsc' : res.asset_platform_id; const a = res.platforms?.[res.asset_platform_id]; if (a) token = `${chain}:${a}`; }
   }
   const { sourceRow, pressureStage } = await import('./src/core/unlock-promote.js');
+  // A MECHANISM survives a re-ingest: "this contract pays a continuous stream" is a
+  // fact about the contract, not about the index snapshot. But an index REFRESH can
+  // invalidate 'index-contradicted' specifically — if the new dates moved, they may
+  // now match the observed clusters. So the stamp is carried and the date-set change
+  // is reported LOUD for re-check; it is never silently re-affirmed.
+  const prior = j.tokens[idx] ?? {};
+  const mechanism = args.mechanism ?? (prior.mechanism && prior.mechanism !== 'pending' ? prior.mechanism : 'pending');
+  const mechanismBasis = mechanism !== 'pending' ? (prior.mechanismBasis ?? null) : null;
+  const oldDates = (prior.sourceEvents || []).map((e) => e.t).join(',');
+  const newDates = sourceEvents.map((e) => e.t).join(',');
+  const datesMoved = oldDates && oldDates !== newDates;
   // Default stage is the PRESSURE rule's answer (derived floor, farming/staking-only
-  // -> LOGGED); an explicit stage= still wins and is recorded as such.
-  const defaultStage = pressureStage({ sourceEvents, maxSupply: p.maxSupply ?? null, stage: 'STANDARD' });
+  // or unverifiable mechanism -> LOGGED); an explicit stage= still wins.
+  const defaultStage = pressureStage({ sourceEvents, maxSupply: p.maxSupply ?? null, stage: 'STANDARD', mechanism });
   const row = sourceRow(j.tokens[idx] ?? { sym: sym.toUpperCase(), name: args.name ?? p.name }, {
     source: args.source, sourceFetchedAt: indexFile.fetchedAt, sourceEvents, chain, token,
     stage: args.stage ?? defaultStage, note: args.note ?? `Sourced from ${args.source}'s unlock schedule; ${sourceEvents.filter((e) => e.t * 1000 > Date.now()).length} upcoming batch events at ingest. Not independently verified.`,
     circSupply: p.circSupply ?? null, totalLocked: p.totalLocked ?? null, maxSupply: p.maxSupply ?? null,
+    mechanism, mechanismBasis,
   });
   if (idx < 0) j.tokens.push(row); else j.tokens[idx] = row;
   j.lastReviewed = new Date().toISOString().slice(0, 10) + ` (sourced ${row.sym} via promote-unlock.js)`;
   writeFileSync('unlocks.json.tmp', JSON.stringify(j, null, 1));
   renameSync('unlocks.json.tmp', 'unlocks.json');
-  console.log(`${row.sym} SOURCED (${args.source}, ${sourceEvents.length} batch events, chain ${chain}, stage ${row.stage}${args.stage ? ' (explicit)' : ` (pressure rule: ${defaultStage})`}).`);
+  console.log(`${row.sym} SOURCED (${args.source}, ${sourceEvents.length} batch events, chain ${chain}, stage ${row.stage}${args.stage ? ' (explicit)' : ` (pressure rule: ${defaultStage})`}${mechanism !== 'pending' ? `, mechanism ${mechanism} carried` : ''}).`);
+  if (datesMoved && mechanism !== 'pending') console.log(`   [OPERATOR] ${row.sym}: the index dates MOVED and this row carries mechanism '${mechanism}' — re-run detect-cliff-cluster.js ${row.sym} and re-stamp; the old verdict was against the old dates.`);
   process.exit(0);
 }
 

@@ -29,6 +29,17 @@ if errorlevel 1 (
   git init -b main >> push-result.txt 2>&1
 )
 
+REM STALE LOCK GUARD. On 6 Sep a crashed git left .git/index.lock behind; every
+REM later push then failed at 'commit' with "Another git process seems to be
+REM running" - and because nothing below checked an exit code, the script still
+REM printed "Pushed ... DONE". v0.31.1 was tagged on a commit that never happened.
+REM Detect and ABORT LOUD rather than deleting the lock: a lock is sometimes real.
+if exist ".git\index.lock" (
+  echo ABORTED: .git\index.lock exists - a git process crashed or is running. >> push-result.txt
+  echo If no git is running, delete .git\index.lock and re-run this script. >> push-result.txt
+  goto :done
+)
+
 git remote remove origin >nul 2>nul
 git remote add origin https://github.com/bloomstarbms/market-radar.git
 git fetch origin main >> push-result.txt 2>&1
@@ -51,8 +62,22 @@ git -c user.name="BMS" -c user.email="85956989+bloomstarbms@users.noreply.github
 git push -u origin main >> push-result.txt 2>&1
 git tag -f "v%RADAR_VER%" >nul 2>nul
 git push -f origin "v%RADAR_VER%" >> push-result.txt 2>&1
-echo Pushed as v%RADAR_VER% (tagged) >> push-result.txt
-echo DONE >> push-result.txt
+
+REM VERIFY THE OUTCOME, not the exit codes. Exit codes here are ambiguous (commit
+REM returns 1 for "nothing to commit", which is fine) and were not checked at all.
+REM What matters is one thing: does the remote branch now point at our HEAD?
+git fetch origin main >> push-result.txt 2>&1
+git rev-parse HEAD > local-head.tmp 2>>push-result.txt
+git rev-parse FETCH_HEAD > remote-head.tmp 2>>push-result.txt
+fc local-head.tmp remote-head.tmp >nul 2>nul
+if errorlevel 1 (
+  echo PUSH FAILED: origin/main does not match local HEAD - nothing was published. >> push-result.txt
+  echo Read the git output above; the tag may now point at the WRONG commit. >> push-result.txt
+) else (
+  echo Pushed as v%RADAR_VER% (tagged) - verified: origin/main == local HEAD >> push-result.txt
+  echo DONE >> push-result.txt
+)
+del local-head.tmp remote-head.tmp 2>nul
 
 :done
 type push-result.txt

@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { config, ROOT } from '../../config.js';
 import { dispatch } from '../../core/dispatcher.js';
 import { loadWatchState, activeDemotions, observedAround, retrospectiveLine, loadRecheckState, effectiveSourced } from './cadence-watch.js';
-import { sourceIsStale, SOURCE_STALE_DAYS, pressureStage, falsifierWeak, chanceRate, falsifierLine, UNVERIFIABLE_MECHANISMS } from '../../core/unlock-promote.js';
+import { sourceIsStale, SOURCE_STALE_DAYS, pressureStage, falsifierWeak, chanceRate, falsifierLine, sourceFreshness, SOURCE_STALE_DAYS as STALE_D, UNVERIFIABLE_MECHANISMS } from '../../core/unlock-promote.js';
 
 const FILE = join(ROOT, 'unlocks.json');
 // STAGE TIERING (coverage-session Part 3): at 25+ tracked tokens, un-tiered monthly
@@ -82,6 +82,57 @@ function strengthClause(t) {
   const comp = f.compound != null ? ` (that series by chance alone: p≈${f.compound.toExponential(1)})` : '';
   return ` Falsifier strength: each ${f.windowDays}-day window passes by chance ${Math.round(f.chanceRate * 100)}% of the time; record ${series}${comp}${f.verdict === 'WEAK' ? ' — WEAK on both' : ''}.`;
 }
+// CAN THIS ROW ACTUALLY FIRE? (v0.31.1) A sourced row can be perfectly configured
+// and still never alert — if its snapshot held only PAST events, if it went stale,
+// if the source retracted it, or if the pressure rule silenced it. The coverage line
+// counts it as coverage either way, which is the silent-lapse shape: healthy-looking
+// and doing nothing. Measured once on 2026-09-07 (29/29 had a future event, both
+// before and after the refresh — the suspicion was not confirmed), and made
+// PERMANENT here so the next time it is not true, the heartbeat says so.
+//
+// "firing in 7d" means a push is actually SCHEDULED: some (event, lead) pair lands
+// inside the next seven days, using the row's EFFECTIVE stage (pressure rule
+// applied), not its stored one.
+export function sourcedFiring(now = Date.now(), tokens = null) {
+  if (!tokens) { try { tokens = JSON.parse(readFileSync(join(ROOT, 'unlocks.json'), 'utf8')).tokens; } catch { tokens = []; } }
+  const rc = loadRecheckState();
+  const sourced = (tokens || []).filter((t) => !t.retired && t.provenance === 'sourced').map((t) => effectiveSourced(t, rc));
+  const withFuture = sourced.filter((t) => (t.sourceEvents || []).some((e) => e.t * 1000 > now));
+  const firing = [], mute = [];
+  for (const t of sourced) {
+    const blocked = t.sourceDemoted ? 'retracted' : sourceIsStale(t, now) ? 'stale'
+      : !leadsFor({ stage: pressureStage(t) }).length ? 'silent-by-stage'
+      : !(t.sourceEvents || []).some((e) => e.t * 1000 > now) ? 'no future event' : null;
+    if (blocked) { mute.push(`${t.sym}:${blocked}`); continue; }
+    const leads = leadsFor({ stage: pressureStage(t) });
+    const soon = (t.sourceEvents || []).some((e) => leads.some((l) => {
+      const fireAt = e.t * 1000 - l * 86400e3;
+      return fireAt >= now - 86400e3 && fireAt <= now + 7 * 86400e3;
+    }));
+    if (soon) firing.push(t.sym);
+  }
+  // Rows silenced ON PURPOSE (stage/pressure/mechanism) are not a fault; rows mute
+  // because their events ran out or their source went stale are. Split, so the alarm
+  // only fires on the second kind.
+  const faultMute = mute.filter((m) => /stale|no future event|retracted/.test(m));
+  // Freshness ladder, reported on the WORST row (they refresh together, but a partial
+  // refresh must surface as the oldest row, not the newest).
+  const worst = sourced.map((t) => sourceFreshness(t, now)).sort((a, b) => (b.ageDays ?? 1e9) - (a.ageDays ?? 1e9))[0]
+    ?? { level: 'FRESH', ageDays: 0, daysLeft: STALE_D };
+  const fresh = { ...worst,
+    line: worst.level === 'FRESH' ? `index age ${worst.ageDays}d`
+      : worst.level === 'STALE' ? `🚨 index ${worst.ageDays}d old — sourced rows are SILENT; browser-pane refresh required (see NEXT-SESSION.md)`
+      : worst.level === 'UNPARSEABLE' ? '🚨 a sourced row has an unparseable sourceFetchedAt'
+      : `${worst.level === 'URGENT' ? '🚨' : '⚠️'} index ${worst.ageDays}d old · ${worst.daysLeft}d until every sourced row goes silent — browser-pane refresh required (see NEXT-SESSION.md)` };
+  return { sourced: sourced.length, withFuture: withFuture.length, firing7d: firing.length, firing,
+    mute, faultMute,
+    freshness: fresh,
+    line: `Sourced firing: ${sourced.length} rows · ${withFuture.length} with a future event · ${firing.length} firing in 7d`
+      + (firing.length ? ` (${firing.join(', ')})` : '')
+      + (faultMute.length ? ` · 🚨 ${faultMute.length} MUTE: ${faultMute.join(', ')}` : '')
+      + ` · ${mute.length - faultMute.length} silent by design · ${fresh.line}` };
+}
+
 export function claimCoverage(t, lead = 3) {
   if (t?.provenance === 'sourced' && UNVERIFIABLE_MECHANISMS.includes(t.mechanism)) return {
     date: 'no-discrete-event', amount: 'sourced', scope: 'mechanism',

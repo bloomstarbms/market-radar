@@ -2772,3 +2772,114 @@ WHAT MOVED (confirmed in code, not assumed):
    broadcast() in telemetry.js and cadence-watch.js is DM-only.
 ACCEPTANCE pending observation: next 18:00Z heartbeat + digest in DM, nothing in
 public; a full day of facts-only on @radaralert22.
+
+## BUG CLASS — "the branch that agrees with the prior generates no friction" (2026-09-06)
+
+General form of a family found four times now, always by asking, never by breaking:
+ - exclusion log dark, rejection log lit (v0.2x)
+ - write-only accumulators: recorded, never read (v0.21.5)
+ - cadence/cliff CONFIRM stamped and summarised, never SENT — every negative verdict
+   had a destination, the positive one had none (v0.31.0)
+ - a sent-marker settable with nobody having received the message (v0.19.2, again at
+   the digest reroute)
+Mechanism: the outcome that matches expectation produces no error, no retry, no
+operator line — so it is never looked at, and its absence is indistinguishable from
+its presence. Test for it: for every decision with a "bad" branch that reaches a
+reader, ask where the "good" branch goes. If the answer is "nowhere, it's fine",
+that is the finding. Sits alongside the safeguard ("asserts the environment while
+appearing to assert logic") and bypass ("unconditional bypass wearing a
+justification") classes; unlike those it hides in code that is CORRECT.
+
+## 2026-09-07 — HARD RESTRICTION: no Telegram access for Claude
+
+Claude must not read, fetch or open any Telegram chat, channel or DM belonging to
+this project, by any route (browser pane, computer-use, Bot API, pasted content).
+The chat holds confidential material. Written into PART 0 of REMAINING-WORK.md,
+which is pasted verbatim at the top of every session — a note only in this file
+would be read late or not at all.
+
+SCOPE, stated so a future session does not over- or under-apply it:
+ - Restricts CLAUDE, in this and every later session on this machine.
+ - Does NOT restrict the bot. It keeps delivering to @radaralert22 and the operator
+   DM with its own token; stopping that is a different change and has not been asked
+   for. If it ever is, note that the alerts would then have nowhere to go.
+ - Claude may still work from code, unlocks.json, data/*.json, bot.log and any
+   report the operator shares, provided none of it carries chat content.
+
+CONSEQUENCE for the verification loop: every observational check is now the
+operator's. The 18:00Z heartbeat/digest destination check, ENA's window verdict,
+ORDER's cliff verdict, every CONFIRM and DEMOTE — Claude cannot confirm any of them
+and must not claim to. Where a check needs an eye on Telegram, the honest output is
+"operator to confirm", not an inference. bot.log and data/cadence-watch.json remain
+readable and are the substitute where they suffice: watch verdicts are stamped in
+state before they are sent, so the DECISION is auditable locally even though the
+DELIVERY is not.
+
+Set after a session (2026-09-07) in which Claude opened the DM and channel to
+complete the channel-split acceptance check. That was permitted at the time; it is
+not permitted from now on.
+
+## 2026-09-07 — INDEX REFRESH, PRESSURE-FLOOR CORRECTION, FIRING COUNT, STALENESS LADDER (v0.31.1)
+
+CRYPTORANK QUESTION CLOSED (from the brief, recorded so nobody re-debugs it): the
+401 was never a broken key. /v3/currencies/upcoming-token-unlocks, /vesting/events
+and /vesting/schedule are Pro tier, $4,750/year; the free Sandbox plan's 33
+endpoints contain no unlock data. DO NOT RETRY THE KEY. The public page
+cryptorank.io/token-unlock is a separate, keyless route — that is the Part 3 path.
+
+PART 1 — REFRESH DONE, ahead of the Sep 26 cliff.
+ - Re-tested the direct fetch from the sandbox first rather than assuming: still
+   HTTP 403, 5.7KB Cloudflare page, no __NEXT_DATA__. Browser pane loads it fine.
+ - 370 protocols in the page; trimmed to the 53-symbol keep set -> 49 protocols,
+   529 batch events, fetchedAt 2026-09-07T15:59.
+ - TRANSFER: the pane emits a COMPACT encoding (events as [t,typeCode,n,catIdx,rd]
+   with a category dictionary), gzipped and base64'd — 46KB raw -> 8.5KB carried.
+   New script import-unlock-index.js expands it back to the exact schema
+   fetch-unlock-index.js writes. Two fail-loud properties: gzip's CRC rejects any
+   truncated or mistyped slice (nothing is written at all), and the same
+   plausibility gate as the direct fetch (>=20 protocols, >=50 events) refuses a
+   suspiciously empty import. A first attempt at carrying the blob by hand WAS
+   corrupted (self-inflicted truncation) and the CRC caught it — the guard is not
+   theoretical.
+ - All 29 sourced rows re-ingested through promote-unlock.js. Stale count 0.
+ - MECHANISM CARRY: re-ingest now preserves a non-pending mechanism (a stream is a
+   fact about the contract, not the snapshot) but prints a LOUD operator line if the
+   index dates MOVED under a mechanism-stamped row — 'index-contradicted' in
+   particular can be invalidated by a refresh. L3 and REZ: dates unchanged, stamps
+   still valid, checked explicitly rather than assumed.
+
+PRESSURE FLOOR WAS DERIVED FROM THE WRONG POPULATION — found by the refresh.
+The floor moved 0.061% -> 0.014% on a snapshot whose population had not changed.
+Cause: the percentile was taken over every sourced EVENT, so TIA (155 daily
+183,562-token drips) contributed 47% of the sample and set the floor for everyone.
+The deeper error: pressureStage compares a row's MEDIAN tranche to the floor, so
+the floor must be derived from the distribution of ROW MEDIANS — the old version
+compared two different quantities. Per-row is stable across both snapshots
+(p25 0.2775, p50 0.824, n=29 on each). Now: 15th percentile of per-row medians =
+0.0688%. The PERCENTILE (15) is a DECLARED choice, chosen to hold the reviewed
+silence set constant across the statistic change — same status as WEAK_CHANCE=0.5,
+and labelled as such. Silence set reproduced exactly: FORT, TIA, ASTER, CFG by
+size; FXN by category; L3, REZ by mechanism. Fixture pins the INVARIANT, not the
+number: adding 200 tiny events to one row must not move the floor.
+
+PART 2 — THE SUSPICION WAS NOT CONFIRMED. Every sourced row has a future event:
+29/29 after the refresh AND 29/29 before it, so the Sep 5 snapshot was not hiding
+mute rows. Measured, not assumed, and now permanent: heartbeat line
+"Sourced firing: N rows · M with a future event · K firing in 7d (…) · J silent by
+design · index age Xd". "Firing in 7d" means a push is actually SCHEDULED — some
+(event, lead) pair lands inside seven days, using the EFFECTIVE stage. Today: 12 of
+29 fire within 7d, 7 silent by design. Fault-mute (events exhausted / stale /
+retracted) raises 🚨; silent-by-design does not, so the alarm cannot cry wolf.
+
+PART 5 — LADDER: ⚠️ at 14d, 🚨 at 18d, silent at 21d, with the ACTION in the
+sentence ("browser-pane refresh required (see NEXT-SESSION.md)"). The worst row
+sets the level, so a partial refresh cannot be masked by a fresh row.
+FOUND WHILE PINNING IT: sourceIsStale and the new ladder disagreed at exactly 21
+days — two implementations of one rule, the class this project keeps removing. The
+cliff now DELEGATES to the ladder; a fixture asserts the old expression is gone.
+NEXT-SESSION.md gains the refresh as a standing monthly chore with the exact
+commands, including step 7: re-derive and RE-RECORD the floor, because fixture 47
+fails until you do — which is the point of it.
+
+STILL OPEN from this brief: Part 3 (CryptoRank as a second index) and Part 4
+(sourceAgreement). Neither is deadline-bound now that the refresh is done.

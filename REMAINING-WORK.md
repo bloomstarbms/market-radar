@@ -1,5 +1,5 @@
 <!-- PREMISE
-Written against: v0.31.0
+Written against: v0.31.1
 Reviewed: 2026-08-29
 Assumes:
 - Unlock coverage is Ethereum/EVM only; L1 gap ACCEPTED (a) + announcement path (c).
@@ -38,6 +38,22 @@ whatever src/config.js VERSION says — never trust a version written in prose,
 including this document's (it drifted from v0.16.3 to v0.26.x unnoticed). Read
 REMAINING-WORK-NOTES.md (bottom-up: it is append-only and the latest entries
 are current state) and test-delivery.js before writing any code.
+
+## HARD RESTRICTION — no Telegram access
+
+Claude must not read, fetch, or open any Telegram chat, channel or DM
+belonging to this project — not via the browser pane, not via computer-use,
+not via the Bot API, not by any other route. The chat contains confidential
+material. Do not request or accept pastes of channel or DM content. This is
+not negotiable and not a preference.
+
+The BOT's own delivery is unaffected: it keeps sending to @radaralert22 and
+to the operator DM with its own token. Verification of what arrived is the
+operator's, not Claude's — Claude works from code, specs, and logs the
+operator chooses to share, provided those carry no chat content.
+
+Set 2026-09-07, after a session in which Claude read the DM and channel to
+complete an acceptance check. That was permitted then and is not now.
 
 ## Hard constraints — do not violate
 

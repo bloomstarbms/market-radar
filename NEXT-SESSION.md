@@ -12,6 +12,46 @@ STATUS: mostly EXECUTED. Do not run as a session prompt; read as background.
 
 # Next session
 
+## RECURRING CHORE — refresh the unlock index (monthly, or when the heartbeat warns)
+
+**Trigger:** the heartbeat's "Sourced firing:" line shows `⚠️ index 14d old` (or
+`🚨` at 18d). At 21d every sourced row goes silent — correctly, but silent. Do not
+wait for the siren if a session is happening anyway.
+
+**Why manual:** `defillama.com/unlocks` returns Cloudflare 403 to the sandbox AND to
+the operator's desktop (re-tested 2026-09-07). The in-app browser pane loads it
+normally. So the index arrives by hand, carried as gzip+base64, CRC-checked.
+
+**Steps** (about ten minutes):
+
+1. Browser pane → `https://defillama.com/unlocks`.
+2. Get the keep-set:
+   `node -e "const fs=require('fs');const k=new Set();for(const t of JSON.parse(fs.readFileSync('unlocks.json')).tokens)k.add(t.sym);for(const p of JSON.parse(fs.readFileSync('data/unlock-index.json')).protocols)k.add(p.symbol);console.log(JSON.stringify([...k].sort()))"`
+3. In the pane, run the extractor with that array as `KEEP` — it parses
+   `__NEXT_DATA__.props.pageProps.data`, applies the SAME trim as
+   `fetch-unlock-index.js` (cliff, or linear with `rd>=28`; past 120d / future 400d;
+   merged by `timestamp|type`), encodes compactly, gzips, base64s into `window.__C`.
+   The snippet is in the 2026-09-07 entry of REMAINING-WORK-NOTES.md.
+4. Carry `window.__C` out in slices (`.slice(0,2140)`, etc.), append each to one
+   file, then `node import-unlock-index.js <file.b64>`. A truncated or mistyped
+   slice fails the gzip CRC and writes NOTHING — that is the intended behaviour.
+5. Re-ingest every sourced row through the write path (never edit unlocks.json):
+   `for s in $(node -e "console.log(JSON.parse(require('fs').readFileSync('unlocks.json')).tokens.filter(t=>t.provenance==='sourced').map(t=>t.sym).join(' '))"); do node promote-unlock.js $s provenance=sourced source=defillama; done`
+6. Watch for two things in that output:
+   - `[OPERATOR] ... index dates MOVED and this row carries mechanism ...` — re-run
+     `detect-cliff-cluster.js` for that symbol and re-stamp; the old verdict was
+     against the old dates.
+   - a stage flip on a row you expected to stay put.
+7. Re-derive and RE-RECORD the pressure floor if it moved:
+   `node -e "import('./src/core/unlock-promote.js').then(m=>console.log(JSON.stringify(m.derivePressureFloor(JSON.parse(require('fs').readFileSync('unlocks.json')).tokens))))"`
+   — update `SOURCED_PRESSURE_FLOOR` (value, n, basis) in `src/core/unlock-promote.js`.
+   Fixture 47 fails until you do; that is the point of it.
+8. `node test-delivery.js` (ALL GREEN), then restart and push.
+
+**Verify:** heartbeat shows `index age 0d`, `Sourced firing: N rows · N with a
+future event`, and no `🚨 MUTE`.
+
+
 ## 0. FIRST: restore drill on tonight's backup (before push, before EIGEN)
 Load `data/backups/outcomes-2026-08-09.json` as if the live file were gone:
 parse it, assert row count vs live `data/outcomes.json`, then run
