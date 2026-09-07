@@ -83,6 +83,11 @@ if errorlevel 1 (
 )
 del local-head.tmp remote-head.tmp 2>nul
 
+REM Tags are checked against the tree they point at, EVERY push - not just the one
+REM made now. The 2026-09-07 mis-pointing was invisible to a script that only looks
+REM at its own tag.
+node verify-tags.js >> push-result.txt 2>&1
+
 :done
 type push-result.txt
 timeout /t 6 >nul

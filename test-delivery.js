@@ -1066,6 +1066,34 @@ console.log('53. CROSS-SOURCE AGREEMENT — a second index changes the MESSAGE, 
   check('LIVE: the second index is on disk and dated', (() => { const s2 = loadSecondIndex(); return !!s2 && /^\d{4}-\d\d-\d\dT/.test(s2.fetchedAt) && s2.protocols.length >= 20; })());
 }
 
+console.log('54. the TRUNCATION BOUNDARY day is partial — and must never sit inside an evaluated window');
+{
+  // Probed 2026-09-07: a Blockscout fetch stopped after 3 pages holds a PARTIAL sum
+  // for its oldest day (150 transfers vs 400 at 8 pages; 2026-06-30 differed). That
+  // is correct — the fetch stopped mid-day. It is only safe because every reader
+  // pages until its oldest day is STRICTLY older than the window it will evaluate.
+  // Nothing asserted that, and flipping one "<" to "<=" would put a half-counted day
+  // at the start of a cadence window and manufacture a DEMOTE. Asserted here.
+  const cw = readFileSync('src/sources/calendar/cadence-watch.js', 'utf8');
+  const cc = readFileSync('detect-cliff-cluster.js', 'utf8');
+  const dc = readFileSync('detect-cadence.js', 'utf8');
+  check('cadence reader stops STRICTLY past the window start, not at it', /oldest\s*&&\s*oldest\s*<\s*untilDate/.test(cw) && !/oldest\s*<=\s*untilDate/.test(cw));
+  check('cadence-history reader stops STRICTLY past its cutoff', /oldest\s*&&\s*oldest\s*<\s*cutoff/.test(dc) && !/oldest\s*<=\s*cutoff/.test(dc));
+  check('cliff reader stops strictly past its target too', /oldest\s*<\s*untilDate/.test(cc) && !/oldest\s*<=\s*untilDate/.test(cc));
+  // The cliff reader additionally starts its fetch 2 days BEFORE the earliest cliff,
+  // so even the boundary day is outside the first window it scores.
+  check('cliff reader asks for a margin before the earliest cliff it scores', /-\s*2\s*\*\s*86400e3/.test(cw) || /-\s*2\s*\*\s*86400e3/.test(cc));
+  // Why it matters, demonstrated rather than asserted: a half-counted first day
+  // drops a family window below its floor and flips CONFIRM to DEMOTE.
+  const { cadenceDecision } = await import('./src/sources/calendar/cadence-watch.js');
+  const spec = { wallet: '0xw', meanAmount: 1e6, expectDay: 10, graceDays: 3 };
+  const full = { '2026-09-09': 1.2e6 };
+  const partial = { '2026-09-09': 4e5 }; // same day, half-counted because the fetch stopped in it
+  const now = new Date(Date.UTC(2026, 8, 20));
+  check('a fully-counted boundary day CONFIRMs', cadenceDecision(spec, 2026, 9, now, full).action === 'CONFIRM');
+  check('the SAME day half-counted DEMOTEs — so the boundary must stay outside the window', cadenceDecision(spec, 2026, 9, now, partial).action === 'DEMOTE');
+}
+
 console.log('48. MECHANISM — a sourced date can name no discrete event; weak falsifiers are stated');
 {
   const { mechanismEvidence, mechanismProblems, sourceRow, sourcedRowProblems, pressureStage, chanceRate, falsifierWeak, promoteRow, UNVERIFIABLE_MECHANISMS } = await import('./src/core/unlock-promote.js');

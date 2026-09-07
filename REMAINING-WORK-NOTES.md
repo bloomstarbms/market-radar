@@ -2968,3 +2968,49 @@ CRYPTORANK PAID API — CLOSED, DO NOT REOPEN. /v3 unlock endpoints
 (currencies/upcoming-token-unlocks, vesting/events, vesting/schedule) are Pro tier,
 $4,750/year; the free Sandbox key's 33 endpoints carry no unlock data. August's 401s
 were plan-gating, not a broken key.
+
+## 2026-09-07 (later) — TAGS VERIFIED, PAGINATION SWEPT, REDUNDANCY STILL UNRESOLVED
+
+1. TAGS — all 26 verify. v0.31.1 was repaired as a side effect of the corrected
+re-push (the script does `git tag -f` + `git push -f`, so the second run moved it to
+7ce11b4, whose config.js says 0.31.1). No EARLIER tag was wrong: the lock was left at
+6 Sep 14:20 but the v0.31.0 push at 18:29 still committed, so only v0.31.1 was ever
+mis-pointed. Checked rather than assumed — each tag's own tree compared against its
+src/config.js VERSION. Kept as `verify-tags.js`, and wired into PUSH-TO-GITHUB.bat so
+EVERY push re-checks EVERY tag: the push script can only see the tag it just made,
+which is exactly why this went unnoticed.
+
+2. PAGINATION CLASS — swept, one latent dependency found, no live defect.
+`probe-pagination.js` runs the reviewer's test (same query, two page sizes, diff the
+DERIVED result rather than the row count) against both verdict-bearing readers.
+ - Blockscout (cadence AND cliff): there is NO page-size knob to get wrong —
+   items_count accepts only its default 50 and returns HTTP 422 for 100 or 200.
+   Refused, not silently degraded. That is the opposite of CryptoRank's behaviour and
+   is now pinned so nobody "optimises" it later.
+ - Etherscan v2 tokentx (whale facts): offset=100 vs offset=1000 give one identical
+   field set and identical shared rows. No degradation.
+ - WHAT DEPTH DOES CHANGE: a truncated fetch holds a PARTIAL sum for its OLDEST day
+   (3 pages of the EIGEN wallet = 150 transfers, 8 pages = 400; 2026-06-30 differed).
+   Correct behaviour — the fetch stopped mid-day — and safe ONLY because every reader
+   pages until its oldest day is STRICTLY older than the window it evaluates
+   (`oldest < untilDate`, and the cliff reader adds a 2-day margin). Nothing asserted
+   that. Flipping one `<` to `<=` would put a half-counted day at the start of a
+   cadence window; fixture 54 now pins the guard in all three readers and
+   demonstrates the consequence — the same day, half-counted, flips CONFIRM to
+   DEMOTE.
+ - THE PROBE HAD THE BUG IT WAS HUNTING, twice: the first version printed "PAGE SIZE
+   DOES NOT CHANGE THE ANSWER" while one side had returned zero rows and the other
+   probe had been skipped for a missing key, and it compared the boundary day where a
+   difference is expected. A skipped or empty side is now a FAILURE, not a pass.
+
+3. REDUNDANCY IS **NOT ACHIEVED** — recorded as UNRESOLVED, not addressed.
+CryptoRank covers 3 of 53 tracked symbols with a dated unlock (APT, MANTA, FF). So
+DEFILLAMA REMAINS A SINGLE POINT OF FAILURE FOR THE OTHER 50: a permanent block
+there still silences them at the 21-day cliff, and the second index would not carry
+them. What Part 3 delivered is a CROSS-CHECK — which earned itself immediately by
+finding FF's 2-day disagreement — not a FAILOVER. A future session must not read
+"second source exists" as "there is a fallback".
+What would actually resolve it, unexplored: a third aggregator with better coverage
+of our population; per-project vesting pages (per-chain work, out of scope); or
+accepting that the sourced tier is inherently single-sourced and making the 21-day
+silence the honest failure mode it already is. NOT a $0 problem with a known answer.

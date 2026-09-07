@@ -1,5 +1,5 @@
 <!-- PREMISE
-Written against: v0.31.2
+Written against: v0.31.3
 Reviewed: 2026-08-29
 Status: DESCRIPTIVE — every claim below cites the fixture that would fail if the
   code stopped matching it. This file IS the enforcement companion to

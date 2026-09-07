@@ -1,5 +1,5 @@
 <!-- PREMISE
-Written against: v0.31.2
+Written against: v0.31.3
 Reviewed: 2026-09-07
 Assumes:
 - Nothing about the code. The restriction below is version-independent and does not
