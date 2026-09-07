@@ -1029,6 +1029,43 @@ console.log('52. staleness LADDER — the 21-day cliff warns before it bites');
   check('LIVE: the index is inside the ladder and the heartbeat says its age', /index (age )?\d+d/.test(sourcedFiring().line));
 }
 
+console.log('53. CROSS-SOURCE AGREEMENT — a second index changes the MESSAGE, never the provenance');
+{
+  const { sourceAgreement, sourcedMessage, unlockCoverage, AGREEMENT_STATES, AGREE_TOLERANCE_DAYS, loadSecondIndex } = await import('./src/sources/calendar/unlocks.js');
+  const { sourcedRowProblems } = await import('./src/core/unlock-promote.js');
+  const now = Date.UTC(2026, 8, 7, 12), D = 86400e3, sec = (ms) => Math.floor(ms / 1000);
+  const row = (dates) => ({ sym: 'TST', name: 'T', provenance: 'sourced', source: 'defillama', chain: 'ethereum',
+    stage: 'STANDARD', maxSupply: 1e9, circSupply: 5e8, sourceFetchedAt: new Date(now - D).toISOString().slice(0, 16),
+    sourceEvents: dates.map((d) => ({ t: sec(now + d * D), type: 'cliff', n: 1e7, cats: 'insiders' })) });
+  const idx = (d) => ({ protocols: [{ symbol: 'TST', nextDate: d }], withheld: 5 });
+  check('the four states are exactly these four', AGREEMENT_STATES.join() === 'both-agree,both-differ,single-source,not-checked');
+  check('same date -> both-agree', sourceAgreement(row([10]), idx('2026-09-17'), now).state === 'both-agree');
+  check('one day apart is still agreement (declared tolerance, timezones)', AGREE_TOLERANCE_DAYS === 1 && sourceAgreement(row([10]), idx('2026-09-18'), now).state === 'both-agree');
+  const diff = sourceAgreement(row([10]), idx('2026-09-20'), now);
+  check('two days apart -> both-differ', diff.state === 'both-differ' && Math.abs(diff.deltaDays) === 3);
+  check('DISAGREEMENT SHOWS BOTH DATES and picks no winner', /2026-09-17/.test(diff.line) && /2026-09-20/.test(diff.line) && !/correct|right|use /i.test(diff.line));
+  check('second source silent on this symbol -> single-source, and says the source withholds', sourceAgreement(row([10]), { protocols: [], withheld: 5 }, now).state === 'single-source');
+  check('no second index at all -> not-checked, never "agree"', sourceAgreement(row([10]), null, now).state === 'not-checked');
+  check('a row with no future event cannot agree with anything', sourceAgreement(row([-10]), idx('2026-09-17'), now).state === 'single-source');
+  // The comparison is against OUR NEXT event, not any event.
+  check('compares our NEXT event, not a later one (no manufactured disagreement)', sourceAgreement(row([10, 40]), idx('2026-09-17'), now).state === 'both-agree');
+  const msg = sourcedMessage(row([10, 40]), row([10, 40]).sourceEvents[0], 7, new Date(now), idx('2026-09-17'));
+  check('the message carries the agreement line on the NEXT event', msg.lines.some((l) => /agree on this date/.test(l)));
+  const later = sourcedMessage(row([10, 40]), row([10, 40]).sourceEvents[1], 7, new Date(now), idx('2026-09-17'));
+  check('a LATER tranche carries no agreement line (the second source made no claim about it)', !later.lines.some((l) => /agree on this date|Sources disagree/.test(l)));
+  // AGREEMENT MUST NOT PROMOTE.
+  const agreed = row([10]);
+  check('an agreeing row is still provenance sourced, still not verified', agreed.provenance === 'sourced' && agreed.verified !== true && sourcedRowProblems(agreed).length === 0);
+  check('nothing in the agreement path writes a provenance or verified field', (() => { const before = JSON.stringify(agreed); sourceAgreement(agreed, idx('2026-09-17'), now); return JSON.stringify(agreed) === before; })());
+  check('the message still says NOT independently verified even when both agree', msg.lines.some((l) => /NOT independently verified/.test(l)));
+  // Live: all four states are reachable, and two are actually occupied today.
+  const cov = unlockCoverage();
+  check('coverage line reports the second-source split', /2nd source: \d+ agree · \d+ DISAGREE · \d+ single-source/.test(cov.line));
+  check('LIVE: the states sum to the sourced row count', Object.values(cov.agreement).reduce((a, b) => a + b, 0) === cov.sourced);
+  check('LIVE: at least one real disagreement was found (the state that earns the feature)', cov.agreement['both-differ'] >= 1);
+  check('LIVE: the second index is on disk and dated', (() => { const s2 = loadSecondIndex(); return !!s2 && /^\d{4}-\d\d-\d\dT/.test(s2.fetchedAt) && s2.protocols.length >= 20; })());
+}
+
 console.log('48. MECHANISM — a sourced date can name no discrete event; weak falsifiers are stated');
 {
   const { mechanismEvidence, mechanismProblems, sourceRow, sourcedRowProblems, pressureStage, chanceRate, falsifierWeak, promoteRow, UNVERIFIABLE_MECHANISMS } = await import('./src/core/unlock-promote.js');

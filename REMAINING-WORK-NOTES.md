@@ -2911,3 +2911,60 @@ locks is a worse failure than a refused push.
 
 Re-pushed clean: 166d067 v0.31.1, tag force-moved to it. Verified from outside the
 script (origin/main == HEAD, no .env or data/ in the commit).
+
+## 2026-09-07 — PARTS 3 & 4: CRYPTORANK AS A SECOND INDEX, AND AGREEMENT (v0.31.2)
+
+REACHABILITY, TESTED NOT ASSUMED — and it inverts the expectation. The brief warned
+CryptoRank might 403 from the desktop like DefiLlama. It does not: the sandbox
+fetches cryptorank.io/token-unlock at 200 with __NEXT_DATA__ intact. So the SECOND
+source is the one that can run unattended, and the PRIMARY is the one needing a
+browser pane. Recorded as the standing dependency: DefiLlama = manual/monthly,
+CryptoRank = automatable.
+
+THE ENDPOINT WAS FOUND BY LOOKING, NOT GUESSING. Four guessed API paths returned
+404 (the ABI-archaeology shape). Loading the page in the browser pane and watching
+what it requested gave it in one step: api.cryptorank.io/v0/app/consolidated-vesting
+— keyless, no account, the public table's own endpoint.
+
+PAGE SIZE IS LOAD-BEARING, not a tuning knob. Same 382 rows either way, but at
+limit=100 only 19 carry BOTH symbol and date; at limit=20 it is 81. The server
+returns fuller records for smaller pages. The first version of the fetcher used 100
+and would have silently indexed a quarter of the calendar — which is precisely the
+"silently empty second source is worse than none" failure the brief named. Caught by
+cross-checking the row count against what the page itself displays.
+
+WHAT THE FREE SURFACE ACTUALLY GIVES (382 rows): 81 identified + dated; 78 with a
+schedule but identity WITHHELD (isHidden:true — CryptoRank's Pro boundary; the
+schedule is shown, the coin is not); 223 identified but with no next date. Counts
+are written into the index file (withheld, undated) so a shrinking identified set is
+visible rather than inferred from a smaller file.
+
+OVERLAP WITH OUR POPULATION IS THIN: 3 of 53 tracked symbols carry a dated next
+unlock — APT, MANTA (not sourced), FF. That is the honest measure of how much
+redundancy this buys today: it does NOT cover the 29 sourced rows if DefiLlama
+disappears. It is a cross-check, not a failover. Recorded plainly because the brief
+asked for redundancy and this does not deliver it.
+
+PART 4 — AGREEMENT, and it earned itself immediately:
+  APT  DefiLlama 2026-09-11 · CryptoRank 2026-09-12 -> both-agree (1 day, tolerance)
+  FF   DefiLlama 2026-09-29 · CryptoRank 2026-10-01 -> BOTH-DIFFER, 2 days apart
+  27 others -> single-source
+A real disagreement on the first run, on a row that is currently STANDARD and will
+push. The message shows both dates and picks no winner; a fixture asserts it names
+neither as correct.
+DELIBERATE DEVIATION FROM THE BRIEF: sourceAgreement is derived at RUNTIME, not
+stamped on the row. The value is a function of two index files that refresh
+independently, so a stored copy is stale the moment either moves, and unlocks.json
+would gain a second writer. Overlay, like effectiveSourced. The intent — every
+sourced row carries a state, visible in its message and in coverage — is met.
+AGREEMENT NEVER PROMOTES: fixtures assert an agreeing row is still provenance
+'sourced', that the path writes nothing to the row, and that the message still says
+NOT independently verified. Comparison is on DATES only — CryptoRank states amounts
+as % of CIRCULATING supply, DefiLlama as tokens against maxSupply, and reconciling
+them would invent precision neither source gives.
+Coverage line: "2nd source: 1 agree · 1 DISAGREE · 27 single-source".
+
+CRYPTORANK PAID API — CLOSED, DO NOT REOPEN. /v3 unlock endpoints
+(currencies/upcoming-token-unlocks, vesting/events, vesting/schedule) are Pro tier,
+$4,750/year; the free Sandbox key's 33 endpoints carry no unlock data. August's 401s
+were plan-gating, not a broken key.

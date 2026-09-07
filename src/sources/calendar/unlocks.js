@@ -188,6 +188,8 @@ export function unlockCoverage(tokens = null) {
     staleSourced: stale.length,
     belowFloor: sourced.filter((t) => t.stage !== 'LOGGED' && pressureStage(t) === 'LOGGED').length,
     sourcedPending: sourced.filter((t) => !UNVERIFIABLE_MECHANISMS.includes(t.mechanism)).length,
+    agreement: (() => { const sec = loadSecondIndex(); const c = { 'both-agree': 0, 'both-differ': 0, 'single-source': 0, 'not-checked': 0 };
+      for (const t of sourced) c[sourceAgreement(t, sec).state]++; return c; })(),
     sourcedUnverifiable: sourced.filter((t) => UNVERIFIABLE_MECHANISMS.includes(t.mechanism)).length,
     continuousClaim: sourced.filter((t) => t.mechanism === 'continuous-claim').length,
     indexContradicted: sourced.filter((t) => t.mechanism === 'index-contradicted').length,
@@ -202,7 +204,7 @@ export function unlockCoverage(tokens = null) {
     stages,
   };
   c.sourceDemoted = sourceDemoted;
-  c.line = `Unlock coverage: ${c.tracked} tracked · ${c.verified} verified (${c.cadence} cadence-watched · ${c.contractCliff} contract-cliff · ${c.reviewBy} review-dated) · falsifier chance→replay: ${c.strength}${c.underived ? ` (${c.underived} UNDERIVED)` : ''} · ${c.sourced} sourced (${c.sourcedPending} pending verification · ${c.sourcedUnverifiable} unverifiable by mechanism: ${c.continuousClaim} continuous-claim, ${c.indexContradicted} index-contradicted)${c.staleSourced ? ` (${c.staleSourced} STALE, silent)` : ''}${c.belowFloor ? ` (${c.belowFloor} below pressure floor, silent)` : ''}${sourceDemoted ? ` (${sourceDemoted} retracted by source)` : ''} · ${c.estimated} estimated (silent) · ${c.retired} retired · stages ${Object.entries(stages).map(([k, v]) => k + ':' + v).join(' ')} · verified reads are Ethereum/EVM only — sourced rows cite a named calendar and are not independently checked`;
+  c.line = `Unlock coverage: ${c.tracked} tracked · ${c.verified} verified (${c.cadence} cadence-watched · ${c.contractCliff} contract-cliff · ${c.reviewBy} review-dated) · falsifier chance→replay: ${c.strength}${c.underived ? ` (${c.underived} UNDERIVED)` : ''} · ${c.sourced} sourced (${c.sourcedPending} pending verification · ${c.sourcedUnverifiable} unverifiable by mechanism: ${c.continuousClaim} continuous-claim, ${c.indexContradicted} index-contradicted)${c.staleSourced ? ` (${c.staleSourced} STALE, silent)` : ''}${c.belowFloor ? ` (${c.belowFloor} below pressure floor, silent)` : ''} · 2nd source: ${c.agreement['both-agree']} agree · ${c.agreement['both-differ']} DISAGREE · ${c.agreement['single-source']} single-source${c.agreement['not-checked'] ? ` · ${c.agreement['not-checked']} unchecked` : ''}${sourceDemoted ? ` (${sourceDemoted} retracted by source)` : ''} · ${c.estimated} estimated (silent) · ${c.retired} retired · stages ${Object.entries(stages).map(([k, v]) => k + ':' + v).join(' ')} · verified reads are Ethereum/EVM only — sourced rows cite a named calendar and are not independently checked`;
   return c;
 }
 
@@ -212,7 +214,57 @@ export function unlockCoverage(tokens = null) {
 // states how long ago the source was last confirmed. Same prose discipline as every
 // fact: no direction, no imperative, no frequency claim without n.
 const EXPLORER = { ethereum: 'https://etherscan.io/token/', base: 'https://basescan.org/token/', bsc: 'https://bscscan.com/token/', arbitrum: 'https://arbiscan.io/token/', optimism: 'https://optimistic.etherscan.io/token/' };
-export function sourcedMessage(t, ev, lead, now = new Date()) {
+// CROSS-SOURCE AGREEMENT (Route: two indexes, v0.31.2). This is still
+// INDEX-NOT-EVIDENCE. Two aggregators concurring is not chain evidence and MUST NOT
+// promote anything — it changes the MESSAGE, never the provenance tier. What it buys
+// is the one thing a single source cannot give: visible DISAGREEMENT, which flags a
+// date not to rely on.
+//
+// Derived at RUNTIME rather than stamped on the row. The brief said "add to the
+// row", and the intent (every sourced row carries a state, visible in its message)
+// is met — but the value is a function of TWO index files that refresh
+// independently, so a stored copy would be stale the moment either moved, and
+// unlocks.json would gain a second writer. Overlay, like effectiveSourced.
+//
+// COMPARISON IS ON DATES ONLY. CryptoRank states amounts as a percentage of
+// CIRCULATING supply, DefiLlama as tokens against maxSupply; reconciling them would
+// invent precision neither source gives.
+export const AGREEMENT_STATES = ['both-agree', 'both-differ', 'single-source', 'not-checked'];
+export const AGREE_TOLERANCE_DAYS = 1; // declared, not derived: calendars differ by a day on timezone alone
+
+export function loadSecondIndex() {
+  try { return JSON.parse(readFileSync(join(ROOT, 'data', 'unlock-index-cryptorank.json'), 'utf8')); }
+  catch { return null; }
+}
+
+// PURE. Compares the row's NEXT future event against the second index's next date
+// for that symbol. Anything else would be a false comparison: the second source
+// publishes ONE next unlock per symbol, so matching it against a later event of ours
+// would manufacture a disagreement that neither source claims.
+export function sourceAgreement(t, second, now = Date.now()) {
+  const ours = (t?.sourceEvents || []).filter((e) => e.t * 1000 > now).sort((a, b) => a.t - b.t)[0];
+  const ourDate = ours ? new Date(ours.t * 1000).toISOString().slice(0, 10) : null;
+  if (!second) return { state: 'not-checked', ourDate, otherDate: null, deltaDays: null,
+    line: 'Second source not checked — no CryptoRank index on disk.' };
+  const p = (second.protocols || []).find((x) => x.symbol === t?.sym);
+  const sourceName = t?.source === 'defillama' ? 'DefiLlama' : (t?.source ?? 'the source');
+  if (!p?.nextDate || !ourDate) {
+    const why = p ? 'lists it without a next-unlock date' : 'does not list it';
+    return { state: 'single-source', ourDate, otherDate: null, deltaDays: null,
+      line: `Listed by ${sourceName} only — CryptoRank ${why}${second.withheld ? ` (that source withholds ${second.withheld} entries' identity behind its paid tier)` : ''}.` };
+  }
+  const deltaDays = Math.round((Date.parse(p.nextDate + 'T00:00:00Z') - Date.parse(ourDate + 'T00:00:00Z')) / 86400e3);
+  if (Math.abs(deltaDays) <= AGREE_TOLERANCE_DAYS) {
+    return { state: 'both-agree', ourDate, otherDate: p.nextDate, deltaDays,
+      line: `${sourceName} and CryptoRank agree on this date${deltaDays ? ` (${Math.abs(deltaDays)} day apart)` : ''} — still two calendars, not a chain read.` };
+  }
+  return { state: 'both-differ', ourDate, otherDate: p.nextDate, deltaDays,
+    line: `Sources disagree: ${sourceName} ${ourDate}, CryptoRank ${p.nextDate} — ${Math.abs(deltaDays)} days apart. Neither is verified; treat this date as the weaker of the two claims.` };
+}
+
+// `second` is INJECTABLE so fixtures are hermetic: a message test that reads the
+// live index tests today's data, not the code.
+export function sourcedMessage(t, ev, lead, now = new Date(), second) {
   const dateKey = new Date(ev.t * 1000).toISOString().slice(0, 10);
   const ageD = Math.max(0, Math.round((now - new Date(t.sourceFetchedAt)) / 86400e3));
   const pctUnlocked = t.maxSupply && t.circSupply != null ? Math.round(100 * t.circSupply / t.maxSupply) : null;
@@ -233,6 +285,11 @@ export function sourcedMessage(t, ev, lead, now = new Date()) {
       t.chain === 'unconfirmed' ? 'Chain: unconfirmed — no on-chain read has been attempted' : `Chain: ${t.chain}`,
       `Source last confirmed ${ageD === 0 ? 'today' : `${ageD} day${ageD === 1 ? '' : 's'} ago`} · goes silent if not re-confirmed within ${SOURCE_STALE_DAYS} days`,
       ...(t.sourceRevision ? [`Schedule ${t.sourceRevision.note} (recheck ${t.sourceRevision.at})`] : []),
+      // Only for the row's NEXT event — the second source publishes one next date
+      // per symbol, so attaching it to a later tranche would compare two different
+      // things and read as a disagreement neither source made.
+      ...(future.length && future.sort((a, b) => a.t - b.t)[0].t === ev.t
+        ? [sourceAgreement(t, second === undefined ? loadSecondIndex() : second, now.getTime()).line] : []),
     ],
     url: explorer ?? 'https://defillama.com/unlocks',
     dateKey,
