@@ -3057,3 +3057,38 @@ SEP 26 MOVED, IT DID NOT CLEAR. The refresh reset the clock: sourceFetchedAt is
 2026-09-07T15:59, so the next cliff is 2026-09-28 with ⚠️ on 09-21 and 🚨 on 09-25.
 This is a RECURRING deadline, not a resolved one — the 14/18-day ladder exists so it
 announces itself instead of being remembered. NEXT-SESSION.md carries the chore.
+
+## 2026-09-08 — EXEMPTIONS NAME THEIR OWN FILE; WATCH WEEK (v0.31.5)
+
+THE EXEMPTION WAS COPY-PASTEABLE. `// PAGINATION-EXEMPT:` is a comment, and a new
+reader started from an exempt one would inherit a reason that was never about it —
+silently, with the boot line still reading "1 declared exempt". Fixed by binding the
+tag to a filename: `// PAGINATION-EXEMPT(discover-vesting.js): <why>`. A copied
+comment names the wrong file, the new reader counts as UNGUARDED, and boot refuses.
+Fails closed rather than relying on anyone noticing a count tick from 1 to 2.
+Belt and braces, per the review: the count is now on the HEARTBEAT too, naming the
+exempt files — "Paginated readers: 4 · 3 guarded · 1 exempt (discover-vesting.js)",
+with 🚨 UNGUARDED if the check ever fails. Fixture covers the copied-exemption case
+explicitly, since that is the accident being defended against.
+
+WATCH WEEK — first time all three routes report on live data in one week, and the
+first exercise of the DEMOTE path on anything. State at 2026-09-08 04:33Z:
+  MOVE   custody-batch, fresh promotion · expected 09-09, window closes 09-12
+         falsifier STRONG 36%/window, 8/8 consecutive · PENDING
+         KNOWN SOFT SPOT: the 10%-of-peak significance floor hid August's emission
+         after a 52.8M off-schedule move. Logged, not fixed. If MOVE DEMOTEs, check
+         that first — it is the likeliest false negative in the set.
+  ENA    custody-batch, 13/13 behind it · expected 09-07 (roll rule fired: the 6th
+         was a Sunday), window closes 09-10, evaluated ~09-11
+         falsifier STRONG 33%/window · PENDING
+  ORDER  contract-cliff · cliff 09-07, window closes 09-12
+         falsifier WEAK 58%/window, 6/8 replay, p≈0.28 · PENDING
+No demotions have ever been recorded (data/cadence-watch.json demotions: {}).
+READ AS A SET, not three stamps: three CONFIRMs would be custody-batch,
+contract-cliff and a fresh promotion all validated in one week. A DEMOTE would be
+the first the system has produced on live data and is the MORE informative outcome —
+nothing has exercised that path outside fixtures, so it tests the demotion machinery
+(overlay write, operator DM, coverage line, re-promotion supersession) as much as it
+tests the row. Neither reading is a market call.
+Then 09-21 index ⚠️, 09-22 ZRO decision and FF's T-7 push carrying both source dates,
+09-25 index 🚨, 09-28 the cliff.

@@ -1088,6 +1088,14 @@ console.log('54. the TRUNCATION BOUNDARY day is partial — every paginated read
   check('every discovered paginated reader is guarded or explicitly exempt', g.ok, g.problems.join(' | '));
   check('discovery finds MORE than the three originally listed', g.readers.length >= 4);
   check('the exemption is a stated reason, never silence', g.readers.filter((r) => r.exempt).every((r) => r.exempt !== 'unstated' && r.exempt.length > 20));
+  check('every live exemption names its own file (so it cannot be copied into a new reader)', g.readers.filter((r) => r.exempt).length >= 1 && !g.readers.some((r) => r.staleExemption));
+  // The count is on the HEARTBEAT, not only in a boot line nobody watched: 1 -> 2
+  // exempt readers is a drift that should be visible over time.
+  const { buildHeartbeat } = await import('./src/core/telemetry.js');
+  const hbP = buildHeartbeat(Date.now(), { rows: [], drops: { total: 0, byReason: {} }, bugs: 0, pulse: 'x', startedAt: Date.now(), digest: { line: 'd' } });
+  check('heartbeat reports the paginated-reader and exemption counts', hbP.lines.some((l) => /Paginated readers: \d+ · \d+ guarded · \d+ exempt/.test(l)));
+  check('heartbeat names the exempt files, so a new one is visible not just counted', hbP.lines.some((l) => /exempt \(discover-vesting\.js\)/.test(l)));
+  check('an unguarded reader would put 🚨 on that heartbeat line', /🚨 UNGUARDED/.test(buildHeartbeat(Date.now(), { rows: [], drops: { total: 0, byReason: {} }, bugs: 0, pulse: 'x', startedAt: Date.now(), digest: { line: 'd' }, pagination: { ok: false, problems: ['synthetic.js is unguarded'], readers: [] } }).lines.join('\n')));
   check('the date-span readers are the guarded ones', ['detect-cadence.js', 'detect-cliff-cluster.js', 'src/sources/calendar/cadence-watch.js'].every((f) => g.readers.find((r) => r.file === f)?.guarded));
   // SELF-TEST: the check must be able to fail. A synthetic reader that walks a
   // paginated feed with neither guard nor exemption is detected.
@@ -1098,8 +1106,14 @@ console.log('54. the TRUNCATION BOUNDARY day is partial — every paginated read
   wf(j2(dir, 'rogue-reader.js'), 'while (j.next_page_params) { next = j.next_page_params; }\n');
   const rogue = checkPaginationGuards(dir);
   check('SELF-TEST: an unguarded new reader is CAUGHT (the check can go red)', !rogue.ok && /rogue-reader/.test(rogue.problems.join()));
-  wf(j2(dir, 'rogue-reader.js'), '// PAGINATION-EXEMPT: synthetic, walks nothing that is ever scored by date\nwhile (j.next_page_params) {}\n');
-  check('SELF-TEST: the same reader passes once it declares why', checkPaginationGuards(dir).ok);
+  // A COPIED exemption must fail closed. This is the exact accident the tag guards
+  // against: a new reader started from an exempt one inherits a reason that was
+  // never about it, and the boot line would still have said "1 declared exempt".
+  wf(j2(dir, 'rogue-reader.js'), '// PAGINATION-EXEMPT(discover-vesting.js): holder traversal is balance-ordered\nwhile (j.next_page_params) {}\n');
+  const copied = checkPaginationGuards(dir);
+  check('SELF-TEST: an exemption COPIED from another file does not transfer', !copied.ok && /written for discover-vesting\.js/.test(copied.problems.join()));
+  wf(j2(dir, 'rogue-reader.js'), '// PAGINATION-EXEMPT(rogue-reader.js): synthetic, walks nothing that is ever scored by date\nwhile (j.next_page_params) {}\n');
+  check('SELF-TEST: the same reader passes once it declares why, naming ITSELF', checkPaginationGuards(dir).ok);
   mkdirSync(j2(dir, 'empty'), { recursive: true });
   check('SELF-TEST: discovering NOTHING is a failure, not a pass (the marker moving is a defect)', !checkPaginationGuards(j2(dir, 'empty')).ok);
   check('the marker set is declared, so a new feed shape is an edit not a silence', PAGINATION_MARKERS.length >= 1 && PAGINATION_MARKERS.includes('next_page_params'));

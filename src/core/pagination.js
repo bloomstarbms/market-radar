@@ -24,7 +24,13 @@ import { ROOT } from '../config.js';
 // and every existing reader keeps working.
 export const PAGINATION_MARKERS = ['next_page_params'];
 const GUARD_CALL = 'spanCovered(';
-const EXEMPT_TAG = 'PAGINATION-EXEMPT:';
+// The exemption NAMES ITS OWN FILE: `// PAGINATION-EXEMPT(discover-vesting.js): why`.
+// A bare `PAGINATION-EXEMPT:` comment is portable, and a new reader started by
+// copying an exempt one would inherit an exemption whose reason does not apply —
+// silently, since the boot line would still say "1 declared exempt". Binding the tag
+// to a filename makes the copy fail closed: the copied comment names the wrong file,
+// the new reader counts as unguarded, and boot refuses.
+const EXEMPT_RX = /PAGINATION-EXEMPT\(([^)]+)\):\s*(.+)/;
 const SKIP = /(^|\/)(node_modules|data|fixtures|docs)(\/|$)|test-delivery\.js$|probe-pagination\.js$|property-test\.js$|regression-fixtures\.js$|replay-|acceptance-|src\/core\/pagination\.js$/;
 
 // THE guard. `oldest` is the oldest day the fetch has reached, `target` the oldest
@@ -57,10 +63,12 @@ export function paginatedReaders(root = ROOT) {
     let src = '';
     try { src = readFileSync(join(root, rel), 'utf8'); } catch { continue; }
     if (!PAGINATION_MARKERS.some((m) => src.includes(m))) continue;
-    const exempt = src.includes(EXEMPT_TAG)
-      ? (src.match(new RegExp(EXEMPT_TAG + '\\s*(.+)')) || [])[1]?.trim() ?? 'unstated'
-      : null;
-    found.push({ file: rel, guarded: src.includes(GUARD_CALL), exempt });
+    const m = src.match(EXEMPT_RX);
+    const base = rel.split('/').pop();
+    const claimsFile = m ? m[1].trim() : null;
+    const exempt = m && claimsFile === base ? (m[2].trim() || 'unstated') : null;
+    found.push({ file: rel, guarded: src.includes(GUARD_CALL), exempt,
+      ...(m && claimsFile !== base ? { staleExemption: claimsFile } : {}) });
   }
   return found;
 }
@@ -73,7 +81,9 @@ export function checkPaginationGuards(root = ROOT) {
   if (!readers.length) problems.push('no paginated readers discovered — the marker moved and this check is now vacuous');
   for (const r of readers) {
     if (r.guarded || r.exempt) continue;
-    problems.push(`${r.file} walks a paginated feed but neither calls spanCovered() nor declares "// ${EXEMPT_TAG} <why>" — its truncation boundary could land inside a scored window`);
+    problems.push(r.staleExemption
+      ? `${r.file} carries an exemption written for ${r.staleExemption} — a copied comment, not a decision about this file; it must call spanCovered() or state its own reason`
+      : `${r.file} walks a paginated feed but neither calls spanCovered() nor declares "// PAGINATION-EXEMPT(${r.file.split('/').pop()}): <why>" — its truncation boundary could land inside a scored window`);
   }
   return { ok: problems.length === 0, problems, readers };
 }

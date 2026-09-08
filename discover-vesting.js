@@ -150,7 +150,7 @@ export async function discover(sym, opts = {}) {
       if (!a.is_contract || a.hash?.toLowerCase() === addr.toLowerCase()) continue;
       out.contracts.push({ addr: a.hash, name: a.name || null, bal: Math.round(bal), pctSupply: +(100 * bal / supply).toFixed(2) });
     }
-    // PAGINATION-EXEMPT: holder traversal is BALANCE-ordered, not date-bounded. It
+    // PAGINATION-EXEMPT(discover-vesting.js): holder traversal is BALANCE-ordered, not date-bounded. It
     // stops at the first holder below THRESH, so there is no "oldest day" and no
     // boundary day that could land inside a scored window. What truncation costs
     // here is small holders, which are below the bucket threshold by construction.

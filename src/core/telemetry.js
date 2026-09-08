@@ -14,6 +14,7 @@ import { broadcast, hasRecipients, publicPushes24h } from './telegram.js';
 // message that reaches the channel is a fixture failure (section 50), not a taste.
 const sendTelemetry = (text) => broadcast(text, { toChannel: false });
 import { formatAlert, dispatchBugCount, messageCounts } from './dispatcher.js';
+import { checkPaginationGuards } from './pagination.js';
 import { dropStats } from './budget.js';
 import { allOutcomes } from './outcomes.js';
 import { getState, save } from './store.js';
@@ -268,6 +269,9 @@ export function buildHeartbeat(now = Date.now(), deps = {}) {
       // pulse — a cadence watch that stops confirming must be visible, not assumed.
       (deps.coverage ?? unlockCoverage()).line,
       (deps.sourcedFiring ?? sourcedFiring()).line,
+      (() => { const g = deps.pagination ?? checkPaginationGuards();
+        const ex = g.readers.filter((r) => r.exempt);
+        return `Paginated readers: ${g.readers.length} · ${g.readers.length - ex.length} guarded · ${ex.length} exempt${ex.length ? ` (${ex.map((r) => r.file.split('/').pop()).join(', ')})` : ''}${g.ok ? '' : ' · 🚨 UNGUARDED: ' + g.problems.join('; ')}`; })(),
       (deps.cadence ?? cadenceStatus()).line,
       (deps.digest ?? digestStatus(getState(), now, deps.rows ?? null)).line,
       ...(deps.accumulators ?? accumulatorStatus(now, { rows: deps.rows ?? undefined })).lines,
