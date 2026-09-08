@@ -3092,3 +3092,53 @@ nothing has exercised that path outside fixtures, so it tests the demotion machi
 tests the row. Neither reading is a market call.
 Then 09-21 index ⚠️, 09-22 ZRO decision and FF's T-7 push carrying both source dates,
 09-25 index 🚨, 09-28 the cliff.
+
+## 2026-09-08 — MOVE FLOOR REPLAY, RUN BEFORE THE WINDOW CLOSES (v0.31.6)
+
+Run offline as asked, read-only, changing no detector mid-window:
+`replay-move-floor.js` (new; writes nothing, touches no live file).
+
+ANSWER TO THE QUESTION ASKED — the artifact is NOT in front of this verdict.
+The 10%-of-peak significance floor lives in detect-cadence.js's DISCOVERY path
+(line ~70, "significant emission days only: >= 10% of the largest daily outflow").
+The WATCH — cadenceDecision — applies NO significance floor at all: it takes the
+peak day inside the window and compares it to 50% of the spec mean. Verified on
+MOVE's real series, not by reading the code: replaying every closed month through
+the live function gives the same verdict with and without the floor applied to its
+input, in six of seven months.
+The seventh is AUGUST, and it is instructive: raw CONFIRM 0.543 vs with-floor
+DEMOTE, because August's 5,138,889 sits just under the floor of 5,277,778 (which the
+52.8M off-schedule day set). That disagreement is COUNTERFACTUAL — it shows what
+would happen if anyone wired the discovery floor into the watch. It is an argument
+for keeping them apart, not a risk to this month's verdict.
+DISCOVERY ITSELF IS ALSO UNAFFECTED for MOVE: under a median-based floor
+(50% of the median active day = 277,778 instead of 5,277,778) detectCadence returns
+an IDENTICAL result — CADENCE day 9, 8 months, mean 9,461,497, cv 0.31, 8 emissions
+counted either way. The floor drops 34 small days but none of them are emission days.
+
+THE REPLAY FOUND SOMETHING WORSE THAN THE ARTIFACT — MOVE IS DECLINING, MONOTONICALLY:
+  2026-02  6,387,817  0.675      2026-06   9,462,897  1.000
+  2026-03  7,878,237  0.833      2026-07   6,436,929  0.680
+  2026-04 12,182,342  1.288      2026-08   5,138,889  0.543
+  2026-05 10,034,692  1.061      bar (0.5 x mean):  4,730,749
+Five consecutive months down from the April peak, and August cleared the bar by
+8.6%. A September emission any smaller than August's by more than ~8% DEMOTES MOVE.
+PRE-REGISTERED, before the window closes: the peak day in 2026-09-08..09-12 must be
+>= 4,730,749 MOVE. If it demotes, that is a TRUE demotion — the schedule really is
+shrinking — NOT the floor artifact, and the notes say so in advance rather than
+after the overlay is written.
+Second-order: the emission day is drifting later inside the grace window (09th, 09th,
+09th, 09th, 09th, 11th, 10th). Still inside grace; worth watching.
+
+GAP THE REPLAY EXPOSED — THE DRIFT DETECTOR STARTS BLIND. driftStatus reads the
+ratios the WATCH has stamped in data/cadence-watch.json, and MOVE has none (promoted
+2026-09-05; the heartbeat says "no window closed yet"). So a row can be promoted on a
+history whose ratios decline five months running and the drift detector cannot see
+any of it — it only begins accumulating from the first post-promotion window. The
+promotion evidence and the drift baseline are two separate memories, and only one of
+them is consulted.
+NOT FIXED, DELIBERATELY: seeding the drift baseline from the promotion series would
+change what a verdict means during an open window, which is exactly what this replay
+was run to avoid. Queued as the first thing after 09-12. The candidate fix is to
+carry the promotion's per-month ratios onto the row at promote time (they are already
+computed by detectCadence) so drift has a baseline from day one.
