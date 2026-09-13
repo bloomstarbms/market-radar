@@ -16,7 +16,7 @@
 //
 // feedWasLooking applies: an uncovered window is NOT an empty window. Pagination must
 // reach every cliff under test or the verdict is UNVERIFIED, never FAILED.
-import { spanCovered } from './src/core/pagination.js';
+import { spanCovered, rangeCovers } from './src/core/pagination.js';
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
@@ -38,15 +38,45 @@ const deser = (o) => Object.fromEntries(Object.entries(o || {}).map(([d, r]) => 
 // tokenAddr: filter server-side. SHARED lockup vaults (Hedgey, Sablier) hold dozens of
 // tokens; RE's claims were buried past the page cap behind DOG/NET/PUFFER traffic and
 // read as NO-CLUSTERS — a wrong verdict. With the filter, coverage is per token.
-export async function outflowsWithRecipients(addr, sym, untilDate, { maxPages = 40, deadlineTs = null, tokenAddr = null, resume = true } = {}) {
+// PURE, and exported so the decision that produced a false verdict can be tested
+// without a network. A cached fetch may answer a request only when it reaches BACK
+// past what will be scored AND FORWARD to the end of it. An entry with no coveredTo
+// is a pre-2026-09-13 entry that never recorded its recent boundary — it cannot prove
+// it covers anything, so it does not.
+export function cacheSatisfies(entry, untilDate, needUpTo) {
+  if (!entry) return false;
+  if (!needUpTo) return true;               // caller stated no requirement
+  return rangeCovers(entry.oldest, entry.coveredTo, untilDate, needUpTo);
+}
+
+export async function outflowsWithRecipients(addr, sym, untilDate, { maxPages = 40, deadlineTs = null, tokenAddr = null, resume = true, needUpTo = null } = {}) {
   const key = `${addr.toLowerCase()}|${(tokenAddr || sym).toLowerCase()}`;
   const cache = resume ? loadCache() : {};
-  const c0 = cache[key];
+  let c0 = cache[key];
+  // A CACHE MAY ONLY ANSWER A REQUEST WHOSE WINDOW IT ACTUALLY COVERS (v0.31.7).
+  //
+  // `done` meant "this fetch once reached back to the untilDate it was given". It said
+  // NOTHING about the RECENT end, so on 2026-09-12 the cliff watch asked whether
+  // ORDER's vault had emitted in 09-07..09-12 and was handed the 2026-09-05 cache:
+  // covered:true, 0 pages, no network, and no days in the window. Verdict: DEMOTE at
+  // ratio 0 — a verdict from a fetch that never ran, which is the one thing this
+  // project says a verdict may never be.
+  //
+  // A stale cache is NOT a resume point either. Resuming pages BACKWARDS from a stored
+  // cursor, so it would extend the old end and never reach the new one. Discarded
+  // wholesale rather than extended — re-paging from the head into an existing byDay
+  // would double-count every day already collected.
+  const staleCache = !!c0 && !cacheSatisfies(c0, untilDate, needUpTo);
+  if (staleCache) c0 = null;
   const byDay = c0 ? deser(c0.byDay) : {};
   let next = c0?.next ?? '', oldest = c0?.oldest ?? null, pages = 0;
-  if (c0?.done) return { byDay, covered: true, oldest, pages: 0, resumed: true };
+  // The coverage boundary is the moment this fetch STARTED reading from the head. A
+  // resumed fetch keeps the ORIGINAL boundary: its later pages come from further back,
+  // not from a newer head.
+  const coveredTo = c0?.coveredTo ?? new Date().toISOString().slice(0, 10);
+  if (c0?.done) return { byDay, covered: true, oldest, pages: 0, resumed: true, coveredTo };
   const tok = tokenAddr ? `&token=${tokenAddr}` : '';
-  const persist = (done) => { if (resume) { cache[key] = { byDay: ser(byDay), next, oldest, done, at: new Date().toISOString().slice(0, 16) }; saveCache(cache); } };
+  const persist = (done) => { if (resume) { cache[key] = { byDay: ser(byDay), next, oldest, done, coveredTo, at: new Date().toISOString().slice(0, 16) }; saveCache(cache); } };
   for (let p = 0; p < maxPages; p++) {
     if (deadlineTs && Date.now() > deadlineTs) break;
     const j = await jget(`https://eth.blockscout.com/api/v2/addresses/${addr}/token-transfers?filter=from${tok}${next}`);
@@ -57,10 +87,10 @@ export async function outflowsWithRecipients(addr, sym, untilDate, { maxPages = 
     if (j === null) {
       await sleep(1500);
       const again = await jget(`https://eth.blockscout.com/api/v2/addresses/${addr}/token-transfers?filter=from${tok}${next}`);
-      if (again === null) { persist(false); return { byDay, covered: false, oldest, pages, reason: 'page fetch failed twice' }; }
+      if (again === null) { persist(false); return { byDay, covered: false, oldest, pages, coveredTo, staleCache, reason: 'page fetch failed twice' }; }
       for (const t of (again.items || [])) { const d = (t.timestamp || '').slice(0, 10); if (d && (!oldest || d < oldest)) oldest = d; if ((t.token?.symbol || '').toUpperCase() !== sym.toUpperCase()) continue; const dec = Number(t.total?.decimals ?? 18); const amt = Number(t.total?.value || 0) / 10 ** dec; byDay[d] = byDay[d] || { amt: 0, to: new Set() }; byDay[d].amt += amt; byDay[d].to.add((t.to?.hash || '').toLowerCase()); }
-      if (!again.next_page_params) { persist(true); return { byDay, covered: true, oldest, pages }; }
-      if (spanCovered(oldest, untilDate)) { persist(true); return { byDay, covered: true, oldest, pages }; }
+      if (!again.next_page_params) { persist(true); return { byDay, covered: true, oldest, pages, coveredTo, staleCache }; }
+      if (spanCovered(oldest, untilDate)) { persist(true); return { byDay, covered: true, oldest, pages, coveredTo, staleCache }; }
       next = '&' + Object.entries(again.next_page_params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
       await sleep(250); continue;
     }
@@ -73,14 +103,14 @@ export async function outflowsWithRecipients(addr, sym, untilDate, { maxPages = 
       byDay[d] = byDay[d] || { amt: 0, to: new Set() };
       byDay[d].amt += amt; byDay[d].to.add((t.to?.hash || '').toLowerCase());
     }
-    if (!j?.next_page_params) { persist(true); return { byDay, covered: true, oldest, pages }; }
-    if (spanCovered(oldest, untilDate)) { persist(true); return { byDay, covered: true, oldest, pages }; }
+    if (!j?.next_page_params) { persist(true); return { byDay, covered: true, oldest, pages, coveredTo, staleCache }; }
+    if (spanCovered(oldest, untilDate)) { persist(true); return { byDay, covered: true, oldest, pages, coveredTo, staleCache }; }
     next = '&' + Object.entries(j.next_page_params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
     if (pages % 5 === 0) persist(false);
     await sleep(250);
   }
   persist(false);
-  return { byDay, covered: false, oldest, pages };
+  return { byDay, covered: false, oldest, pages, coveredTo, staleCache };
 }
 
 // PURE. byDay: {date: {amt, to:Set}}; cliffs: ['YYYY-MM-DD'...] (past). Returns per-

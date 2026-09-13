@@ -8,7 +8,7 @@
 // comfortably ($9.7M executable, tight book) because it is a real, liquid instrument —
 // it is simply one whose price is pinned by design. Liquidity and tradability are
 // different questions, so both layers are required.
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { config } from '../config.js';
 import { isStockName, isStockSymbol } from '../sources/cex/exchanges.js';
@@ -127,13 +127,37 @@ const CRYPTO_EXCEPTIONS = new Set([
   'HELIX', 'MATIC', 'PENDLE', 'RUNE', 'VELODROME', 'ONYX', 'PHX', 'LUX', 'MTX',
 ]);
 
+// WHERE A DEFAULT IS UNAVOIDABLE IT MUST BE THE RESTRICTIVE ONE (v0.31.7).
+//
+// This used to swallow any failure into `new Set()`. An empty ticker set does not
+// disable the xStock rule — it INVERTS it: a trailing-X symbol whose stem cannot be
+// corroborated falls through to UNRECOGNISED, which is "pushed, logged for review".
+// So a corrupt or missing equity-tickers.json silently turns the EXCLUDE path into a
+// PUSH path, which is how TSLAX and CRCLX reached the channel in the first place.
+// Absent evidence must not read as evidence of absence: when the list is
+// UNAVAILABLE the convention alone excludes, and the reason says the list was
+// missing so nobody mistakes it for a corroborated match.
+export const EQUITY_LIST_OK = 'ok';
 let equityTickers = null;
+let equityListState = null;   // 'ok' | 'missing' | 'corrupt'
+export function equityListStatus() { return equityListState; }
 function loadEquityTickers() {
   if (equityTickers) return equityTickers;
+  const p = join(config.dataDir, 'equity-tickers.json');
+  if (!existsSync(p)) {
+    equityListState = 'missing';
+    console.error('[OPERATOR] equity-tickers.json is MISSING — the xStock rule now excludes on the trailing-X convention alone. Restore the file; until then, legitimate crypto ending in X may be blocked.');
+    equityTickers = new Set();
+    return equityTickers;
+  }
   try {
-    const p = join(config.dataDir, 'equity-tickers.json');
     equityTickers = new Set((JSON.parse(readFileSync(p, 'utf8')).tickers || []).map((t) => t.toUpperCase()));
-  } catch { equityTickers = new Set(); }
+    equityListState = EQUITY_LIST_OK;
+  } catch (e) {
+    equityListState = 'corrupt';
+    console.error(`[OPERATOR] equity-tickers.json EXISTS but does not parse (${e.message}) — refusing to treat a corrupt list as an empty one. The xStock rule now excludes on the convention alone.`);
+    equityTickers = new Set();
+  }
   return equityTickers;
 }
 
@@ -142,6 +166,9 @@ export function classifySymbol(base, quote = 'USDT', venue = '', deps = {}) {
   const b = String(base || '').toUpperCase().replace(/[-_]/g, '');
   if (!b) return { state: 'OK' };
   const tickers = deps.tickers ?? loadEquityTickers();
+  // Injected tickers are trusted (fixtures supply their own); otherwise the loader's
+  // state decides whether a non-match means "not an equity" or "could not check".
+  const listUsable = deps.tickers ? true : equityListState === EQUITY_LIST_OK;
 
   // LEVERAGED: the suffix is SUFFICIENT ON ITS OWN. A 3x product is excluded whatever
   // the underlying — BTC3L is not a BTC listing — so no corroboration is needed and
@@ -174,6 +201,10 @@ export function classifySymbol(base, quote = 'USDT', venue = '', deps = {}) {
     if (tickers.has(stem)) {
       return { state: 'EXCLUDE', cls: AssetClass.TOKENIZED_EQUITY,
         reason: `xStock convention + '${stem}' is a known equity ticker`, underlying: stem };
+    }
+    if (!listUsable) {
+      return { state: 'EXCLUDE', cls: AssetClass.TOKENIZED_EQUITY,
+        reason: `xStock convention and the equity ticker list is ${equityListState} — excluded on the convention alone rather than pushed uncorroborated`, underlying: stem };
     }
     return { state: 'UNRECOGNISED', reason: `trailing-X convention but '${stem}' is not a known equity ticker — pushed, logged for review` };
   }

@@ -3142,3 +3142,185 @@ change what a verdict means during an open window, which is exactly what this re
 was run to avoid. Queued as the first thing after 09-12. The candidate fix is to
 carry the promotion's per-month ratios onto the row at promote time (they are already
 computed by detectCadence) so drift has a baseline from day one.
+
+## 2026-09-13 — ITEM 0: THE SUITE WENT RED WITHOUT A CODE CHANGE (environment-vs-logic, 4th instance)
+
+The correctness queue opens with a suite run on an untouched tree. It was RED — four
+failures, no code change since v0.31.6 (commit 3079344, green when pushed on 09-08).
+
+  FAIL  LIVE: no sourced row is mute by fault
+  FAIL  LIVE: every sourced row still has a future event
+  FAIL  heartbeat carries the weak flag with the chance rate
+  FAIL  heartbeat lists ORDER with its next cliff
+
+CAUSE 1 — three rows ran out of runway. SEI's last listed event was 2026-09-13,
+APT's 09-11, CARV's 09-10. All now past, so faultMute = [SEI, APT, CARV]. The two
+fixtures asserted "all 29 rows can fire", which was true when written on 09-07 and
+is falsified by the calendar, not by a defect.
+CAUSE 2 — ORDER is demoted (on the void verdict, queue item 5), and cadenceStatus
+short-circuits demoted rows to "🚨 demoted", so the two fixtures pinning ORDER's
+live heartbeat line cannot match.
+
+THE CLASS, 4th instance: a fixture that asserts the ENVIRONMENT rather than the
+LOGIC. Previous three: the mtime fixture, the live-table fixture, the pushed-only
+multiplier corpus. A fixture pinning today's data reddens with the calendar, and a
+suite that reddens on schedule trains people to ignore red — the inverse of "a green
+check that cannot go red is decoration", and just as corrosive.
+RULE ADOPTED: `LIVE:` is not a valid fixture prefix. Facts about today belong on the
+HEARTBEAT, where drift is supposed to be visible; fixtures assert invariants.
+
+FIXED — the four rewritten as invariants over synthetic rows, fixed `now`, no
+Date.now() in any of them, each with a MUTATION check that proves it can go red in
+the same run:
+  - a row with zero future events is fault-mute and says which fault; a row with one
+    is not; giving the exhausted row an event removes it from faultMute
+  - withFuture counts exactly the rows with an event after now (2 live -> 2, 2 dead -> 0)
+  - a non-demoted WEAK contract row renders its chance rate; a DEMOTED one renders the
+    demotion and NOT the chance rate; a strong falsifier renders no WEAK clause
+  - a contract row reports its EARLIEST unobserved cliff, never an observed one; with
+    every cliff observed it claims no next cliff
+Suite: 573 checks, ALL GREEN. Deliberately NOT fixed by refreshing the index — that
+would have made them pass today and fail again on whatever date the next row runs
+out, masking a fixture-design error with data.
+
+LOGGED, NOT FIXED: 17 other `check('LIVE: ...')` fixtures remain. They pin live rows
+(ORDER's promotion, FORT's floor position, the six resolved chains, the 30 sourced
+ingests). Each will redden when its row legitimately changes. Converting them is a
+larger piece of work than item 0 and is queued rather than done mid-item — but the
+rule above means no NEW one may be written.
+
+THE REAL PRODUCT OF ITEM 0 — THE LADDER MEASURES THE WRONG THING.
+The staleness ladder answers "how old is the index file": today it reads FRESH,
+6 days old, 15 days of slack, no warning at any level. Meanwhile three rows had
+ALREADY gone silent because their listed events ran out. The question that actually
+mattered was "how much runway does each ROW have", and the ladder was assumed to
+cover it because both feel like staleness.
+Same shape as the falsifier that watched ONE wallet while the message claimed a
+FAMILY: an instrument built to answer one question, trusted for a neighbouring one it
+never asked. Queued as item 8 with N pre-registered before it is chosen.
+
+## 2026-09-13 — ITEM 1: ENA's DEMOTION STANDS, AND IT IS NOT A MIGRATION
+
+`node detect-cadence.js ENA` — 4 wallets scanned.
+  0x54B8 (watched)  CADENCE FIXED-DAY day~6 x13mo mean 11,972,127 cv 0.28
+                    lastSeen 2026-09-07, emission 5,148,798
+  0x2146 (alsoObserve, 1,185M bal)   NOTHING in September, nothing since August
+  0xdeDc (alsoObserve, 62M bal)      NOTHING in September, nothing since August
+  0xA7eE (NOT in alsoObserve, 57M)   2 days of history, INSUFFICIENT, emitted nothing
+
+VERDICT: the wallet emitted ON THE CORRECT DAY (09-07; the 6th was a Sunday, roll rule
+fired) and SHORT — 5,148,798 against a 12,069,436 mean, ratio 0.427, bar 0.5. Both
+co-emitters silent. The ~6.9M shortfall was not distributed anywhere; it was not
+distributed at all. The single-wallet scope caveat resolves cleanly: the verdict could
+not distinguish stop from migration, and the co-emitter read settles it. Demotion
+stands on evidence rather than on the absence of a check. NOTHING RE-PROMOTED.
+
+FINDING A — THE TWO INSTRUMENTS DISAGREE ON THE SAME DATA, BY DESIGN.
+The watch DEMOTED; detect-cadence re-read today still says CADENCE x13mo. Not a
+conflict: discovery is LENIENT (finds a pattern despite noise, dominant-class logic
+absorbs one low month), the watch is STRICT (falsifies on one miss). They answer
+different questions. The hazard is that "detect-cadence still says CADENCE" READS as
+re-promotion evidence when it is only the same pre-demotion history re-read leniently.
+
+RULE ADOPTED — RE-PROMOTION AFTER A DEMOTION REQUIRES POST-DEMOTION EVIDENCE.
+At least one on-schedule emission AFTER the miss, before the row may be re-promoted.
+Re-analysing pre-demotion history is not new evidence however the tool classifies it.
+Corollary, and the reason this also closes a slower leak: the spec mean may not be
+re-derived from a window containing the emission that caused the demotion. Today's
+scan already shows the ratchet — mean has moved 12,069,436 -> 11,972,127, which would
+lower the bar to 5,986,063. Each such cycle walks the bar toward whatever the schedule
+is drifting to, until a row that has halved is still "verified". Requiring a fresh
+window bounds it: the mean can only move through a re-promotion, and a re-promotion
+now needs evidence that post-dates the demotion.
+QUEUED as item 10 (encode in promoteRow's gate, not as a note).
+
+FINDING B — A FOURTH WALLET, AND IT MAY BE THE ACTUAL STORY.
+0xA7eEA194794D1BEe1067C8fA7D8dbC8ca94A907a holds 57M ENA with TWO DAYS of history —
+funded at almost exactly the moment the main wallet short-paid by 6.9M. That is the
+shape of a distribution being RESTRUCTURED, not one stopping. It emitted nothing, so
+it does not change the September verdict, and it is NOT in alsoObserve.
+THE TEST IS 2026-10-06. If 0xA7eE emits on the 6th, it is the migration target and the
+co-emitter set was incomplete — which would also mean September was the handover month
+rather than a shortfall. Read the October window with that wallet included regardless
+of whether it has been added to the row by then.
+
+## 2026-09-13 — CORRECTNESS QUEUE ITEMS 2-7 (v0.31.7)
+
+2.  routes.js gate-input. Both loaders distinguished "absent" from "unparseable" only
+    for the calendar, and not at all for unlocks.json. A corrupt file made the tier-route
+    and classifier-wiring assertions trivially TRUE — nothing left to route or classify —
+    so the bot booted with the thing the gate protects entirely absent. Now a present-but-
+    unparseable file pushes a problem and refuses boot. CAL_PATH moved from a module-load
+    constant to calPath() at point of use: frozen at import it could not be pointed
+    anywhere, so the corrupt branch was UNTESTABLE, and an untestable branch is how a gate
+    ends up never having been shown to fail. Fixture 56, real temp dirs, both-absent and
+    both-valid mutations prove a fresh install still boots.
+
+2b. Fixture 37's status selector was FAIL-OPEN (/Status:\s*DESCRIPTIVE/, case-sensitive).
+    STATUS:, status:, "Status : X" all escaped the cite-a-fixture-per-claim rule silently;
+    MESSAGE-FIELD-INVENTORY.md slipped through by typo on the day it was written. Replaced
+    with a parser: case-insensitive, word-boundary, exactly one of DESCRIPTIVE / ACTIVE
+    PLAN / REFUTED / EXECUTED / STRADDLES. Briefs must carry one; docs/briefs/README.md is
+    the one principled exception (an index, not a brief). Self-tests show it REJECTING —
+    DESCRIPTIVEE refused, two statuses in one line refused — and qualifiers surviving
+    ("mostly EXECUTED", "EXECUTED TWICE", "STRADDLES — per-section"). STRADDLES had to be
+    in the known set or ALPHA_RADAR_BUILD_SPEC.md would have broken on the first run.
+
+3.  loadWatchState now QUARANTINES. A corrupt file is renamed to
+    cadence-watch.corrupt-<ts>.json, [OPERATOR] logged, historyResetAt + historyResetFile
+    stamped into the fresh state, and demote DMs suppressed for one cycle. Semantics:
+    the first post-reset cycle re-derives everything at once, so those verdicts were
+    almost certainly already delivered — they are marked delivered WITHOUT sending (the
+    duplicate that actually happened on 09-12), and the heartbeat banner carries the
+    disclosure until an operator clears it. No timeout. Fixture 57 drives the real path
+    against a temp file: absent -> empty, valid -> untouched, corrupt -> quarantined with
+    the original bytes intact.
+    SWEEP: taxonomy.js. The empty-set default did not disable the xStock rule, it
+    INVERTED it — an uncorroborated trailing-X symbol falls through to UNRECOGNISED,
+    which PUSHES. A corrupt ticker file silently converted the EXCLUDE path into the push
+    path: the exact mechanism that put TSLAX and CRCLX in the channel, found from the
+    other side. Missing/corrupt is now detected and excludes on the convention alone,
+    with the reason stating it was uncorroborated so it cannot be mistaken for a match.
+
+4.  Determinism fixture (59). The 09-12 reset accidentally re-derived three verdicts
+    exactly; now that property is tested on purpose, per row shape, twice over frozen
+    input with fixed now, with the three live values pinned as the regression case and
+    five mutations proving each can disagree. Nothing can be safely re-scored if scoring
+    can disagree with itself.
+
+5.  Cliff cache staleness — the cause of ORDER's void demotion. rangeCovers(oldest,
+    coveredTo, from, to) added beside spanCovered, with coveredTo recorded as FETCH-START.
+    THE TRAP, caught in review before it shipped: had coveredTo come from the newest ROW
+    found, a genuinely silent vault would read as UNCOVERED and sit PENDING FOREVER —
+    making a dead vault indistinguishable from a stale cache, with the case that matters
+    never resolving. A stale cache is discarded WHOLESALE, not resumed: resuming pages
+    backwards and would never reach the recent end, and re-paging into an existing byDay
+    would double-count. pollCliffWatch now states needUpTo = latest due cliff + window.
+    Every cache entry on disk predates coveredTo and self-discards; no cache surgery.
+
+6.  annotate-verdict.js — the sanctioned write path. Refuses without a >=20-char reason,
+    records the ORIGINAL into data/verdict-annotations.json BEFORE touching state,
+    round-trips the JSON before renaming, and RE-READS afterwards to report loudly if the
+    poller raced it. Core extracted as pure voidVerdict(); CLI guarded, because importing
+    it was executing it — the lesson detect-cadence.js already carried.
+    ORDER 2026-09-07 VOIDED through it: stamp cleared, demotion removed, ENA's real
+    demotion untouched, original preserved with its reason. The window is re-scorable and
+    the next poll fetches it for the first time.
+
+7.  Void exclusion turned out to be the WRONG DESIGN and was not built. The brief said
+    "exclude void entries from every consumer" — which means every consumer must learn a
+    new state, and the first one that does not is the leak. Instead the correction REMOVES
+    the verdict from state and records it in the audit log: state holds live verdicts, the
+    log holds corrections, and nothing downstream needs to know corrections exist. The
+    derived-not-stored move applied to corrections. Its one cost is invisibility, so
+    verdictCorrections() puts the count and the latest entry on the heartbeat, and an
+    unreadable log says so rather than reading as zero.
+
+WHAT ITEM 0 PRODUCED THAT WAS WORTH MORE THAN THE FOUR FAILURES: the staleness ladder
+measures index AGE, not row RUNWAY. Queued as item 8. And a near-miss worth its own rule:
+a scripted replace() with no assertion silently did nothing, leaving suppressNotify
+referenced but never declared. node --check PASSED — a syntax check is not an execution.
+Both rules now in CLAUDE.md.
+
+STILL OPEN: item 8 (ladder coverage arm), item 9 (index refresh — SEI/APT/CARV have
+genuinely exhausted their events), item 10 (re-promotion requires post-demotion evidence).

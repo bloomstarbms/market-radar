@@ -1,0 +1,202 @@
+PENDING PATCH — launcher preflight + bounded restart (run-hidden.bat)
+Written 2026-09-12. NOT APPLIED. NOT TESTED — cmd.exe cannot be run from the agent
+sandbox, and the sandbox was down entirely for this session.
+
+WHAT `node --check` ACTUALLY COVERS — CORRECTED 2026-09-13, BEFORE REAPPLYING
+  This patch previously implied that a preflight of `node --check` catches "a parse
+  error before any gate runs". It catches LESS than that, and the correction comes
+  from a live near-miss: on 2026-09-13 a scripted edit left `suppressNotify`
+  referenced but never declared inside pollCadence. `node --check` PASSED — it is a
+  syntax check, and an undeclared reference inside a function body is a runtime
+  ReferenceError, not a syntax error. Only executing the function found it.
+  Three layers, and the preflight provides only the first:
+    1. node --check <file>          SYNTAX only. Catches the dropped brace. Misses
+                                    every reference error.
+    2. dry import                   `node -e "import('./src/index.js')"` with the
+                                    poll loop gated off. Catches MODULE-SCOPE errors
+                                    — bad imports, undeclared top-level references,
+                                    circular-import failures.
+    3. execution                    Function-body ReferenceErrors. Only the boot
+                                    self-test (admitSelfTest) or test-delivery.js
+                                    reaches these.
+  A launcher preflight can afford 1 and arguably 2 (a dry import costs one process
+  and no network if the poll loop is gated). It CANNOT afford 3. So the patch must
+  claim layer 1 (+2 if implemented) and say plainly that a ReferenceError inside a
+  poller still reaches production and is caught by the suite, not by the launcher.
+  Shipping it with wider stated coverage than it has would be the fifth instance of
+  the class this project keeps fixing: a guard that reports more assurance than it
+  provides.
+
+THE HOLE THIS CLOSES
+  Every gate in this project assumes the process reaches main(). admitSelfTest, the
+  tier-route assertion, the classifier-wiring check and the pagination guard all run
+  INSIDE index.js. A parse error in any statically-imported module throws at import
+  time, before the first line of main(), so none of them execute. The only gate that
+  can run earlier than the code it checks is the launcher.
+
+CURRENT LAUNCHER (verified by reading it, 2026-09-12):
+  @echo off
+  cd /d "%~dp0"
+  :loop
+  node src\index.js >> data\bot.log 2>&1
+  echo [%date% %time%] bot exited, restarting in 15s... >> data\bot.log
+  timeout /t 15 /nobreak >nul
+  goto loop
+  -> UNBOUNDED. A parse error = 4 crashes/minute, forever, with no operator line.
+
+WHY THIS IS PARKED AND NOT APPLIED
+  1. It cannot be tested here. The file header of PUSH-TO-GITHUB.bat already records
+     the rule, learned twice: "cmd.exe cannot be tested from the agent sandbox, so
+     stop writing clever batch." Two parser casualties are documented there (nested
+     PowerShell quoting; delims=' colliding with an apostrophe), and a third was hit
+     on 2026-09-07 — a literal ")" inside a parenthesised if-block closed it early
+     and cmd abandoned the rest of the script SILENTLY.
+  2. The suggested form contains exactly that hazard:
+       for /r src %%f in (*.js) do (
+         node --check "%%f" || ( echo ... & exit /b 1 )
+       )
+     The inner ")" terminates the outer "do (" block. Nested parens plus "&" inside
+     an if/|| are the two constructs that have broken this project's batch before.
+  3. THE FAILURE MODE IS WORSE THAN THE ONE IT PREVENTS. A buggy preflight that
+     always fails means the bot NEVER STARTS — silent, permanent, and possibly
+     without even writing its log line. That is strictly worse than a crash-loop,
+     which at least leaves a visible trail in bot.log. Shipping an untested launcher
+     tonight, with MOVE's and ORDER's windows closing, would repeat the exact
+     mistake the demote-scope patch was just reverted to avoid — in the one file
+     that is MORE load-bearing than the app.
+
+PREFLIGHT DESIGN, WRITTEN BATCH-SAFE (apply and test with a deliberate syntax error)
+  No nested parentheses. No "&" command chaining. errorlevel captured immediately,
+  because echo can reset it.
+
+--- begin run-hidden.bat ---
+@echo off
+cd /d "%~dp0"
+set "BACKOFF=15"
+
+:preflight
+set "BAD="
+for /r "%~dp0src" %%f in (*.js) do call :check "%%f"
+rem Root-level readers the bot imports dynamically (cadence-watch imports
+rem detect-cliff-cluster.js at runtime). Cheap to include; a parse error there is
+rem non-fatal today but still wrong.
+call :check "detect-cadence.js"
+call :check "detect-cliff-cluster.js"
+call :check "discover-vesting.js"
+if defined BAD goto refuse
+goto run
+
+:check
+node --check %1 2>nul
+set "RC=%errorlevel%"
+if "%RC%"=="0" exit /b
+echo [%date% %time%] [PREFLIGHT][OPERATOR] parse error in %1 >> data\bot.log
+set "BAD=1"
+exit /b
+
+:refuse
+echo [%date% %time%] [PREFLIGHT][OPERATOR] REFUSING TO START - a source file does not parse. Fix it, then start the bot. This does NOT retry, because a parse error does not heal itself and a 15s loop would hide it. >> data\bot.log
+exit /b 1
+
+:run
+node src\index.js >> data\bot.log 2>&1
+echo [%date% %time%] bot exited, restarting in %BACKOFF%s... >> data\bot.log
+timeout /t %BACKOFF% /nobreak >nul
+rem BOUNDED BY BACKOFF, NOT BY A CAP. A hard stop after N tries leaves an unattended
+rem machine with no bot at all, which is the wrong trade for a transient fault. This
+rem escalates 15 -> 60 -> 300s and stays at 300s, so a persistent failure costs 12
+rem restarts an hour instead of 240 and is obvious in the log, while a one-off crash
+rem still recovers in 15 seconds.
+if "%BACKOFF%"=="15" set "BACKOFF=60" & goto preflight
+if "%BACKOFF%"=="60" echo [%date% %time%] [OPERATOR] third restart - backing off to 5 minutes. Something is failing repeatedly. >> data\bot.log
+if "%BACKOFF%"=="60" set "BACKOFF=300"
+goto preflight
+--- end run-hidden.bat ---
+
+  NOTE the "set X=Y & goto" line above still uses "&" — REWRITE IT as two lines
+  before applying. It is left visible here as the thing to fix, not as a template.
+
+GAP 1 — A CLEAN REFUSAL IS THE MOST SILENT FAILURE OF ALL
+  The heartbeat reports "the bot is down" only while the bot is up. So the SAFEST
+  failure mode is also the one nothing announces: one line in a log file on a machine
+  nobody is reading. Refusing to start without a notification trades an invisible
+  crash-loop for an invisible refusal.
+  The notification must therefore live OUTSIDE the Node process, in the launcher,
+  working precisely when the process cannot run.
+
+  SCOPE NOTE, because it touches Telegram: this is the BOT's own delivery path,
+  extended to its launcher. It is explicitly permitted — CLAUDE.md restricts CLAUDE
+  from reading any Telegram surface and says in terms that "the bot's own delivery is
+  unaffected". Nothing here reads a chat, a channel or a message; it only sends. The
+  token is read from .env by PowerShell and never printed to the log.
+
+  IT MUST GO TO THE OPERATOR DM, NOT THE CHANNEL. A preflight refusal is telemetry,
+  and v0.31.0 split telemetry out of @radaralert22. The chat id is the subscriber in
+  data/state.json, which PowerShell can parse directly.
+
+  DO NOT INLINE THE POWERSHELL. Nested PowerShell quoting inside a .bat is casualty
+  #1 in PUSH-TO-GITHUB.bat's header. This project already keeps .ps1 files
+  (wake-timers.ps1, wake-selftest.ps1) — follow that precedent:
+
+--- begin notify-operator.ps1 ---
+param([Parameter(Mandatory=$true)][string]$Text)
+# Launcher-side notifier. Runs when the bot CANNOT — a parse error, a refusal to
+# start — so it must never throw, never block, and never write the token anywhere.
+try {
+  $envFile = Join-Path $PSScriptRoot '.env'
+  $token = (Select-String -Path $envFile -Pattern '^TELEGRAM_BOT_TOKEN=(.+)$').Matches[0].Groups[1].Value.Trim()
+  $state = Get-Content (Join-Path $PSScriptRoot 'data\state.json') -Raw | ConvertFrom-Json
+  $chat  = $state.subscribers[0]
+  if (-not $token -or -not $chat) { exit 0 }
+  $body = @{ chat_id = $chat; text = $Text } | ConvertTo-Json -Compress
+  Invoke-RestMethod -Method Post -TimeoutSec 20 -ContentType 'application/json' `
+    -Uri "https://api.telegram.org/bot$token/sendMessage" -Body $body | Out-Null
+} catch {
+  # A failed notification must not stop the launcher doing its job. The log line in
+  # bot.log is the fallback record; this is best-effort on top of it.
+  exit 0
+}
+exit 0
+--- end notify-operator.ps1 ---
+
+  Then in :refuse, AFTER the log line:
+    powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0notify-operator.ps1" "[PREFLIGHT] Market Radar refused to start: a source file does not parse. The bot is DOWN and will not retry. See data\bot.log."
+
+  TEST IT BY BREAKING IT: confirm the DM arrives with the bot stopped, and confirm a
+  deliberately wrong token still lets the launcher exit cleanly rather than hang.
+
+GAP 2 — BACKOFF MUST RESET AFTER A SUSTAINED RUN
+  As drafted it escalates 15 -> 60 -> 300s and never comes back down, so one bad
+  night leaves the launcher at five minutes indefinitely and a routine restart takes
+  five minutes to recover. Reset on evidence that the process actually ran.
+
+  Batch cannot do elapsed time without pain (midnight rollover, locale). PowerShell
+  is already a dependency here, and this form avoids the "%" escaping trap entirely
+  (no -UFormat %s, which needs doubling inside a .bat):
+
+    for /f %%t in ('powershell -NoProfile -Command "[int](New-TimeSpan -Start (Get-Date '1970-01-01') -End (Get-Date).ToUniversalTime()).TotalSeconds"') do set "T0=%%t"
+    node src\index.js >> data\bot.log 2>&1
+    for /f %%t in ('powershell -NoProfile -Command "[int](New-TimeSpan -Start (Get-Date '1970-01-01') -End (Get-Date).ToUniversalTime()).TotalSeconds"') do set "T1=%%t"
+    set /a RAN=T1-T0
+    if %RAN% GEQ 600 set "BACKOFF=15"
+
+  A run of 10 minutes or more counts as "it worked, then something happened" and
+  restores fast recovery; anything shorter is a crash-loop and keeps escalating.
+  600s is a DECLARED constant, not a derived one — record it as such.
+
+TEST PLAN (all of it, before trusting this)
+  1. Back up run-hidden.bat first.
+  2. Apply. Start it. Confirm the bot boots normally and bot.log shows the usual
+     banner — i.e. the preflight passes on a healthy tree and costs only the extra
+     seconds of ~100 `node --check` spawns.
+  3. Introduce a deliberate parse error in a leaf module (e.g. an unclosed brace in
+     src/core/pulse.js). Start it. Confirm EXACTLY one [PREFLIGHT][OPERATOR] line
+     naming that file, and NO restart loop.
+  4. Revert the deliberate error. Confirm normal boot again.
+  5. Kill the node process mid-run. Confirm the backoff escalates and logs.
+  Only after 3 and 5 actually behave is this better than what it replaces.
+
+COST TO WEIGH
+  ~100 `node --check` spawns on Windows adds perhaps 10-30s to every start,
+  including every restart in the backoff loop. Narrowing to src/ plus the three root
+  readers keeps it near 40 files. Measure before accepting.

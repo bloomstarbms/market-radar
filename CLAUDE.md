@@ -1,5 +1,5 @@
 <!-- PREMISE
-Written against: v0.31.6
+Written against: v0.31.7
 Reviewed: 2026-09-07
 Assumes:
 - Nothing about the code. The restriction below is version-independent and does not
@@ -73,6 +73,55 @@ If a session ever finds it *can* reach Telegram, the grant has been restored by
 accident and that should be reported, not used.
 
 ---
+
+## ⚠️ TWO AGENTS, ONE REPO — ownership split
+
+As of 2026-09-13 the Cowork workspace cannot reach these files (a Windows update
+released 2026-09-08; being tracked). Claude Code is unaffected. So work may be split
+across two agents on the same working tree at the same time.
+
+**Preferred: do not run them concurrently.** One at a time removes the problem
+entirely and costs nothing but patience.
+
+**If they must overlap, ownership is exclusive and non-negotiable:**
+
+| Owner | May write |
+|---|---|
+| Claude Code | `src/`, `data/`, `*.js` at root, `test-delivery.js`, version bumps (`src/config.js` + `package.json`), git operations, restarts |
+| Cowork session | `docs/briefs/`, `*.pending` — and nothing else |
+
+Neither reads the other's working state mid-flight. A brief written against a tree
+that changed underneath it describes a repo that no longer exists, and a code change
+made against a stale brief implements a plan that was already revised.
+
+This is the lost-update class, which has already cost this project three times with a
+single writer: regime tags clobbered (v0.13.1), the `outcomes.json` tear (v0.17), and
+`data/cadence-watch.json` destroyed by a hand-edit (2026-09-12). Two concurrent
+writers make it likelier, not less.
+
+**Version bumps and pushes belong to Claude Code only.** Two agents bumping
+`src/config.js` produces the version-drift the boot gate exists to catch, and a push
+from a tree the other agent is mid-edit in commits a half-written state.
+
+## Scripted edits must assert their own match
+
+Twice in one session a programmatic edit silently did nothing and the result looked
+fine: an `Edit` whose `new_string` dropped a closing brace (destroying
+`data/cadence-watch.json`), and a Python `replace()` with no assertion that failed to
+match, leaving `suppressNotify` referenced but never declared. Both passed the checks
+that were run; neither was caught by the tool that made them.
+
+**Every scripted edit asserts its match count and aborts on zero.** In Python,
+`assert old in s` before `s.replace(old, new, 1)` — or a helper that exits non-zero
+when the count is not exactly 1. In `sed`, verify with a follow-up `grep`. A
+`replace` that matches nothing is indistinguishable from one that worked, and that is
+the whole problem.
+
+**And a syntax check is not an execution.** `node --check` passes on an undeclared
+reference inside a function body. After any non-trivial edit, run the thing: the
+suite, or at minimum `node -e "import('./path.js').then(m => m.theFunction(...))"`.
+"A patch's exit code is not evidence the function changed" applies to the checker as
+much as to the patcher.
 
 ## Project
 

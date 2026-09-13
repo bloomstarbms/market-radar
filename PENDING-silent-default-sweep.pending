@@ -1,0 +1,107 @@
+PENDING — sweep: "could this return a valid-looking EMPTY result when the thing it
+reads is BROKEN?"
+Written 2026-09-12 after loadWatchState() silently discarded all verdict history on a
+malformed file. NOT APPLIED (sandbox down all session). Read-only grep sweep of src/.
+
+THE SHAPE
+    try { return JSON.parse(readFileSync(F, 'utf8')); } catch { return <empty>; }
+  "File is corrupt" and "nothing has happened yet" become the same value. Every
+  downstream reader sees a clean, plausible zero. Second time this family has caused
+  a real loss (loadUnlockEvents reading a non-existent path was the first).
+
+================================================================================
+RANKED BY CONSEQUENCE
+
+1. src/core/routes.js:62  events = []        <- feeds assertTierRoutes()
+   src/core/routes.js:77  unlockTokens = []  <- feeds checkClassifiersWired()
+   *** WORST: THESE ARE BOOT GATES THAT PASS BECAUSE THEY READ NOTHING. ***
+   A corrupt macro-calendar or unlocks.json makes "every tier has a reader" and
+   "every classifier is wired" trivially TRUE — there is nothing left to route or
+   classify. The gate reports OK and the bot starts with the thing the gate exists to
+   protect entirely absent. A green check that cannot go red, arrived at from the
+   input side.
+   FIX: distinguish "read nothing" from "read an empty list". If the file exists and
+   fails to parse, the assertion must FAIL, not pass. Boot should refuse.
+
+2. src/core/taxonomy.js:135  equityTickers = new Set()
+   A corrupt data/equity-tickers.json silently disables the EQUITY/xStock exclusion.
+   Tokenised equities would stop being classified EXCLUDE and could be admitted to
+   the universe. Silent, and safety-relevant rather than merely lossy.
+   FIX: log [OPERATOR] and keep the previous in-memory set rather than emptying it;
+   an empty exclusion list should never be reachable by accident.
+
+3. src/sources/calendar/cadence-watch.js:28  loadWatchState -> { months:{}, demotions:{} }
+   CONFIRMED HARM, 2026-09-12 (see PENDING-cliff-cache-staleness.pending). Total
+   verdict history loss, silently, plus re-notification of an already-sent demote.
+   FIX: quarantine to cadence-watch.corrupt-<ts>.json, log [OPERATOR], set
+   historyResetAt, suppress demote DMs for the first cycle after a reset.
+
+4. src/sources/calendar/cadence-watch.js:394  loadRecheckState -> { lastRun:null, rows:{} }
+   A corrupt source-recheck.json reads as "the weekly recheck has never run". The
+   overlay that marks sourced rows demoted/revised by their source disappears, so
+   rows the SOURCE retracted quietly start pushing again. Same shape, opposite
+   direction: silence restores alerts rather than suppressing them.
+
+5. src/core/unclassified.js:41  cache = {}
+   Corrupt file reads as "no unclassified announcement shapes ever seen". The
+   heartbeat's backlog (105 shapes / 11 recurring today) resets to zero and the
+   review queue vanishes with no trace.
+
+6. src/sources/calendar/cadence-watch.js:165, 412, 475  catch { return; }
+   A corrupt unlocks.json stops pollCadence / pollSourceRecheck / pollCliffWatch
+   entirely, with NO log line. unlocks.js:35 logs this same failure properly
+   ('[unlocks] bad unlocks.json') — these three do not. Inconsistent treatment of the
+   identical failure in the same file.
+
+7. src/sources/calendar/cadence-watch.js:520  tokens = []   (cadenceStatus)
+   src/sources/calendar/unlocks.js:97        tokens = []   (sourcedFiring)
+   The heartbeat then reports "nothing watched" / "0 sourced rows" as though that
+   were the true state. The lines added to make silence visible would themselves go
+   silent.
+
+8. src/core/telemetry.js:208  catch { /* never run */ }  (restore drill)
+   Conflates "drill never run" with "drill record corrupt". Low harm — both nag — but
+   the nag names the wrong cause.
+
+================================================================================
+DOING IT RIGHT ALREADY — the patterns to copy
+  src/sources/calendar/unlocks.js:35  logs '[unlocks] bad unlocks.json' and returns
+                                      null, so the caller can tell broken from empty.
+  src/sources/calendar/macro.js:55    logs '[macro] calendar unreadable'.
+  src/core/outcomes.js:196, 203       PARSE-VERIFY BEFORE WRITE — a torn live file can
+                                      never overwrite a good backup. The inverse
+                                      discipline, already learned once.
+  src/core/outcomes.js:45             no catch at all: a corrupt outcomes.json THROWS
+  src/core/store.js:11                and takes the boot down loudly. Correct for
+  src/index.js:33                     anything load-bearing.
+
+THE RULE TO ADOPT
+  A reader may return a default ONLY when it has established the file is ABSENT.
+  If the file EXISTS and does not parse, that is an error: log [OPERATOR], and either
+  throw (load-bearing state) or quarantine and mark the loss (accumulated history).
+  Never the same value as "not started yet".
+
+================================================================================
+MAKE THE LOSS PERSIST — historyResetAt
+  A log line scrolls and a DM is read once; a history loss matters for weeks. Same
+  treatment as the stale-source ladder and the unreviewed-exclusion count:
+    - on quarantine, write `historyResetAt` (+ the quarantined filename) into the
+      fresh state;
+    - the heartbeat carries "🚨 verdict history was RESET on <date> (file quarantined
+      to X) — N verdicts lost, unacknowledged" on EVERY heartbeat until cleared;
+    - clearing is an explicit operator action (the annotate/acknowledge write path),
+      never automatic and never a timeout.
+
+================================================================================
+TURN THE ACCIDENT INTO A FIXTURE — determinism of the watch
+  The 2026-09-12 reset accidentally re-derived EIGEN 2026-08 CONFIRM 0.976,
+  MOVE 2026-09 CONFIRM 2.048 / 19,376,705 and ENA 2026-09 DEMOTE 5,148,798 EXACTLY.
+  That is evidence for a property the whole re-score design depends on and which has
+  never been tested deliberately: SCORING IS DETERMINISTIC OVER FIXED INPUTS. Nothing
+  can be safely re-scored if re-scoring can disagree with itself.
+  FIXTURE: freeze one byDay fixture per row shape (single, family, contract-cliff),
+  run cadenceDecision / cliffClusterDecision TWICE over it with a fixed `now`, and
+  assert deep equality of the verdict objects — action, ratio, amounts, window, the
+  lot. Then mutate one input and assert the verdict CHANGES, so the test can go red.
+  Pin the three live values above as the regression case, since they are known-good
+  and were reproduced independently.

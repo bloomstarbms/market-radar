@@ -15,7 +15,10 @@ import { config } from '../config.js';
 import { FACT_TYPES } from './budget.js';
 import { verifiedRowProblems } from './unlock-promote.js';
 
-const CAL_PATH = join(process.cwd(), 'data', 'macro-calendar.json');
+// Resolved at POINT OF USE, not at import. Frozen at module load it could not be
+// pointed anywhere, so the corrupt-file branch below was untestable — and an
+// untestable branch is how a gate ends up never having been shown to fail.
+const calPath = () => join(process.cwd(), 'data', 'macro-calendar.json');
 
 const ROUTES = {
   // macro-calendar event tiers -> who reads them
@@ -56,10 +59,22 @@ const FACT_ROUTES = {
 //              around the gate, which defeats it.
 export function checkTierRoutes({ calendarEvents, tiers, factTypes, tokens } = {}) {
   const problems = [];
+  // A GATE MUST NOT PASS BECAUSE IT READ NOTHING (v0.31.7). Both loaders below used
+  // to fall back to [] on a parse failure, which made this assertion trivially TRUE
+  // on a corrupt file: no events left to route, no tokens left to check, "OK". The
+  // bot would then boot with exactly the thing the gate protects entirely absent.
+  // ABSENT and UNPARSEABLE are different facts: absent is a legitimate empty state
+  // (no calendar yet), unparseable is a defect and must refuse boot.
   let events = calendarEvents;
   if (!events) {
-    if (!existsSync(CAL_PATH)) events = [];
-    else { try { events = JSON.parse(readFileSync(CAL_PATH, 'utf8')).events || []; } catch { events = []; } }
+    if (!existsSync(calPath())) events = [];
+    else {
+      try { events = JSON.parse(readFileSync(calPath(), 'utf8')).events || []; }
+      catch (e) {
+        events = [];
+        problems.push(`macro-calendar.json EXISTS but does not parse (${e.message}) — refusing to treat a corrupt calendar as an empty one`);
+      }
+    }
   }
   for (const ev of events) {
     if (!(ev.tier in ROUTES.macro)) problems.push(`calendar event '${ev.id}' has tier '${ev.tier}' with NO delivery route`);
@@ -74,8 +89,15 @@ export function checkTierRoutes({ calendarEvents, tiers, factTypes, tokens } = {
   // with it, the revival fails boot and forces the question.
   let unlockTokens = tokens ?? null;
   if (!unlockTokens) {
-    try { unlockTokens = JSON.parse(readFileSync(join(process.cwd(), 'unlocks.json'), 'utf8')).tokens || []; }
-    catch { unlockTokens = []; }
+    const UNLOCKS = join(process.cwd(), 'unlocks.json');
+    if (!existsSync(UNLOCKS)) unlockTokens = [];
+    else {
+      try { unlockTokens = JSON.parse(readFileSync(UNLOCKS, 'utf8')).tokens || []; }
+      catch (e) {
+        unlockTokens = [];
+        problems.push(`unlocks.json EXISTS but does not parse (${e.message}) — refusing to treat a corrupt schedule as an empty one`);
+      }
+    }
   }
   for (const t of unlockTokens) {
     if (t?.retired && (t.monthlyDay || (Array.isArray(t.events) && t.events.length)))

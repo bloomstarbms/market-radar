@@ -1,0 +1,232 @@
+PENDING PATCH — the resume cache can answer "covered: true" without looking
+Written 2026-09-12. NOT APPLIED, NOT TESTED (sandbox down all session).
+SEVERITY: HIGH — it has already produced one false DEMOTE (ORDER, 2026-09-12).
+
+THE DEFECT
+  detect-cliff-cluster.js / outflowsWithRecipients begins:
+
+    if (c0?.done) return { byDay, covered: true, oldest, pages: 0, resumed: true };
+
+  `done` means "this fetch once reached back to the untilDate it was given". It says
+  NOTHING about the RECENT end of the range. Every entry in
+  data/cliff-fetch-cache.json is `"done":true,"at":"2026-09-05T17:3x"` with newest
+  day 2026-09-05. When pollCliffWatch asked on 2026-09-12 whether ORDER's vault had
+  emitted in 09-07..09-12, it was handed that cache: covered:true, 0 pages, no
+  network, and no days in the window. Verdict: DEMOTE at ratio 0, recipients 0.
+
+  This is the "we did not look is never a verdict" rule failing through a new door.
+  The `covered` flag was not bypassed — the cache HANDED it a true value having
+  fetched nothing. windowObserved() is satisfied by a lie it cannot detect.
+
+  Introduced 2026-09-05 with the resumable cache (added so L3's 120-page proxy could
+  not eat a budget slice). Same day, same file.
+
+FIX 1 — a cache may only satisfy a request whose window it actually covers
+  `done` must be qualified by the NEWEST day the cache holds. A resume is valid only
+  when the cache extends at least to the end of the range being asked about.
+
+  Requires the cache to record its newest day (it records `oldest` only), and the
+  caller to say how recent a read it needs. Sketch — REVIEW, do not paste blind:
+
+    // cache entry gains: newest (YYYY-MM-DD), written alongside oldest
+    // signature gains: needUpTo (YYYY-MM-DD) — the last day the caller will score
+    const fresh = c0?.newest && needUpTo && c0.newest >= needUpTo;
+    if (c0?.done && fresh) return { byDay, covered: true, oldest, pages: 0, resumed: true };
+    // a done-but-stale cache is a STARTING POINT, not an answer: keep byDay, drop
+    // `done`, and page forward from the newest end before returning covered.
+
+  Until the forward-paging path exists, the CONSERVATIVE version is correct and one
+  line: treat a stale cache as no cache.
+
+    if (c0?.done && c0?.newest && needUpTo && c0.newest < needUpTo) { /* refetch */ }
+
+FIX 2 — pollCliffWatch must state what it needs
+  It scores [cliff, cliff + windowDays]. It must pass needUpTo = that end date, and
+  must treat `resumed: true` with an insufficient `newest` as NOT covered — i.e. the
+  existing `if (!f.covered) continue;` keeps working, because covered becomes false.
+
+FIX 3 — a DEMOTE must carry its own strength, like a CONFIRM does
+  Raised in review 2026-09-12 and correct independently of the cache bug: the
+  compound machinery (chanceRate, replayRate, binomial tail) is attached only to
+  CONFIRMs. A DEMOTE is just a DEMOTE, which matters most on a WEAK falsifier.
+    - ORDER: chanceRate 0.58, so an empty window is a ~42% event under the null.
+      Near-noise even if it had been observed.
+    - ENA: 5,148,798 vs a 13-month minimum of 6,413,805 — P(next draw is the
+      smallest of 14) ≈ 1/14 ≈ 0.07 under exchangeability, and 20% below the prior
+      floor. Genuinely informative.
+  Carry the figure into BOTH the overlay entry and the demote message, so
+  re-promotion logic and a human reading the DM can tell those two apart. Suggested
+  line: "Strength: this window is empty ~42% of the time by chance (chanceRate 0.58)
+  — weak evidence, confirm before acting." / for a break below an all-time floor,
+  state the rank probability instead.
+
+IMMEDIATE, BEFORE ANY OF THE ABOVE
+  1. Treat data/cadence-watch.json's ORDER demotion and its cliffs entry
+     ORDER:2026-09-07 as VOID. They record a verdict from a fetch that never ran.
+  2. Do NOT hand-edit them while the bot is running — pollCliffWatch re-reads and
+     rewrites this file each cycle. Stop the bot first, or fix the code and let a
+     fresh evaluation overwrite.
+  3. The `cliffs` stamp BLOCKS re-evaluation of that cliff (`due` filters on
+     `!st.cliffs[key]`), so this will NOT self-correct once the cache is fixed. The
+     stamp must be cleared for 2026-09-07 to be scored honestly.
+  4. Deleting data/cliff-fetch-cache.json is safe on its own (the code handles
+     absence) and makes every future cliff read fetch fresh — but it does not undo
+     items 1-3.
+
+INCIDENT 2026-09-12 — I CORRUPTED data/cadence-watch.json BY HAND-EDITING IT
+  Attempting to mark ORDER's false demotion `void`, I wrote a JSON object and omitted
+  its closing brace. The bot's loadWatchState() caught the parse error, returned the
+  empty default `{ months: {}, demotions: {} }`, and the pollers re-derived ALL state
+  from scratch at 13:56-13:58.
+
+  WHAT WAS LOST
+    - the void annotation itself, entirely;
+    - every original verdict timestamp (ENA's demote was 2026-09-10T19:05, now
+      13:58; ORDER's cliff stamp was 01:58, now 13:56);
+    - ENA's `notified: true`, which meant the DEMOTE DM was almost certainly SENT TO
+      THE OPERATOR A SECOND TIME. If a duplicate ENA demotion notice arrived on the
+      12th, that is this, not a new event.
+
+  WHAT SURVIVED, and it is worth something: the re-derivation reproduced every
+  verdict EXACTLY — EIGEN 2026-08 CONFIRM 0.976, MOVE 2026-09 CONFIRM 2.048 /
+  19,376,705, ENA 2026-09 DEMOTE largestSeen 5,148,798. Unintended, but it is real
+  evidence that the watch is deterministic over the same inputs.
+
+  DEFECT THIS EXPOSED — loadWatchState() TREATS A CORRUPT FILE AS "NO HISTORY".
+    try { return JSON.parse(readFileSync(STATE_FILE, 'utf8')); }
+    catch { return { months: {}, demotions: {} }; }
+  A silent, total reset of verdict history on any parse failure — a typo, a torn
+  write, disk corruption — with NO log line and no operator alert. This time the
+  windows were recent enough to re-derive; a month later they would not have been,
+  and the history would have been gone with nothing said. Same class as everything
+  else in this file: a failure that leaves no trace.
+  FIX: on parse failure, rename the bad file to `cadence-watch.corrupt-<ts>.json`,
+  log `[OPERATOR]`, and — since an empty state causes re-notification — refuse to
+  send demote DMs on the first cycle after a reset.
+
+  THE LESSON, NOW DEMONSTRATED RATHER THAN ARGUED: hand-editing a bot-owned file does
+  not work. Not "races sometimes" — it destroyed the file on the first attempt and
+  silently discarded every verdict in it. The annotation write path
+  (`node annotate-verdict.js ORDER 2026-09-07 --void --reason "..."`) is not a queue
+  item to get to eventually; it is the ONLY safe way to record a correction, and its
+  absence is why this was attempted by hand at all. It must: take the lock the way
+  promote-unlock.js does for unlocks.json, validate the JSON it produces before
+  renaming it into place, and refuse to run while the field it writes is unknown to
+  the reader that must honour it.
+  Third occurrence of this hazard in the project's history (regime tags clobbered in
+  v0.13.1, the outcomes.json tear in v0.17, this).
+
+SWEEP — "could this flag be true while the thing it claims never happened?"
+Run 2026-09-12 across every .js in the repo. The result is narrower than feared:
+
+  DERIVED, arithmetic at the point of use — these cannot lie:
+    detect-cliff-cluster.js:63,77   covered: true  <- spanCovered(oldest, untilDate)
+    cadence-watch.js:151            covered: true  <- spanCovered(oldest, untilDate)
+    detect-cliff-cluster.js:62,76   covered: true  <- !next_page_params, history exhausted
+    cadence-watch.js:150            covered: true  <- !next_page_params, history exhausted
+
+  ASSERTED, set alongside the action rather than computed from its product:
+    detect-cliff-cluster.js:47      covered: true  <- if (c0?.done)      *** THE BUG ***
+
+  FIVE of the six `covered: true` returns in this codebase are already arithmetic.
+  Exactly ONE is an assertion, and it is the one that produced a false verdict.
+  That is the whole finding, and it makes the durable fix small: route line 47
+  through the SAME function as the others, extended to bound the recent end.
+
+    // covered becomes a pure function of what was actually fetched vs what is scored
+    export function rangeCovers(oldest, coveredTo, from, to) {
+      return !!oldest && !!coveredTo && oldest < from && coveredTo >= to;
+    }
+
+  *** THE SECOND ARGUMENT IS NOT "THE NEWEST ROW FOUND". ***
+  Caught in review 2026-09-12, before this was applied, and it inverts the very
+  failure the fix exists for. If `coveredTo` were derived from the newest TRANSACTION
+  in the fetch, then a vault that genuinely STOPPED emitting has nothing in or after
+  the window, so coveredTo < to, the window reads UNCOVERED, and the row goes PENDING
+  FOREVER instead of demoting. The stale-cache case and the silent-vault case become
+  indistinguishable — and the one we most need to detect is the one that never
+  resolves. A row stuck PENDING is this project's worst failure shape: silent, and
+  indistinguishable from health.
+
+  `coveredTo` must be the BOUNDARY THE FETCH REACHED, not a property of the data it
+  found. The readers page BACKWARDS FROM THE HEAD, so a completed fetch covers
+  [oldest-boundary, fetch-start]. Therefore:
+
+    coveredTo = the wall-clock time the fetch STARTED (or the head block at that
+                moment), NOT the newest row, and NOT the time it finished.
+
+  Fetch-START, not fetch-end: paging takes seconds to minutes and the head advances
+  while it runs, so claiming coverage to fetch-END overclaims by the duration of the
+  fetch and could miss a transaction that landed mid-page. Fetch-start under-claims
+  slightly, which is the safe direction.
+
+  Then: a fresh fetch of a silent vault reports coveredTo = now, covers the window,
+  finds zero, and DEMOTES correctly. A cache written 2026-09-05 reports
+  coveredTo = 2026-09-05, fails to cover a 09-12 window, and REFETCHES. The two cases
+  separate cleanly, which is the entire point.
+
+  The cache already stores what is needed: each entry carries `at`. It must be
+  re-recorded as the fetch START (it is currently written at persist time) and read
+  as the coverage boundary rather than as a note about when the file was touched.
+
+  SYMMETRY NOTE, because it explains why this was easy to get wrong: `oldest` is
+  likewise NOT sufficient on its own — it is a data property used as a proxy for the
+  backward boundary, and it is only sound in combination with the history-exhausted
+  check (`!next_page_params`). Either you paged PAST the target, or you ran out of
+  history; both mean full coverage below. The recent end had no such pairing at all,
+  which is how an assertion slipped in.
+
+  Then a cache ending 2026-09-05 asked about 2026-09-07..09-12 returns false BY
+  ARITHMETIC. There is nothing left to lie with, and `done` stops being load-bearing:
+  it becomes a resume hint, not an attestation.
+
+  EARNED — set only on evidence of the thing itself:
+    cadence-watch.js:199,256   notified = true  <- only `if (ids.length)`, i.e. only
+                               when Telegram returned message ids. Correct.
+    src/core/pulse.js          notePulse()      <- called after a successful fetch.
+    telemetry.js:125           done = ids.length || !hasRecipients(false)
+                               Can be true without delivery, but ONLY when there is
+                               nobody to deliver to — and the claim it makes is "this
+                               digest is settled for today", not "it was delivered".
+                               Deliberate and documented; passes the test in spirit.
+
+  MISSING ENTIRELY — worse than a false attestation, because there is no record
+  either way and no retry:
+    pollCliffWatch             writes st.demotions[sym] with NO `notified` field and
+                               broadcasts with `.catch(() => [])`. Already logged as
+                               FIX 3's sibling; the cadence path at :256 is the model.
+
+  MIDDLE GROUND, noted not actioned:
+    promoteRow -> verified: true is an assertion, but verifiedRowProblems re-derives
+    its preconditions at every boot, so a lie cannot survive a restart.
+    sourceFetchedAt copies the index file's own capture time; re-ingesting an OLD
+    index correctly carries the OLD timestamp, and the staleness ladder then fires.
+    Honest by construction.
+
+MISSING CAPABILITY — NO VERDICT CAN EVER BE RE-SCORED (general, not ORDER's)
+  `due` filters on `!st.cliffs[key]`, and the cadence path similarly skips a month
+  once `rec.action !== 'DEMOTE' || rec.notified`. So ANY verdict later found wrong —
+  for any reason, not just this cache bug — is permanent. The only way to correct one
+  is to hand-edit a file the bot rewrites every cycle, which is tampering, leaves no
+  trace, and races the poller.
+  What is missing is a supported path:
+    - `node rescore.js ORDER 2026-09-07 --reason "resume cache returned covered:true
+      without fetching (2026-09-12)"` — clears the stamp and any demotion it caused,
+      and APPENDS to a rescore log rather than silently deleting.
+    - the row's history keeps both: the original verdict, and the correction with its
+      reason. A correction recorded as a correction, not as an absence.
+    - refuse to rescore without a reason string, the same discipline as
+      clusterSpec.basis and toleranceBasis: the number is the fact, the reason is why
+      anyone should believe the second reading over the first.
+  Until it exists, corrections require stopping the bot — which is itself an argument
+  for building it.
+
+TEST PLAN
+  - Unit: a cache entry with newest < needUpTo must NOT satisfy the request. Assert
+    covered === false, and assert pages > 0 on the refetch path.
+  - Regression: the ORDER window 2026-09-07..2026-09-12 re-scored against a live
+    fetch, and the verdict compared with what the stale cache produced. If the vault
+    really did emit in that window, this is a confirmed false demotion and the
+    fixture should pin exactly that case.
+  - The rule to assert, not the shape: "no verdict may be produced from a fetch whose
+    covered range does not include the scored window."

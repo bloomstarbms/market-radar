@@ -988,6 +988,8 @@ console.log('51. a sourced row that CANNOT fire is counted as coverage — the h
     { ...base, sym: 'QUIET', stage: 'LOGGED', sourceEvents: [ev(3)] },         // silent on purpose
     { ...base, sym: 'OLD', stage: 'STANDARD', sourceEvents: [ev(7)], sourceFetchedAt: new Date(now - 40 * D).toISOString().slice(0, 16) },
   ];
+  // one-row builder, so the invariants below read as rules rather than as data
+  const row = ([sym, daysOut]) => [{ ...base, sym, stage: 'STANDARD', sourceEvents: [ev(daysOut)] }];
   const r = sourcedFiring(now, rows);
   check('counts rows, rows with a future event, and rows firing in 7d', r.sourced === 6 && r.withFuture === 5 && r.firing7d === 2);
   check('a row whose next lead lands inside 7d counts, one whose lead is further out does not', r.firing.includes('SOON') && r.firing.includes('DUE10') && !r.firing.includes('LATER'));
@@ -996,10 +998,21 @@ console.log('51. a sourced row that CANNOT fire is counted as coverage — the h
   check('a LOGGED row is silent BY DESIGN, not a fault (the alarm must not cry wolf)', r.mute.includes('QUIET:silent-by-stage') && !r.faultMute.some((m) => m.startsWith('QUIET')));
   check('the line names the firing rows and raises 🚨 only on fault-mute', /29|6 rows/.test(r.line) && /🚨 2 MUTE/.test(r.line) && /1 silent by design/.test(r.line));
   check('no fault-mute -> no siren', !/🚨/.test(sourcedFiring(now, [rows[0], rows[4]]).line));
-  // Live: measured 2026-09-07, before and after the refresh — all 29 could fire.
-  const live = sourcedFiring();
-  check('LIVE: no sourced row is mute by fault', live.faultMute.length === 0, live.faultMute.join(' | '));
-  check('LIVE: every sourced row still has a future event', live.withFuture === live.sourced);
+  // INVARIANTS, not today's data. These two were written as `LIVE:` assertions on
+  // 2026-09-07 ("all 29 rows can fire") and went RED on 2026-09-13 without a line of
+  // code changing: SEI, APT and CARV simply ran out of listed events. A fixture that
+  // pins today's data reddens with the calendar, and a suite that reddens on schedule
+  // trains people to ignore red. Fourth instance of the environment-vs-logic class.
+  // The RULE is what is asserted now; the facts about today live on the heartbeat.
+  const exhausted = row(['EXH', -30]);   // events all in the past
+  const alive = row(['ALIVE', 10]);      // one future event
+  const mixed = sourcedFiring(now, [...exhausted, ...alive]);
+  check('a row with zero future events is fault-mute, and says which fault', mixed.faultMute.includes('EXH:no future event'));
+  check('a row with a future event is NOT fault-mute', !mixed.faultMute.some((m) => m.startsWith('ALIVE')));
+  check('MUTATION: give the exhausted row a future event and it leaves faultMute', sourcedFiring(now, row(['EXH', 10])).faultMute.length === 0);
+  check('withFuture counts exactly the rows with an event after now', mixed.withFuture === 1 && mixed.sourced === 2);
+  check('MUTATION: two live rows -> withFuture === sourced; two dead rows -> 0', sourcedFiring(now, [...row(['A', 5]), ...row(['B', 9])]).withFuture === 2
+    && sourcedFiring(now, [...row(['A', -5]), ...row(['B', -9])]).withFuture === 0);
 }
 
 console.log('52. staleness LADDER — the 21-day cliff warns before it bites');
@@ -1120,6 +1133,332 @@ console.log('54. the TRUNCATION BOUNDARY day is partial — every paginated read
   check('paginatedReaders skips the test and probe files (or it would find itself)', !paginatedReaders().some((r) => /test-delivery|probe-pagination/.test(r.file)));
 }
 
+console.log('56. a BOOT GATE must not pass because it read nothing (corrupt != empty)');
+{
+  const { checkTierRoutes } = await import('./src/core/routes.js');
+  const { mkdtempSync, writeFileSync: wf, mkdirSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join: j3 } = await import('node:path');
+  // checkTierRoutes reads unlocks.json and data/macro-calendar.json relative to cwd.
+  // Both used to fall back to [] on a parse failure, which made the assertion
+  // trivially TRUE on a corrupt file — nothing left to route or check, so "OK", and
+  // the bot boots with the thing the gate protects entirely absent.
+  const here = process.cwd();
+  const mk = (unlocks, calendar) => {
+    const d = mkdtempSync(j3(tmpdir(), 'routes-'));
+    mkdirSync(j3(d, 'data'), { recursive: true });
+    if (unlocks !== null) wf(j3(d, 'unlocks.json'), unlocks);
+    if (calendar !== null) wf(j3(d, 'data', 'macro-calendar.json'), calendar);
+    return d;
+  };
+  const run = (d) => { process.chdir(d); try { return checkTierRoutes(); } finally { process.chdir(here); } };
+
+  const corrupt = run(mk('{"tokens":[', '{"events":['));
+  check('a corrupt unlocks.json FAILS the gate instead of reading as empty', !corrupt.ok && corrupt.problems.some((p) => /unlocks\.json EXISTS but does not parse/.test(p)));
+  check('a corrupt macro-calendar.json FAILS the gate instead of reading as empty', corrupt.problems.some((p) => /macro-calendar\.json EXISTS but does not parse/.test(p)));
+  check('the failure names the file, so the operator knows which one', corrupt.problems.some((p) => /refusing to treat a corrupt/.test(p)));
+
+  // MUTATION — the gate must still PASS on the states that are legitimately empty,
+  // or this fix would refuse boot on a fresh install.
+  const absent = run(mk(null, null));
+  check('MUTATION: both files ABSENT is a legitimate empty state and PASSES', absent.ok, absent.problems.join(' | '));
+  const valid = run(mk('{"tokens":[]}', '{"events":[]}'));
+  check('MUTATION: both files present and VALID passes', valid.ok, valid.problems.join(' | '));
+  const halfBad = run(mk('{"tokens":[]}', '{"events":['));
+  check('MUTATION: one corrupt of the two still fails, naming only that one', !halfBad.ok
+    && halfBad.problems.some((p) => /macro-calendar/.test(p)) && !halfBad.problems.some((p) => /unlocks\.json EXISTS/.test(p)));
+  check('cwd is restored after every probe', process.cwd() === here);
+}
+
+console.log('57. a corrupt state file is QUARANTINED, not silently treated as no history');
+{
+  const { loadWatchState, cadenceStatus } = await import('./src/sources/calendar/cadence-watch.js');
+  const { mkdtempSync, writeFileSync: wf, readFileSync: rf, existsSync: ex, readdirSync, mkdirSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join: j4 } = await import('node:path');
+  // The state file path is INJECTABLE, so the corrupt-file path is exercised for real
+  // against a temp file rather than asserted from source text. The live
+  // data/cadence-watch.json is never touched by this fixture.
+  const d = mkdtempSync(j4(tmpdir(), 'watchstate-'));
+  const at = new Date(Date.UTC(2026, 8, 13, 14, 30, 5));
+  const target = j4(d, 'cadence-watch.json');
+
+  // ABSENT is a legitimate empty state and must NOT quarantine or stamp anything.
+  const absent = loadWatchState(at, target);
+  check('absent file reads as empty history with NO reset stamp', absent.historyResetAt === undefined && Object.keys(absent.months).length === 0);
+
+  // VALID parses through untouched.
+  wf(target, JSON.stringify({ months: { EIGEN: { '2026-08': { action: 'CONFIRM' } } }, demotions: {} }));
+  const good = loadWatchState(at, target);
+  check('a valid file is returned as-is, with no reset stamp', good.months.EIGEN['2026-08'].action === 'CONFIRM' && good.historyResetAt === undefined);
+
+  // CORRUPT — the case that erased everything on 2026-09-12.
+  wf(target, '{"months":{"EIGEN":');
+  const bad = loadWatchState(at, target);
+  const quarantined = readdirSync(d).filter((f) => /corrupt-/.test(f));
+  check('a corrupt file is QUARANTINED, not overwritten', quarantined.length === 1 && /cadence-watch\.corrupt-2026-09-13/.test(quarantined[0]));
+  check('the quarantined copy still holds the original bytes', rf(j4(d, quarantined[0]), 'utf8') === '{"months":{"EIGEN":');
+  check('the corrupt file is GONE from its live path (renamed, not copied)', !ex(target));
+  check('the loss is stamped into the fresh state', bad.historyResetAt === '2026-09-13T14:30' && bad.historyResetFile === quarantined[0]);
+  check('the fresh state suppresses notifications for one cycle', bad.suppressNotifyUntilCycle === true);
+  check('history is empty after a reset — the point is that this is now VISIBLE, not silent', Object.keys(bad.months).length === 0);
+
+  const resetState = { months: {}, demotions: {}, cliffs: {}, historyResetAt: '2026-09-12T13:58', historyResetFile: 'cadence-watch.corrupt-2026-09-12.json', suppressNotifyUntilCycle: true };
+  const tok = [{ sym: 'X', reviewBy: '2026-12-01', events: [{}] }];
+  const hbNow2 = new Date(Date.UTC(2026, 8, 13));
+  const resetLine = cadenceStatus(tok, resetState, hbNow2).line;
+  check('a reset is announced on the heartbeat with its timestamp', /🚨 VERDICT HISTORY RESET 2026-09-12T13:58/.test(resetLine));
+  check('the banner names the quarantined file so the evidence is findable', /corrupt file kept as cadence-watch\.corrupt-2026-09-12\.json/.test(resetLine));
+  check('the banner says the verdicts were RE-DERIVED and may not have been announced', /RE-DERIVED and may not have been announced/.test(resetLine));
+  check('the banner says it is UNACKNOWLEDGED (it does not time out)', /unacknowledged/.test(resetLine));
+  check('cadenceStatus exposes historyResetAt so telemetry can act on it', cadenceStatus(tok, resetState, hbNow2).historyResetAt === '2026-09-12T13:58');
+  // MUTATION — a clean state must carry NO banner, or the alarm is meaningless.
+  const cleanLine = cadenceStatus(tok, { months: {}, demotions: {} }, hbNow2).line;
+  check('MUTATION: a clean state raises no reset banner', !/VERDICT HISTORY RESET/.test(cleanLine) && !/🚨/.test(cleanLine));
+  check('MUTATION: a quarantine that FAILED says so rather than implying a copy exists',
+    /could NOT be quarantined/.test(cadenceStatus(tok, { ...resetState, historyResetFile: null }, hbNow2).line));
+
+  // The suppression flag is what stops a reset re-sending delivered verdicts.
+  check('a reset sets the one-cycle notify suppression', resetState.suppressNotifyUntilCycle === true);
+  const src = rf('src/sources/calendar/cadence-watch.js', 'utf8');
+  check('pollCadence marks re-derived verdicts delivered instead of re-sending them', /if \(suppressNotify\) \{[\s\S]{0,200}notified = true/.test(src));
+  check('the suppression clears after one cycle, so real demotions still send', /if \(suppressNotify\) \{ st\.suppressNotifyUntilCycle = false/.test(src));
+  check('the corrupt file is RENAMED, never overwritten (data/ is not in the backup set)', /renameSync\(file, quarantine\)/.test(src));
+}
+
+console.log('58. an unavailable equity list EXCLUDES on the convention — it does not fall through to pushing');
+{
+  const { classifySymbol, equityListStatus, EQUITY_LIST_OK } = await import('./src/core/taxonomy.js');
+  // The xStock rule reads: trailing-X + stem in the ticker list -> EXCLUDE; trailing-X
+  // + stem NOT in the list -> UNRECOGNISED, which is "pushed, logged for review".
+  // So an EMPTY list does not disable the rule, it INVERTS it — every tokenised
+  // equity becomes a push. That is how TSLAX and CRCLX reached the channel. Absent
+  // evidence must not read as evidence of absence.
+  check('LIVE list is usable, so the ordinary path is being exercised below', equityListStatus() === EQUITY_LIST_OK);
+  // Injected tickers are trusted (this is how the ordinary non-match is expressed).
+  const withList = classifySymbol('FOOX', 'USDT', '', { tickers: new Set(['TSLA']) });
+  check('list present, stem unknown -> UNRECOGNISED and pushed for review', withList.state === 'UNRECOGNISED');
+  const matched = classifySymbol('TSLAX', 'USDT', '', { tickers: new Set(['TSLA']) });
+  check('list present, stem known -> EXCLUDE with the corroborated reason', matched.state === 'EXCLUDE' && /is a known equity ticker/.test(matched.reason));
+  // The restrictive default. Exercised by pointing the loader at a corrupt file via a
+  // temp dataDir, so the real behaviour is tested rather than the source text.
+  const { mkdtempSync, writeFileSync: wf } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join: j5 } = await import('node:path');
+  const dir = mkdtempSync(j5(tmpdir(), 'equity-'));
+  wf(j5(dir, 'equity-tickers.json'), '{"tickers":[');
+  const { config } = await import('./src/config.js');
+  const realDir = config.dataDir;
+  let corruptResult, missingResult, corruptState, missingState;
+  try {
+    // fresh module instance so the memoised list re-loads against the temp dir
+    config.dataDir = dir;
+    const t1 = await import(`./src/core/taxonomy.js?corrupt=${Date.now()}`);
+    corruptResult = t1.classifySymbol('TSLAX');
+    corruptState = t1.equityListStatus();
+    wf(j5(dir, 'equity-tickers.json'), '');
+    const { rmSync } = await import('node:fs');
+    rmSync(j5(dir, 'equity-tickers.json'));
+    const t2 = await import(`./src/core/taxonomy.js?missing=${Date.now()}`);
+    missingResult = t2.classifySymbol('TSLAX');
+    missingState = t2.equityListStatus();
+  } finally { config.dataDir = realDir; }
+  check('a CORRUPT equity list is detected as corrupt, not read as empty', corruptState === 'corrupt');
+  check('with a corrupt list, a tokenised equity is EXCLUDED, not pushed', corruptResult.state === 'EXCLUDE' && /list is corrupt/.test(corruptResult.reason));
+  check('the reason says it was excluded UNCORROBORATED, so it is not mistaken for a match', /rather than pushed uncorroborated/.test(corruptResult.reason));
+  check('a MISSING equity list is detected as missing', missingState === 'missing');
+  check('with a missing list, a tokenised equity is EXCLUDED, not pushed', missingResult.state === 'EXCLUDE');
+  // MUTATION — the leveraged rule and the crypto guard must be untouched by this.
+  check('MUTATION: the leveraged rule is unaffected by list availability', classifySymbol('BTC3L').state === 'EXCLUDE');
+  check('MUTATION: a known crypto ending in X is still OK, list or no list', classifySymbol('AVAX').state === 'OK');
+  check('MUTATION: a plain symbol is still a plain listing', classifySymbol('SOL').state === 'OK');
+}
+
+console.log('59. SCORING IS DETERMINISTIC — nothing can be safely re-scored if it disagrees with itself');
+{
+  const { cadenceDecision, cliffClusterDecision } = await import('./src/sources/calendar/cadence-watch.js');
+  // The 2026-09-12 history reset accidentally re-derived three live verdicts EXACTLY.
+  // That is evidence for a property the whole rescore design rests on and which had
+  // never been tested on purpose: the same inputs must give the same verdict. If
+  // scoring can disagree with itself, a "correction" is indistinguishable from noise.
+  // Fixed `now` throughout; no Date.now() anywhere in this section.
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+  // --- SINGLE-WALLET, the MOVE 2026-09 regression case (CONFIRM, ratio 2.048) ---
+  const moveSpec = { wallet: '0xE67A9E94bf21551EDCB8008AAE29823E87610D9b', expectDay: 9, meanAmount: 9461497, graceDays: 3 };
+  const moveDays = { '2026-09-08': 120000, '2026-09-09': 19376705, '2026-09-11': 88000 };
+  const moveNow = new Date(Date.UTC(2026, 8, 20));
+  const m1 = cadenceDecision(moveSpec, 2026, 9, moveNow, moveDays);
+  const m2 = cadenceDecision(moveSpec, 2026, 9, moveNow, moveDays);
+  check('single-wallet: two runs over identical input give identical verdicts', eq(m1, m2));
+  check('REGRESSION: MOVE 2026-09 re-derives as CONFIRM 19,376,705 ratio 2.048', m1.action === 'CONFIRM' && m1.amount === 19376705 && m1.ratio === 2.048 && m1.date === '2026-09-09');
+
+  // --- SINGLE-WALLET, the ENA 2026-09 regression case (DEMOTE, largestSeen 5,148,798) ---
+  const enaSpec = { wallet: '0x54B8c65f0635fD91C8729Dd3269C630d9AED54e5', expectDay: 6, meanAmount: 12069436, roll: 'nextBusinessDay' };
+  const enaDays = { '2026-09-07': 5148798 };
+  const enaNow = new Date(Date.UTC(2026, 8, 20));
+  const e1 = cadenceDecision(enaSpec, 2026, 9, enaNow, enaDays);
+  const e2 = cadenceDecision(enaSpec, 2026, 9, enaNow, enaDays);
+  check('the DEMOTE path is deterministic too, not just the confirming one', eq(e1, e2));
+  check('REGRESSION: ENA 2026-09 re-derives as DEMOTE with largestSeen 5,148,798', e1.action === 'DEMOTE' && e1.largestSeen === 5148798 && e1.window === '2026-09-06..2026-09-10');
+
+  // --- FAMILY, the EIGEN 2026-08 regression case (CONFIRM, ratio 0.976) ---
+  const eigenSpec = { wallets: [{ addr: '0xA', meanAmount: 7822556 }, { addr: '0xB', meanAmount: 1692519 }],
+    familyMean: 9515075, tolerance: 0.13, expectDay: 30, monthEnd: true, graceDays: 3 };
+  const eigenDays = { '0xA': { '2026-08-30': 7920090 }, '0xB': { '2026-08-30': 1364336 } };
+  const eigenNow = new Date(Date.UTC(2026, 8, 10));
+  const g1 = cadenceDecision(eigenSpec, 2026, 8, eigenNow, eigenDays);
+  const g2 = cadenceDecision(eigenSpec, 2026, 8, eigenNow, eigenDays);
+  check('family: two runs over identical input give identical verdicts, per-wallet detail included', eq(g1, g2));
+  check('REGRESSION: EIGEN 2026-08 re-derives as CONFIRM familyTotal 9,284,426 ratio 0.976', g1.action === 'CONFIRM' && g1.familyTotal === 9284426 && g1.ratio === 0.976);
+
+  // --- CONTRACT-CLIFF ---
+  const spec5 = { windowDays: 5, minRatio: 3, minRecipients: 5, baselineDaily: 19488 };
+  const clDays = { '2026-10-05': { amt: 400000, to: ['a', 'b', 'c', 'd', 'e', 'f'] }, '2026-10-07': { amt: 50000, to: ['g'] } };
+  const clNow = new Date(Date.UTC(2026, 9, 20));
+  const c1 = cliffClusterDecision(spec5, '2026-10-05', clNow, clDays);
+  const c2 = cliffClusterDecision(spec5, '2026-10-05', clNow, clDays);
+  check('contract-cliff: two runs over identical input give identical verdicts', eq(c1, c2));
+  check('contract-cliff verdict carries its numbers, not just its action', c1.action === 'CONFIRM' && c1.recipients === 7 && typeof c1.ratio === 'number');
+
+  // --- MUTATION: each must be able to DISAGREE, or determinism is vacuous ---
+  check('MUTATION: one token less and MOVE flips to DEMOTE', cadenceDecision(moveSpec, 2026, 9, moveNow, { '2026-09-09': 4730748 }).action === 'DEMOTE');
+  check('MUTATION: one token more and ENA flips to CONFIRM', cadenceDecision(enaSpec, 2026, 9, enaNow, { '2026-09-07': 6034718 }).action === 'CONFIRM');
+  check('MUTATION: a silent family wallet turns EIGEN CONFIRM into PARTIAL', cadenceDecision(eigenSpec, 2026, 8, eigenNow, { '0xA': { '2026-08-30': 7920090 }, '0xB': {} }).action === 'PARTIAL');
+  check('MUTATION: one claimant fewer drops the cliff below its recipient gate', cliffClusterDecision(spec5, '2026-10-05', clNow, { '2026-10-05': { amt: 400000, to: ['a', 'b', 'c', 'd'] } }).action === 'DEMOTE');
+  check('MUTATION: a window that has not closed is PENDING, not a verdict', cliffClusterDecision(spec5, '2026-10-05', new Date(Date.UTC(2026, 9, 6)), clDays).action === 'PENDING');
+
+  // --- The property that makes re-scoring safe at all ---
+  check('re-running a verdict does not consume or mutate its input', eq(moveDays, { '2026-09-08': 120000, '2026-09-09': 19376705, '2026-09-11': 88000 })
+    && eq(eigenDays, { '0xA': { '2026-08-30': 7920090 }, '0xB': { '2026-08-30': 1364336 } }));
+}
+
+console.log('60. a CACHE may not answer a request whose window it does not cover (ORDER\'s void demotion)');
+{
+  const { rangeCovers, spanCovered } = await import('./src/core/pagination.js');
+  const { cacheSatisfies } = await import('./detect-cliff-cluster.js');
+  // 2026-09-12: pollCliffWatch asked whether ORDER's vault emitted in 09-07..09-12 and
+  // was handed the 2026-09-05 cache — covered:true, 0 pages, no network. The window
+  // was empty BY CONSTRUCTION, so the verdict was DEMOTE at ratio 0: a verdict from a
+  // fetch that never ran. `covered` was not bypassed; the cache handed it a true value.
+  check('rangeCovers is strict at the BACK end, like spanCovered', rangeCovers('2026-05-01', '2026-09-13', '2026-05-05', '2026-09-12') && !rangeCovers('2026-05-05', '2026-09-13', '2026-05-05', '2026-09-12'));
+  check('rangeCovers requires reaching the FRONT end too', !rangeCovers('2026-05-01', '2026-09-11', '2026-05-05', '2026-09-12'));
+  check('reaching exactly the front end counts (coveredTo >= to)', rangeCovers('2026-05-01', '2026-09-12', '2026-05-05', '2026-09-12'));
+  check('a missing boundary is never coverage', !rangeCovers(null, '2026-09-13', '2026-05-05', '2026-09-12') && !rangeCovers('2026-05-01', null, '2026-05-05', '2026-09-12'));
+
+  // THE TRAP the fix had to avoid: coveredTo must be the boundary the FETCH reached,
+  // not the newest row it FOUND. A vault that genuinely stopped has nothing in or
+  // after the window; if coveredTo came from the data, it would read UNCOVERED and the
+  // row would sit PENDING FOREVER instead of demoting — making a dead vault
+  // indistinguishable from a stale cache, and the one that matters never resolves.
+  const silentVault = { oldest: '2026-05-01', coveredTo: '2026-09-13' };  // fetched today, found nothing recent
+  check('a SILENT vault fetched today still COVERS the window, so it can be demoted', cacheSatisfies(silentVault, '2026-09-05', '2026-09-12'));
+
+  // The actual regression: the real shape of the 2026-09-05 entry.
+  const sept5 = { oldest: '2026-05-11', coveredTo: '2026-09-05', done: true };
+  check('REGRESSION: the 2026-09-05 cache does NOT satisfy a 2026-09-12 window', !cacheSatisfies(sept5, '2026-09-05', '2026-09-12'));
+  check('the same cache DOES satisfy the window it was actually built for', cacheSatisfies(sept5, '2026-05-15', '2026-09-05'));
+  // Pre-fix entries recorded no recent boundary at all — they must not be trusted.
+  check('a pre-fix entry with no coveredTo cannot prove coverage, so it does not', !cacheSatisfies({ oldest: '2026-05-11', done: true }, '2026-09-05', '2026-09-12'));
+  check('LIVE-SHAPED: every entry now on disk lacks coveredTo and will be discarded', (() => {
+    const c = JSON.parse(readFileSync('data/cliff-fetch-cache.json', 'utf8'));
+    return Object.values(c).every((e) => !cacheSatisfies(e, '2026-09-05', '2026-09-30'));
+  })());
+  // MUTATION — the guard must still let a GOOD cache through, or every read refetches.
+  check('MUTATION: a cache fetched after the window end satisfies it', cacheSatisfies({ oldest: '2026-05-01', coveredTo: '2026-10-01' }, '2026-09-05', '2026-09-30'));
+  check('MUTATION: with no stated requirement the cache is allowed (offline tools)', cacheSatisfies(sept5, '2026-05-15', null));
+  check('MUTATION: no cache at all is never satisfaction', !cacheSatisfies(null, '2026-09-05', '2026-09-12'));
+
+  // The caller must actually state the requirement, or the guard is unreachable.
+  const cw = readFileSync('src/sources/calendar/cadence-watch.js', 'utf8');
+  check('pollCliffWatch passes needUpTo covering the LATEST due cliff plus its window', /needUpTo: latestEnd/.test(cw) && /windowDays \* 86400e3/.test(cw));
+  check('an uncovered fetch logs what it reached and produces NO verdict', /no verdict, retrying next poll/.test(cw));
+}
+
+console.log('61. corrections go through a WRITE PATH — a voided verdict is recorded, not erased');
+{
+  const { voidVerdict } = await import('./annotate-verdict.js');
+  // Hand-editing data/cadence-watch.json destroyed it on the first attempt (2026-09-12):
+  // one dropped brace, loadWatchState returned the empty default, every verdict was
+  // re-derived and an already-delivered DM was re-sent. Third instance of the hazard
+  // (regime tags v0.13.1, the outcomes.json tear v0.17, this). promote-unlock.js exists
+  // so nobody hand-edits unlocks.json; this is the same thing for verdicts.
+  const base = () => ({
+    cliffs: { 'ORDER:2026-09-07': { action: 'DEMOTE', ratio: 0, recipients: 0, at: '2026-09-12T13:56' } },
+    demotions: { ORDER: { cliff: '2026-09-07', type: 'cliff-cluster-absent' }, ENA: { month: '2026-09', kind: 'DEMOTE' } },
+    months: { ENA: { '2026-09': { action: 'DEMOTE', largestSeen: 5148798 } } },
+  });
+  const why = 'scored against a stale cache rather than a fetch, so the window was empty by construction';
+
+  check('a correction with NO reason is refused', !!voidVerdict(base(), 'ORDER', '2026-09-07', null).error);
+  check('a token gesture at a reason is refused too (>=20 chars of actual reason)', !!voidVerdict(base(), 'ORDER', '2026-09-07', 'bad').error);
+  check('voiding a verdict that does not exist is refused, not silently ignored', !!voidVerdict(base(), 'ORDER', '2026-11-11', why).error);
+
+  const r = voidVerdict(base(), 'ORDER', '2026-09-07', why);
+  check('the blocking stamp is CLEARED, so the window can be scored again', !r.error && r.state.cliffs['ORDER:2026-09-07'] === undefined);
+  check('the demotion that verdict caused is cleared with it', r.clearedDemotion === true && r.state.demotions.ORDER === undefined);
+  check('an UNRELATED demotion is left alone', r.state.demotions.ENA !== undefined);
+  check('the ORIGINAL verdict is carried into the audit entry — recorded, not erased', r.entry.original.action === 'DEMOTE' && r.entry.original.at === '2026-09-12T13:56');
+  check('the audit entry carries the reason verbatim', r.entry.reason === why);
+  check('the input state is NOT mutated (a correction must not half-apply on error)', (() => { const b = base(); voidVerdict(b, 'ORDER', '2026-09-07', why); return b.cliffs['ORDER:2026-09-07'] !== undefined; })());
+
+  // A month verdict clears through the same path, matched on month not cliff.
+  const rm = voidVerdict(base(), 'ENA', '2026-09', why);
+  check('a monthly verdict voids through the same path', !rm.error && rm.state.months.ENA['2026-09'] === undefined && rm.state.demotions.ENA === undefined);
+  check('voiding ENA leaves ORDER\'s verdict untouched', rm.state.cliffs['ORDER:2026-09-07'] !== undefined);
+
+  // MUTATION — a demotion that does NOT correspond to the voided verdict must survive.
+  const mism = voidVerdict({ cliffs: { 'ORDER:2026-09-07': { action: 'DEMOTE' } }, demotions: { ORDER: { cliff: '2026-10-05' } }, months: {} }, 'ORDER', '2026-09-07', why);
+  check('MUTATION: a demotion from a DIFFERENT cliff is not swept up', mism.clearedDemotion === false && mism.state.demotions.ORDER !== undefined);
+
+  // LIVE: the correction actually applied, and it is on the record.
+  const ann = JSON.parse(readFileSync('data/verdict-annotations.json', 'utf8'));
+  check('LIVE-RECORD: ORDER\'s void verdict is in the annotation log with its reason', ann.annotations.some((a) => a.sym === 'ORDER' && a.key === '2026-09-07' && /stale cache|resume cache/i.test(a.reason)));
+  check('LIVE-RECORD: the original DEMOTE is preserved in that entry', ann.annotations.some((a) => a.sym === 'ORDER' && a.original?.action === 'DEMOTE' && a.original?.ratio === 0));
+}
+
+console.log('62. a CORRECTION is visible — removing a verdict from state must not remove it from view');
+{
+  const { verdictCorrections } = await import('./src/sources/calendar/cadence-watch.js');
+  const { buildHeartbeat } = await import('./src/core/telemetry.js');
+  const { mkdtempSync, writeFileSync: wf } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join: j6 } = await import('node:path');
+  // The design choice: a voided verdict is REMOVED from state and written to the
+  // annotation log, so no consumer needs to learn a 'void' state — state holds live
+  // verdicts, the log holds corrections. The cost is that a correction is invisible
+  // unless something reports it, which is the silence this project keeps closing.
+  const d = mkdtempSync(j6(tmpdir(), 'ann-'));
+  const f = j6(d, 'verdict-annotations.json');
+
+  check('no log yet -> no line, and no false alarm', verdictCorrections(f).n === 0 && verdictCorrections(f).line === '');
+  wf(f, JSON.stringify({ annotations: [
+    { at: '2026-09-13T20:00', sym: 'ORDER', key: '2026-09-07', op: 'void', reason: 'stale cache', original: { action: 'DEMOTE' } },
+  ] }));
+  const one = verdictCorrections(f);
+  check('a correction is counted and the latest one is named', one.n === 1 && /Verdict corrections: 1 \(latest ORDER 2026-09-07 void/.test(one.line));
+  wf(f, JSON.stringify({ annotations: [
+    { at: '2026-09-13T20:00', sym: 'ORDER', key: '2026-09-07', op: 'void', reason: 'x', original: {} },
+    { at: '2026-09-14T09:00', sym: 'ENA', key: '2026-09', op: 'void', reason: 'y', original: {} },
+  ] }));
+  check('the count rises and the LATEST is the one reported', verdictCorrections(f).n === 2 && /latest ENA 2026-09/.test(verdictCorrections(f).line));
+  // MUTATION — an unreadable log is a failure to audit, not an absence of corrections.
+  wf(f, '{"annotations":[');
+  const broken = verdictCorrections(f);
+  check('MUTATION: an unreadable annotation log says so rather than reading as zero', broken.unreadable === true && /does not parse/.test(broken.line));
+  check('MUTATION: it does NOT claim zero corrections when it cannot tell', broken.n === 0 && broken.line !== '');
+
+  // The line reaches the heartbeat.
+  const hb = buildHeartbeat(Date.now(), { rows: [], drops: { total: 0, byReason: {} }, bugs: 0, pulse: 'x', startedAt: Date.now(),
+    digest: { line: 'd' }, corrections: { n: 3, line: 'Verdict corrections: 3 (latest ORDER 2026-09-07 void 2026-09-13T20:00)' } });
+  check('the heartbeat carries the corrections line', hb.lines.some((l) => /Verdict corrections: 3/.test(l)));
+  check('MUTATION: with no corrections the heartbeat adds no empty line', !buildHeartbeat(Date.now(), { rows: [], drops: { total: 0, byReason: {} }, bugs: 0, pulse: 'x', startedAt: Date.now(), digest: { line: 'd' }, corrections: { n: 0, line: '' } }).lines.some((l) => /Verdict corrections/.test(l)));
+
+  // LIVE — ORDER's correction is real and reportable.
+  const live = verdictCorrections();
+  check('LIVE-RECORD: the real annotation log is readable and reports ORDER', !live.unreadable && live.n >= 1 && /ORDER 2026-09-07/.test(live.line));
+}
+
 console.log('48. MECHANISM — a sourced date can name no discrete event; weak falsifiers are stated');
 {
   const { mechanismEvidence, mechanismProblems, sourceRow, sourcedRowProblems, pressureStage, chanceRate, falsifierWeak, promoteRow, UNVERIFIABLE_MECHANISMS } = await import('./src/core/unlock-promote.js');
@@ -1168,7 +1507,20 @@ console.log('48. MECHANISM — a sourced date can name no discrete event; weak f
   const cov = unlockCoverage();
   check('coverage line splits sourced into pending vs unverifiable-by-mechanism', /\d+ pending verification · 2 unverifiable by mechanism: 1 continuous-claim, 1 index-contradicted/.test(cov.line) && cov.sourcedPending + cov.sourcedUnverifiable === cov.sourced);
   check('coverage line flags ORDER weak with its numbers', /ORDER 58%\/window · 6\/8 · p≈2\.8e-1 WEAK/.test(cov.line) && cov.weakFalsifier === 1);
-  check('heartbeat carries the weak flag with the chance rate', /ORDER cliff .* falsifier WEAK \(chance 58%\)/.test(cadenceStatus().line));
+  // RENDERING RULE, not the live row. This asserted ORDER's live line and went red the
+  // moment ORDER was demoted (on a fetch that never ran — queue item 5). What matters
+  // is that a WEAK contract row shows its chance rate and a demoted one shows only the
+  // demotion. Both states are constructed; `now` is fixed; state is injected.
+  const hbNow = new Date(Date.UTC(2026, 8, 13));
+  const weakRow = { sym: 'WK', clusterSpec: { windowDays: 5, hits: 6, offIndex: 7, n: 8, spanDays: 113, minRatio: 3, minRecipients: 5, baselineDaily: 1, basis: 'b' },
+    cliffDates: [{ date: '2026-10-05', cluster: null }], enforcement: 'contract', events: [{ date: '2026-09-01', source: 'contract-cliff' }] };
+  const cleanState = { months: {}, demotions: {}, cliffs: {} };
+  const weakLine = cadenceStatus([weakRow], cleanState, hbNow).line;
+  check('a non-demoted WEAK contract row renders its chance rate', /WK cliff 0\/0 confirmed · next 2026-10-05 · falsifier WEAK \(chance 58%\)/.test(weakLine));
+  const demotedState = { months: {}, demotions: { WK: { at: '2026-09-12T00:00', type: 'cliff-cluster-absent' } }, cliffs: {} };
+  const demotedLine = cadenceStatus([weakRow], demotedState, hbNow).line;
+  check('a DEMOTED row renders the demotion and NOT the chance rate', /WK 🚨 demoted/.test(demotedLine) && !/chance/.test(demotedLine));
+  check('MUTATION: a strong falsifier renders no WEAK clause', !/WEAK/.test(cadenceStatus([{ ...weakRow, clusterSpec: { ...weakRow.clusterSpec, offIndex: 0, hits: 2 } }], cleanState, hbNow).line));
 }
 
 console.log('47. sourced PRESSURE FLOOR is derived from the index distribution, recorded, static');
@@ -1293,8 +1645,17 @@ console.log('46. CONTRACT-CLIFF tier (Route 2) — enforcement:contract is EARNE
   check('claimCoverage names the contract enforcement and the replay count', cov.scope === 'contract' && /contract-enforced/.test(cov.line) && /6\/8/.test(cov.line));
   check('claimCoverage states the upgradeable answer explicitly', /upgradeable proxy (yes|no)/i.test(cov.line));
   check('coverage line carries the contract-cliff count', /1 contract-cliff/.test(unlockCoverage().line));
-  const st = cadenceStatus();
-  check('heartbeat lists ORDER with its next cliff', /ORDER cliff 0\/0 confirmed · next 2026-\d\d-\d\d/.test(st.line));
+  // RENDERING RULE, same reason as section 46's weak-flag check: this pinned ORDER's
+  // live line and went red when ORDER was demoted. Assert that a contract row with
+  // unobserved cliffs reports the EARLIEST one, from constructed state.
+  const nowHb = new Date(Date.UTC(2026, 8, 13));
+  const twoCliffs = { sym: 'CC', enforcement: 'contract', events: [{ date: '2026-09-01', source: 'contract-cliff' }],
+    clusterSpec: { windowDays: 5, hits: 2, offIndex: 0, n: 3, spanDays: 113, minRatio: 3, minRecipients: 5, baselineDaily: 1, basis: 'b' },
+    cliffDates: [{ date: '2026-11-02', cluster: null }, { date: '2026-10-05', cluster: null }, { date: '2026-08-01', cluster: true }] };
+  const ccLine = cadenceStatus([twoCliffs], { months: {}, demotions: {}, cliffs: {} }, nowHb).line;
+  check('a contract row reports its EARLIEST unobserved cliff', /CC cliff 0\/0 confirmed · next 2026-10-05/.test(ccLine));
+  check('an already-observed cliff is not offered as next', !/2026-08-01/.test(ccLine));
+  check('MUTATION: with every cliff observed, no next-cliff is claimed', !/next /.test(cadenceStatus([{ ...twoCliffs, cliffDates: [{ date: '2026-08-01', cluster: true }] }], { months: {}, demotions: {}, cliffs: {} }, nowHb).line));
 }
 
 console.log('45. SOURCED tier — a named source pushes, labelled; its falsifier is the source');
@@ -1623,7 +1984,41 @@ console.log('37. DESCRIPTIVE docs cite a fixture per claim (invariants, not pros
   const sectionTitles = [...suite.matchAll(/console\.log\('(\d+[a-z]?\..*?)'\)/g)].map((m) => m[1]);
   check('suite exposes its section titles for citation', sectionTitles.length >= 30);
 
-  const descriptive = walk2('.').filter((f) => /Status:\s*DESCRIPTIVE/.test(readFileSync(f, 'utf8').slice(0, 1600)));
+  // STATUS PARSING IS FAIL-CLOSED (v0.31.7). The old selector was
+  //     /Status:\s*DESCRIPTIVE/
+  // — case-sensitive and exact-spacing, so `STATUS:`, `status:`, `Status : X` and any
+  // stray character escaped this discipline SILENTLY. MESSAGE-FIELD-INVENTORY.md was
+  // written with `STATUS:` and slipped through by typo. A selector that fails open
+  // exempts documents; one that fails closed can only break the suite, which is the
+  // direction you want. Third selector this month to have been the thing under test.
+  //
+  // Qualifiers are real and must survive: "mostly EXECUTED" (NEXT-SESSION.md),
+  // "EXECUTED TWICE" (RESCAN-CANDIDATE-INDEX.md), "STRADDLES — ..." (the build spec).
+  // Word boundaries, so DESCRIPTIVEE does NOT read as DESCRIPTIVE.
+  const STATUSES = ['DESCRIPTIVE', 'ACTIVE PLAN', 'REFUTED', 'EXECUTED', 'STRADDLES'];
+  const statusOf = (body) => {
+    const m = body.slice(0, 1600).match(/^\s*status\s*:\s*(.+)$/im);
+    if (!m) return null;
+    const hits = STATUSES.filter((k) => new RegExp(`\\b${k}\\b`, 'i').test(m[1]));
+    return hits.length === 1 ? hits[0] : { bad: m[1].trim(), hits: hits.length };
+  };
+  const mds = walk2('.');
+  const statuses = mds.map((f) => [f, statusOf(readFileSync(f, 'utf8'))]);
+  const unparseable = statuses.filter(([, v]) => v && typeof v === 'object').map(([f, v]) => `${f}: '${v.bad}' matched ${v.hits} known statuses`);
+  check('every Status: line parses to exactly one known status', unparseable.length === 0, unparseable.join(' | '));
+  // A brief with NO status is not exempt — it is unfiled. README.md is the directory
+  // index, not a brief, and is the one principled exception (an index describes the
+  // briefs; it is not one).
+  const briefsMissing = statuses.filter(([f, v]) => /docs[\\/]briefs[\\/]/.test(f) && !/README\.md$/.test(f) && v === null).map(([f]) => f);
+  check('every brief under docs/briefs/ carries a status (an unfiled brief fails)', briefsMissing.length === 0, briefsMissing.join(' | '));
+  // SELF-TESTS — the parser must be shown to reject, not merely to accept.
+  check('SELF-TEST: a typo\'d status is REJECTED, not silently exempted', typeof statusOf('Status: DESCRIPTIVEE') === 'object');
+  check('SELF-TEST: case and spacing variants all PARSE (they used to escape)', ['STATUS: DESCRIPTIVE', 'status:descriptive', 'Status :  DESCRIPTIVE'].every((x) => statusOf(x) === 'DESCRIPTIVE'));
+  check('SELF-TEST: qualifiers survive', statusOf('Status: mostly EXECUTED') === 'EXECUTED' && statusOf('Status: EXECUTED TWICE') === 'EXECUTED' && statusOf('Status: STRADDLES — per-section') === 'STRADDLES');
+  check('SELF-TEST: two statuses in one line is ambiguous and REJECTED', typeof statusOf('Status: EXECUTED and REFUTED') === 'object');
+  check('SELF-TEST: no status line at all reads as null, not as a status', statusOf('# doc\nno header') === null);
+
+  const descriptive = statuses.filter(([, v]) => v === 'DESCRIPTIVE').map(([f]) => f);
   check('at least one DESCRIPTIVE doc exists to check', descriptive.length >= 1);
   const uncited = [], badCite = [];
   let claims = 0, unenforced = 0;

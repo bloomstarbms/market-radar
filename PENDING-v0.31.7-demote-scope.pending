@@ -1,0 +1,122 @@
+PENDING PATCH — "a DEMOTE states its own scope" (intended v0.31.8)
+VERSION COLLISION CORRECTED 2026-09-13: this was written as "intended v0.31.7", but
+v0.31.7 SHIPPED on 2026-09-13 carrying the correctness queue (items 0-7) and NOT this
+patch. The filename is historical; the target is the NEXT version. A parked patch
+claiming a version that already exists is how a future session applies it twice or
+believes it is already live.
+Written 2026-09-12. NOT APPLIED to the working tree. NOT SYNTAX-CHECKED, NOT SUITE-TESTED.
+
+WHY THIS FILE EXISTS
+  The sandbox mount was down for the whole 2026-09-11 session, so this change was
+  written with file tools and could not be run through `node --check` or
+  `node test-delivery.js`. It was applied to src/sources/calendar/cadence-watch.js
+  and test-delivery.js, then DELIBERATELY REVERTED, because:
+    - market-radar.vbs is in Windows Startup, so an unattended reboot (a Windows
+      update overnight) would have launched the bot from the working tree;
+    - a parse error throws at import time, BEFORE any boot gate runs, so the
+      self-tests offer no protection — they never execute;
+    - the result would be a 15-second crash-loop with no alerts, during the week
+      MOVE's and ORDER's windows close;
+    - the daily backup covers data/, not source, and these edits existed in exactly
+      one place, uncommitted.
+  Reverting restored a known-good live path. This file is the work, kept whole, so
+  nothing had to be chosen between "risk the bot" and "lose the change".
+
+HOW TO REAPPLY (shell required)
+  1. node test-delivery.js            <- must be ALL GREEN on the CURRENT tree first
+  2. apply PATCH 1, 2 and 3 below, verbatim
+  3. node --check src/sources/calendar/cadence-watch.js && node --check test-delivery.js
+  4. node test-delivery.js            <- section 55 must appear and pass; section 30
+                                         (prose lint) has NEVER seen this wording and
+                                         is the check most likely to object
+  5. only then: version bump, FORCE-RESTART, verify the banner, PUSH-TO-GITHUB.bat
+
+WHAT IT DOES
+  ENA demoted 2026-09-10 on a SINGLE-WALLET spec while carrying two unwatched
+  co-emitters. Single-wallet was the deliberate choice (an irregular emitter would
+  false-demote every quiet month) and the opposite failure then occurred: the verdict
+  cannot tell a stopped schedule from a migration to another wallet. This is the
+  claim-coverage rule applied to the verdict instead of the alert — it does NOT fold
+  the co-emitters into the band, which would restore the failure single-wallet was
+  chosen to prevent. It makes the verdict state what it read and what it therefore
+  cannot distinguish.
+
+================================================================================
+PATCH 1 — src/sources/calendar/cadence-watch.js
+INSERT the block below immediately BEFORE this existing line:
+
+// Evidence gate: a demotion may only be decided on a fetch that actually REACHED the
+
+--- begin insert ---
+// A VERDICT STATES ITS OWN SCOPE (v0.31.7). Claim-coverage discipline, applied to
+// the demotion rather than to the alert: the spec watches ONE custody wallet by
+// choice — an irregular co-emitter would false-demote every quiet month — but the
+// CLAIM is about the token. So the opposite failure is now live: ENA's 2026-09-10
+// DEMOTE may be a wallet MIGRATION rather than a stopped schedule, and the watch
+// cannot tell the difference. Until this line existed, that caveat lived only in the
+// operator's head. Pure, so the wording is fixture-checkable.
+export function demoteScope(t) {
+  const fam = Array.isArray(t?.cadence?.wallets) ? t.cadence.wallets.length : 0;
+  const unwatched = Array.isArray(t?.alsoObserve) ? t.alsoObserve.length : 0;
+  const sym = t?.sym ?? '?';
+  if (fam) {
+    return `Scope: FAMILY spec — all ${fam} listed wallets were read${unwatched ? `, and ${unwatched} irregular co-emitter${unwatched === 1 ? ' is' : 's are'} deliberately outside the band` : ''}. This says the family total failed, not that one address went quiet.`;
+  }
+  return `Scope: SINGLE-WALLET spec — one custody wallet was read${unwatched ? `, and ${unwatched} known co-emitter${unwatched === 1 ? ' is' : 's are'} deliberately UNWATCHED (an irregular emitter would false-demote every quiet month)` : ''}. This verdict CANNOT distinguish a stopped schedule from a migration to another wallet — run node detect-cadence.js ${sym} before treating it as stopped.`;
+}
+
+--- end insert ---
+
+================================================================================
+PATCH 2 — src/sources/calendar/cadence-watch.js (the DEMOTE/PARTIAL message)
+In the `lines: [` array of the auto-demote broadcast, INSERT `demoteScope(t),`
+between the "Behavioural verification is a habit" line and the "Operator: rerun"
+line, so the array reads:
+
+          `Coverage change, not a market event: the ${t.sym} schedule was inferred from observed custody emissions. ${evidence}`,
+          `Behavioural verification is a habit, not a commitment — the row no longer alerts as verified.`,
+          demoteScope(t),
+          `Operator: rerun node detect-cadence.js ${t.sym}; re-promote only on fresh evidence.`,
+
+================================================================================
+PATCH 3 — test-delivery.js
+INSERT the block below immediately BEFORE this existing line:
+
+console.log('48. MECHANISM — a sourced date can name no discrete event; weak falsifiers are stated');
+
+--- begin insert ---
+console.log('55. a DEMOTE states its own scope — what it read, and what it could not distinguish');
+{
+  const { demoteScope } = await import('./src/sources/calendar/cadence-watch.js');
+  // ENA demoted 2026-09-10 on a SINGLE-WALLET spec while carrying unwatched
+  // co-emitters. Single-wallet was the deliberate choice (an irregular emitter would
+  // false-demote every quiet month) — and the opposite failure then happened: the
+  // verdict cannot tell a stopped schedule from a migration. Until this line existed
+  // that caveat lived only in the operator's head, which is the quarantine-lapse
+  // shape this project has fixed four times elsewhere.
+  const single = { sym: 'ENA', cadence: { wallet: '0xw', meanAmount: 1 }, alsoObserve: ['0xa', '0xb'] };
+  const s = demoteScope(single);
+  check('single-wallet demote says it read ONE wallet', /SINGLE-WALLET spec/.test(s) && /one custody wallet was read/.test(s));
+  check('it names how many co-emitters it did NOT watch, and why', /2 known co-emitters are deliberately UNWATCHED/.test(s) && /false-demote every quiet month/.test(s));
+  check('it states the thing it CANNOT distinguish, not just what it saw', /CANNOT distinguish a stopped schedule from a migration/.test(s));
+  check('it names the command that would settle it', /detect-cadence\.js ENA/.test(s));
+  const family = { sym: 'EIGEN', cadence: { wallets: [{ addr: '0x1' }, { addr: '0x2' }] }, alsoObserve: ['0xc'] };
+  const f = demoteScope(family);
+  check('a FAMILY demote makes a different claim — the total failed, not one address', /FAMILY spec/.test(f) && /all 2 listed wallets were read/.test(f) && /not that one address went quiet/.test(f));
+  check('family scope still discloses co-emitters outside the band', /1 irregular co-emitter is deliberately outside the band/.test(f));
+  check('a row with no co-emitters does not invent any', !/co-emitter/.test(demoteScope({ sym: 'X', cadence: { wallet: '0xw' } })));
+  check('the two scopes are not interchangeable text', s !== f);
+  // LIVE: the row that actually demoted must be the single-wallet case.
+  const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens.find((t) => t.sym === 'ENA');
+  check('LIVE: ENA is a single-wallet spec carrying unwatched co-emitters', !Array.isArray(live?.cadence?.wallets) && (live?.alsoObserve || []).length >= 1);
+  check('LIVE: its demote message would carry the migration caveat', /CANNOT distinguish/.test(demoteScope(live)));
+}
+
+--- end insert ---
+
+================================================================================
+NOTE ON THE .pending EXTENSION
+  Deliberate: every discovery walker in this project keys on `.endsWith('.js')` or
+  `.md` (prose lint, PREMISE check, pagination-guard discovery). A `.pending` file is
+  inert to all of them, so parking work here cannot break a gate. Delete this file
+  once the patches are applied and the suite is green.

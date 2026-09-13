@@ -44,6 +44,25 @@ export function spanCovered(oldest, target) {
 // against. It was the module-level ROOT in the first version, so a scan of any other
 // directory silently found nothing — and the self-test that was supposed to prove
 // this check can go red went green for the wrong reason.
+// THE RECENT END. `spanCovered` bounds how far BACK a fetch reached; this bounds both
+// ends, and the second argument is the boundary the FETCH REACHED — not a property of
+// the data it found.
+//
+// That distinction is the whole fix. If `coveredTo` were derived from the newest
+// TRANSACTION seen, a contract that genuinely STOPPED emitting would have nothing at
+// or after the scored window, so coveredTo < to, the window would read UNCOVERED, and
+// the row would sit PENDING FOREVER instead of demoting — the stale-cache case and
+// the dead-vault case would become indistinguishable, and the one that most needs
+// detecting is the one that never resolves.
+//
+// The readers page BACKWARDS FROM THE HEAD, so a completed fetch covers
+// [oldest, fetch-start]. Fetch-START, not fetch-end: paging takes minutes and the head
+// advances while it runs, so claiming coverage to fetch-end overclaims by the duration
+// of the fetch. Under-claiming is the safe direction.
+export function rangeCovers(oldest, coveredTo, from, to) {
+  return !!oldest && !!coveredTo && !!from && !!to && oldest < from && coveredTo >= to;
+}
+
 function walk(dir, base, out = []) {
   for (const e of readdirSync(dir)) {
     const p = join(dir, e);

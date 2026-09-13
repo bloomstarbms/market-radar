@@ -24,9 +24,37 @@ const STATE_FILE = join(ROOT, 'data', 'cadence-watch.json');
 const CHECK_EVERY = 6 * 3600e3;
 let lastPoll = 0;
 
-export function loadWatchState() {
-  try { return existsSync(STATE_FILE) ? JSON.parse(readFileSync(STATE_FILE, 'utf8')) : { months: {}, demotions: {} }; }
-  catch { return { months: {}, demotions: {} }; }
+// A CORRUPT STATE FILE IS NOT "NO HISTORY" (v0.31.7).
+//
+// This returned the empty default on ANY parse failure — a silent, total loss of
+// every verdict ever recorded, with no log line and no alert. It HAPPENED on
+// 2026-09-12: a malformed hand-edit dropped one closing brace, the pollers re-derived
+// from empty, and ENA's already-delivered demote DM was sent a second time because
+// `notified` went with everything else. The windows were recent enough to re-derive;
+// a month later they would not have been and the history would simply have been gone.
+//
+// Now: ABSENT is a legitimate empty state; UNPARSEABLE is a defect. The bad file is
+// QUARANTINED rather than overwritten (the evidence is the only copy — data/ is not
+// in the backup set), the loss is stamped into the fresh state, and the caller is
+// told so it can refrain from re-notifying verdicts it can no longer prove are new.
+export function loadWatchState(now = new Date(), file = STATE_FILE) {
+  const empty = () => ({ months: {}, demotions: {}, cliffs: {} });
+  if (!existsSync(file)) return empty();
+  try { return JSON.parse(readFileSync(file, 'utf8')); }
+  catch (e) {
+    const stamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const quarantine = file.replace(/\.json$/, `.corrupt-${stamp}.json`);
+    let saved = null;
+    try { renameSync(file, quarantine); saved = quarantine; } catch { /* keep going: losing the copy must not also lose the alarm */ }
+    console.error(`[OPERATOR] cadence-watch.json did not parse (${e.message}) — verdict history RESET.`
+      + (saved ? ` Corrupt file kept at ${saved.split(/[\\/]/).pop()}.` : ' The corrupt file could NOT be quarantined.')
+      + ' Demote notifications are suppressed for one cycle so a reset cannot re-send verdicts already delivered.');
+    const st = empty();
+    st.historyResetAt = now.toISOString().slice(0, 16);
+    st.historyResetFile = saved ? saved.split(/[\\/]/).pop() : null;
+    st.suppressNotifyUntilCycle = true;
+    return st;
+  }
 }
 function saveWatchState(st) {
   const tmp = `${STATE_FILE}.${process.pid}.tmp`; // per-PID: fixed tmp names raced once already
@@ -165,6 +193,14 @@ export async function pollCadence(loadTokens) {
   try { tokens = loadTokens ? loadTokens() : JSON.parse(readFileSync(join(ROOT, 'unlocks.json'), 'utf8')).tokens; } catch { return; }
   if (!Array.isArray(tokens)) return;
   const st = loadWatchState();
+  // FIRST CYCLE AFTER A HISTORY RESET: every verdict below is being re-derived at
+  // once, so it is almost certainly one the operator ALREADY received before the
+  // reset — `notified` was lost with everything else. Re-sending them is the
+  // duplicate that actually happened on 2026-09-12. They are marked delivered
+  // WITHOUT sending, and the heartbeat's historyResetAt banner carries the
+  // disclosure that verdicts were re-derived and may not have been announced. The
+  // banner is the compensating alarm, and it stays up until the operator clears it.
+  const suppressNotify = st.suppressNotifyUntilCycle === true;
   const now = new Date();
   let dirty = false;
 
@@ -244,6 +280,12 @@ export async function pollCadence(loadTokens) {
       const evidence = cur.action === 'PARTIAL'
         ? `${cur.reason}. Family total ${cur.familyTotal.toLocaleString()} vs ${cur.familyMean.toLocaleString()} expected (${cur.perWallet.map((p) => `${p.addr} ${p.amt.toLocaleString()}${p.ok ? '' : ' ✗'}`).join(' · ')}).`
         : `The ${cur.window} window showed no qualifying outflow${cur.largestSeen !== undefined ? ` (largest seen: ${cur.largestSeen.toLocaleString()})` : ` (${cur.reason})`}.`;
+      if (suppressNotify) {
+        st.months[t.sym][mKey].notified = true;
+        dirty = true;
+        console.error(`[OPERATOR] ${t.sym} ${mKey} ${cur.action} re-derived after a history reset — NOT re-sent (see historyResetAt on the heartbeat).`);
+        continue;
+      }
       const ids = await broadcast(formatAlert({
         source: 'SYS', type: 'CADENCE', severity: 'MEDIUM',
         title: `${t.sym} unlock row auto-demoted — ${cur.action === 'PARTIAL' ? 'family emission no longer matches the claim' : 'cadence window passed empty'}`,
@@ -257,6 +299,7 @@ export async function pollCadence(loadTokens) {
     }
     } // monthsToCheck
   }
+  if (suppressNotify) { st.suppressNotifyUntilCycle = false; dirty = true; }
   if (dirty) saveWatchState(st);
 }
 
@@ -487,8 +530,18 @@ export async function pollCliffWatch(loadTokens) {
     try { fetcher = fetcher || (await import('../../../detect-cliff-cluster.js')).outflowsWithRecipients; } catch (e) { console.error('[cliff-watch] tool import failed:', e.message); return; }
     const tokenAddr = t.token?.startsWith('ethereum:') ? t.token.slice(9) : null;
     const earliest = due.map((c) => c.date).sort()[0];
-    const f = await fetcher(t.contract, t.sym, new Date(new Date(earliest + 'T00:00:00Z').getTime() - 2 * 86400e3).toISOString().slice(0, 10), { deadlineTs: Date.now() + 60_000, tokenAddr, maxPages: 400 });
-    if (!f.covered) continue; // "we did not look" — retry next poll
+    // STATE WHAT THIS READ MUST REACH. The window scored runs to the LATEST due cliff
+    // plus its window; a cache that stops short of that cannot answer the question,
+    // and on 2026-09-12 one silently did — producing ORDER's DEMOTE from a fetch that
+    // never ran. needUpTo makes the requirement explicit so the reader can refuse.
+    const latestEnd = due.map((c) => new Date(new Date(c.date + 'T00:00:00Z').getTime() + t.clusterSpec.windowDays * 86400e3))
+      .sort((a, b) => b - a)[0].toISOString().slice(0, 10);
+    const f = await fetcher(t.contract, t.sym, new Date(new Date(earliest + 'T00:00:00Z').getTime() - 2 * 86400e3).toISOString().slice(0, 10),
+      { deadlineTs: Date.now() + 60_000, tokenAddr, maxPages: 400, needUpTo: latestEnd });
+    if (!f.covered) {
+      console.error(`[cliff-watch] ${t.sym}: fetch did not cover through ${latestEnd} (covered to ${f.coveredTo ?? 'unknown'}, ${f.pages} pages${f.staleCache ? ', stale cache discarded' : ''}) — no verdict, retrying next poll.`);
+      continue; // "we did not look" — never a verdict
+    }
     const byDay = Object.fromEntries(Object.entries(f.byDay).map(([d, r]) => [d, { amt: r.amt, to: [...r.to] }]));
     for (const c of due) {
       const dec = cliffClusterDecision(t.clusterSpec, c.date, now, byDay);
@@ -503,6 +556,10 @@ export async function pollCliffWatch(loadTokens) {
       }
       if (dec.action === 'DEMOTE') {
         st.demotions[t.sym] = { at: now.toISOString().slice(0, 16), type: 'cliff-cluster-absent', cliff: c.date, ratio: dec.ratio, recipients: dec.recipients };
+        if (st.suppressNotifyUntilCycle === true) {
+          console.error(`[OPERATOR] ${t.sym} cliff ${c.date} DEMOTE re-derived after a history reset — NOT re-sent.`);
+          continue;
+        }
         await broadcast(formatAlert({ source: 'SYS', type: 'CADENCE', severity: 'MEDIUM',
           title: `${t.sym} contract-cliff row demoted — no claim cluster after ${c.date}`,
           lines: [`Coverage change, not a market event: the vesting contract showed ${dec.recipients} claimants and ${dec.ratio}x baseline in the ${t.clusterSpec.windowDays}-day window after the scheduled cliff (needs >=${t.clusterSpec.minRatio}x and >=${t.clusterSpec.minRecipients}).`,
@@ -511,6 +568,24 @@ export async function pollCliffWatch(loadTokens) {
     }
   }
   if (dirty) saveWatchState(st);
+}
+
+// VERDICT CORRECTIONS ARE PART OF THE RECORD, NOT A FOOTNOTE (v0.31.7).
+//
+// A voided verdict is REMOVED from state and written to data/verdict-annotations.json,
+// so nothing downstream has to learn about a 'void' flag — state holds live verdicts,
+// the log holds corrections. That is the right shape, and it has one cost: a
+// correction becomes invisible unless something reports it. A record nobody reads is
+// the same silence this module exists to prevent, so the count rides the heartbeat.
+export function verdictCorrections(file = join(ROOT, 'data', 'verdict-annotations.json')) {
+  let log = null;
+  try { log = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : { annotations: [] }; }
+  catch (e) { return { n: 0, unreadable: true, line: `⚠️ verdict-annotations.json does not parse (${e.message}) — corrections cannot be audited` }; }
+  const a = log.annotations || [];
+  if (!a.length) return { n: 0, line: '' };
+  const last = a[a.length - 1];
+  return { n: a.length, last,
+    line: `Verdict corrections: ${a.length} (latest ${last.sym} ${last.key} ${last.op} ${last.at})` };
 }
 
 // Heartbeat line. A watch that silently stops watching is the failure mode this module
@@ -522,6 +597,13 @@ export function cadenceStatus(tokens = null, state = loadWatchState(), now = new
   const watched = (tokens || []).filter((t) => (t?.cadence || t?.reviewBy || t?.clusterSpec) && !t.retired);
   if (!watched.length) return { line: 'Cadence watch: no behavioural rows', demoted: [] };
   const demoted = Object.keys(activeDemotions(tokens, state));
+  // A history reset must stay VISIBLE, not scroll past in a log. It rides every
+  // heartbeat until an operator clears it explicitly — no timeout, same treatment as
+  // the stale-source ladder and the unreviewed-exclusion count. A loss that announces
+  // itself once is a loss nobody remembers by the time it matters.
+  const reset = state?.historyResetAt
+    ? ` · 🚨 VERDICT HISTORY RESET ${state.historyResetAt}${state.historyResetFile ? ` (corrupt file kept as ${state.historyResetFile})` : ' (corrupt file could NOT be quarantined)'} — verdicts below were RE-DERIVED and may not have been announced; unacknowledged`
+    : '';
   const parts = watched.map((t) => {
     if (demoted.includes(t.sym)) return `${t.sym} 🚨 demoted`;
     if (t.clusterSpec) {
@@ -550,5 +632,5 @@ export function cadenceStatus(tokens = null, state = loadWatchState(), now = new
       : d?.last ? ` (${d.last > 1 ? '+' : ''}${Math.round((d.last - 1) * 100)}% vs mean)` : '';
     return `${t.sym} ${lastOk ? `ok ${lastOk}` : 'no window closed yet'}${driftMark}${ageD !== null && ageD > 65 ? ' ⚠️ stale confirm' : ''}`;
   });
-  return { line: `Cadence watch: ${parts.join(' · ')}`, demoted };
+  return { line: `Cadence watch: ${parts.join(' · ')}${reset}`, demoted, historyResetAt: state?.historyResetAt ?? null };
 }

@@ -22,6 +22,7 @@ import { formatPulse, feedWasLooking } from './pulse.js';
 import { unclassifiedStats, excludedStats } from './unclassified.js';
 import { cadenceStatus } from '../sources/calendar/cadence-watch.js';
 import { unlockCoverage, sourcedFiring } from '../sources/calendar/unlocks.js';
+import { verdictCorrections } from '../sources/calendar/cadence-watch.js';
 
 const DIGEST_HOUR = Number(process.env.DIGEST_HOUR_UTC ?? 18);
 
@@ -269,6 +270,7 @@ export function buildHeartbeat(now = Date.now(), deps = {}) {
       // pulse — a cadence watch that stops confirming must be visible, not assumed.
       (deps.coverage ?? unlockCoverage()).line,
       (deps.sourcedFiring ?? sourcedFiring()).line,
+      ...(() => { const c = deps.corrections ?? verdictCorrections(); return c.line ? [c.line] : []; })(),
       (() => { const g = deps.pagination ?? checkPaginationGuards();
         const ex = g.readers.filter((r) => r.exempt);
         return `Paginated readers: ${g.readers.length} · ${g.readers.length - ex.length} guarded · ${ex.length} exempt${ex.length ? ` (${ex.map((r) => r.file.split('/').pop()).join(', ')})` : ''}${g.ok ? '' : ' · 🚨 UNGUARDED: ' + g.problems.join('; ')}`; })(),
