@@ -103,6 +103,19 @@ writers make it likelier, not less.
 `src/config.js` produces the version-drift the boot gate exists to catch, and a push
 from a tree the other agent is mid-edit in commits a half-written state.
 
+## No document names a future version
+
+A parked patch was labelled "intended v0.31.7"; v0.31.7 shipped without it. Relabelled
+"v0.31.8"; v0.31.8 shipped without it. Any document claiming a future state it does
+not control is falsified by the next release — the same reason Part 0 of
+`REMAINING-WORK.md` no longer carries a version string. **The number belongs to
+whoever ships it.** Parked work says "the next version"; briefs say what they were
+written against; nothing says what it will be.
+
+The same applies to `git tag`: the tag for a version is made once, when that version
+ships, and `PUSH-TO-GITHUB.bat` refuses to move it afterwards. A push with no bump
+leaves HEAD untagged on purpose.
+
 ## Scripted edits must assert their own match
 
 Twice in one session a programmatic edit silently did nothing and the result looked

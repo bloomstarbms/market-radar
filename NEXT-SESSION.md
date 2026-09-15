@@ -75,6 +75,15 @@ the case a derivation exists for.
   row that uses it — "constant fitted to one instance", arriving on the row with
   the weakest falsifier, where a wrong verdict is hardest to tell from a right one.
 
+  COMPUTED 2026-09-15 (full table in REMAINING-WORK-NOTES.md): at w5, r2 and r3
+  have IDENTICAL margin (replay − chance = 0.17 both). There was no numerical
+  reason to choose r3, so none was recorded, and that choice is what flipped the
+  verdict. Best margin in the whole grid is w3/r2 at 0.26; every w7 point is
+  NEGATIVE. So the question for item 10 is prior to margin-scaling: should a row
+  whose best parameterisation clears chance by 0.26 be VERIFIED at all? Decide
+  that first. If yes, the spec basis must record the choice as arbitrary where it
+  was, and the row must carry its best margin so the weakness is on the row.
+
 ALSO QUEUED, small, whenever there is room:
   - The version bump should ask each file's PREMISE what "Written against" means
     rather than sed-ing a number across every .md. The 2026-09-13 blanket sed

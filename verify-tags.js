@@ -11,6 +11,7 @@
 //
 // Exit 1 if any tag disagrees with the src/config.js VERSION in its own tree.
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 
 const git = (...a) => execFileSync('git', a, { encoding: 'utf8' }).trim();
 let bad = 0, checked = 0;
@@ -23,7 +24,17 @@ for (const t of tags) {
   checked++;
   if (inTree !== expect) { bad++; console.error(`  MISMATCH ${t} -> ${git('rev-list', '-n1', t).slice(0, 7)} whose src/config.js says ${inTree ?? '(no config.js)'}`); }
 }
+// THE CURRENT VERSION MUST HAVE A TAG. Since 2026-09-15 PUSH-TO-GITHUB.bat only tags
+// when the version CHANGED, so a data-only push leaves HEAD untagged on purpose. The
+// failure that guard could introduce is the opposite one: a bump that never gets
+// tagged because the skip condition misfired. Checking each EXISTING tag cannot see
+// a tag that was never made; this can.
+let current = null;
+try { current = (readFileSync('src/config.js', 'utf8').match(/VERSION = '([^']+)'/) || [])[1] ?? null; } catch { /* no config */ }
+const currentTagged = current ? tags.includes(`v${current}`) : false;
+if (current && !currentTagged) { bad++; console.error(`  MISSING  src/config.js says ${current} but there is no v${current} tag — a bump was pushed without being tagged`); }
+
 console.log(bad
-  ? `[OPERATOR] verify-tags: ${bad} of ${checked} tags point at the wrong tree — force-move them: git tag -f vX.Y.Z <commit> && git push -f origin vX.Y.Z`
-  : `verify-tags: all ${checked} version tags point at a tree whose config.js matches.`);
+  ? `[OPERATOR] verify-tags: ${bad} problem(s) across ${checked} tags — see above`
+  : `verify-tags: all ${checked} version tags point at a tree whose config.js matches, and v${current} is tagged.`);
 process.exit(bad ? 1 : 0);

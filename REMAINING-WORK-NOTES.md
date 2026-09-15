@@ -3346,3 +3346,40 @@ version-bump item. The parked demoteScope patch — which had been re-labelled
 "intended v0.31.8" — collided a SECOND time and is now deliberately unnumbered: a
 parked patch must not name its version, because every intervening release falsifies
 it.
+
+## 2026-09-15 — ORDER: THE THRESHOLD CHOICE IS THE VERDICT, AND THE NUMBERS DID NOT MAKE IT
+
+Review asked whether r3 was chosen over r2 for a recorded reason — presumably r2's
+chance rate being too high to falsify. Computed margin (replay − chance) across the
+whole grid ORDER was promoted on (span 113d, n=8):
+
+  w3/r2  0.88 − 0.61 = 0.26   <- best in the grid, and not chosen
+  w3/r3  0.75 − 0.56 = 0.19
+  w3/r5  0.63 − 0.42 = 0.20
+  w5/r2  0.88 − 0.71 = 0.17   <- IDENTICAL margin to the chosen point
+  w5/r3  0.75 − 0.58 = 0.17   <- chosen
+  w5/r5  0.63 − 0.53 = 0.09
+  w7/r2  0.75 − 0.81 = −0.06  <- chance EXCEEDS replay: worse than random
+  w7/r3  0.63 − 0.74 = −0.12
+  w7/r5  0.50 − 0.62 = −0.12
+
+FINDING: at w5, r2 and r3 are indistinguishable by margin. There was no reason in the
+numbers to choose r3, so none was recorded — and the choice that could not be
+justified is exactly the one that flipped ORDER's 09-07 verdict (2.74 CONFIRMs at
+r2, DEMOTEs at r3). A derivation that ran and a choice that was not recorded is
+indistinguishable, to a future reader, from no derivation. Sharper than the addendum's
+premise, and it survives the premise being wrong.
+
+SECOND FINDING, larger: NO parameterisation separates ORDER from chance by more than
+0.26, and a third of the grid is below zero. The WEAK label was right, but the grid
+says something the label does not — the row's evidentiary weight is thin at EVERY
+setting, not just the chosen one. A single-window verdict on ORDER is close to a
+coin flip whichever bar is used.
+
+NOT ACTED ON HERE, deliberately. Voiding the 09-07 DEMOTE as "parameter-
+indeterminate" (the third kind of void) is defensible, but so is reading the grid as
+"this row should not be verified at all". That is a decision about the tier, not a
+correction to a verdict, and it belongs to the reviewer with these numbers in hand.
+Queued ahead of item 10: the spec basis must record WHY a grid point was chosen, or
+state that the choice was arbitrary — and a row whose best margin is ≤0.26 should
+say so on the row, not only in a notes entry.

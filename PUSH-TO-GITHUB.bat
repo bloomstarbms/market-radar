@@ -60,8 +60,23 @@ REM Message states the version and lets git list the files — accurate by
 REM construction rather than by remembering to edit this line.
 git -c user.name="BMS" -c user.email="85956989+bloomstarbms@users.noreply.github.com" commit -m "v%RADAR_VER%" -m "Automated push from PUSH-TO-GITHUB.bat. Version read from src/config.js at push time; see the diff for contents." >> push-result.txt 2>&1
 git push -u origin main >> push-result.txt 2>&1
+
+REM TAG ONLY WHEN THE VERSION CHANGED. `tag -f` on every push re-pointed the CURRENT
+REM version's tag at whatever was just pushed, so a data-only push without a bump would
+REM silently move v0.31.7 off the commit it names - and verify-tags would still pass,
+REM because config.js still matched. Found 2026-09-15; the workaround was a bump, the
+REM fix is this guard. No parentheses, no ampersands: this file has been broken by both.
+git describe --tags --abbrev=0 > last-tag.tmp 2>nul
+set /p LAST_TAG=<last-tag.tmp
+del last-tag.tmp 2>nul
+if "%LAST_TAG%"=="v%RADAR_VER%" goto skiptag
 git tag -f "v%RADAR_VER%" >nul 2>nul
 git push -f origin "v%RADAR_VER%" >> push-result.txt 2>&1
+echo Tagged v%RADAR_VER% [new version] >> push-result.txt
+goto tagdone
+:skiptag
+echo Tag v%RADAR_VER% already exists - NOT moved. A push without a version bump leaves the tag on the commit it named. >> push-result.txt
+:tagdone
 
 REM NO PARENTHESES IN ANY ECHO INSIDE THIS BLOCK. A literal ")" closes the if-block
 REM early and cmd then abandons the rest of the script SILENTLY - the first version
@@ -78,7 +93,7 @@ if errorlevel 1 (
   echo PUSH FAILED: origin/main does not match local HEAD - nothing was published. >> push-result.txt
   echo Read the git output above; the tag may now point at the WRONG commit. >> push-result.txt
 ) else (
-  echo Pushed as v%RADAR_VER% [tagged] - verified: origin/main == local HEAD >> push-result.txt
+  echo Pushed as v%RADAR_VER% - verified: origin/main == local HEAD >> push-result.txt
   echo DONE >> push-result.txt
 )
 del local-head.tmp remote-head.tmp 2>nul
