@@ -1,9 +1,11 @@
-PENDING PATCH — "a DEMOTE states its own scope" (intended v0.31.8)
+PENDING PATCH — "a DEMOTE states its own scope" (intended for THE NEXT VERSION — deliberately unnumbered)
 VERSION COLLISION CORRECTED 2026-09-13: this was written as "intended v0.31.7", but
 v0.31.7 SHIPPED on 2026-09-13 carrying the correctness queue (items 0-7) and NOT this
-patch. The filename is historical; the target is the NEXT version. A parked patch
-claiming a version that already exists is how a future session applies it twice or
-believes it is already live.
+patch. Then re-labelled "v0.31.8" — and v0.31.8 shipped on 2026-09-15 as the index
+refresh, colliding AGAIN. The filename is historical. A parked patch must not name a
+version number at all: the number is assigned when it ships, by whoever ships it. A
+number written here in advance is a claim about the future that every intervening
+release falsifies.
 Written 2026-09-12. NOT APPLIED to the working tree. NOT SYNTAX-CHECKED, NOT SUITE-TESTED.
 
 WHY THIS FILE EXISTS

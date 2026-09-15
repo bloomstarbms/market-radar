@@ -3324,3 +3324,25 @@ Both rules now in CLAUDE.md.
 
 STILL OPEN: item 8 (ladder coverage arm), item 9 (index refresh — SEI/APT/CARV have
 genuinely exhausted their events), item 10 (re-promotion requires post-demotion evidence).
+
+## 2026-09-15 — ITEM 9: INDEX REFRESH (v0.31.8, data + docs only)
+
+Browser-pane route, as the chore describes. 370 protocols on the page -> 49 kept, 526
+events, fetchedAt 2026-09-15T03:49. THE CRC CAUGHT A TRANSCRIPTION SLIP on the first
+carry — one of four base64 slices had a run of characters drifted by hand — and wrote
+NOTHING. Per-slice SHA-256 localised it to slice 1; re-carried in two verified halves.
+The guard is not theoretical: 2 for 2 hand-carries have needed it.
+All 29 sourced rows re-ingested through promote-unlock.js. No mechanism-row dates
+moved (L3, REZ stamps still valid). Pressure floor re-derived: 0.0688 / n=29,
+UNCHANGED — the per-row statistic holding across snapshots is what the 09-07 fix was
+for. SEI, APT and CARV fire again.
+NEW MUTE: YB. DefiLlama lists exactly one YB event (2026-09-15, today) and nothing
+after. Genuinely out of runway per the source, on a 0-day-old index — item 8's case
+arriving before item 8 is built. The fault-mute line reports it; the ladder does not.
+VERSION: bumped to v0.31.8 for a data-only change, because PUSH-TO-GITHUB.bat re-tags
+the CURRENT version on every push and would otherwise have moved v0.31.7 off the
+commit it names. That re-tag behaviour is worth revisiting alongside the queued
+version-bump item. The parked demoteScope patch — which had been re-labelled
+"intended v0.31.8" — collided a SECOND time and is now deliberately unnumbered: a
+parked patch must not name its version, because every intervening release falsifies
+it.

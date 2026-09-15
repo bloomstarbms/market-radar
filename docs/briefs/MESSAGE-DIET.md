@@ -1,5 +1,5 @@
 <!-- PREMISE
-Written against: v0.31.7 live (demoteScope still parked — see PENDING-v0.31.7-demote-scope.pending, retargeted to v0.31.8)
+Written against: v0.31.7 live (demoteScope still parked — see PENDING-v0.31.7-demote-scope.pending, unnumbered until it ships)
 Reviewed: 2026-09-13
 Assumes:
 - FACT/CALL split is live; telemetry is already DM-only as of v0.31.0.

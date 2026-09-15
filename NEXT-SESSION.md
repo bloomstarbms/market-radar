@@ -12,6 +12,91 @@ STATUS: mostly EXECUTED. Do not run as a session prompt; read as background.
 
 # Next session
 
+## OPENER — paste this into Claude Code (written 2026-09-13, annotated 2026-09-15)
+
+```
+Read CLAUDE.md, then Part 0 of REMAINING-WORK.md.
+
+Items 8–10 of docs/briefs/CORRECTNESS-QUEUE.md, in order:
+
+  9 FIRST — index refresh. SEI, APT and CARV have exhausted their
+    listed events and are silent; the ladder reads FRESH because it
+    measures age, not runway. Browser-pane route per the RECURRING
+    CHORE section below. Re-record derivePressureFloor if it moved.
+
+  8 — ladder coverage arm. Pre-register N before choosing it.
+    Acceptance: the coverage arm fires on a row with N days of runway
+    while the age arm stays quiet on the same file.
+
+ 10 — re-promotion requires post-demotion evidence. At least one
+    on-schedule emission after the miss. Re-analysing pre-demotion
+    history is not new evidence however detect-cadence classifies it.
+    Encode it in promote-unlock.js so it refuses, not advises.
+
+Then MESSAGE-DIET.md — inventory exists, two decompositions are
+prerequisites, the render-lint needs its self-test.
+
+Watch: ZK and ARB on the 14th. FF pushes both dates on the 22nd.
+ENA's fourth wallet (0xA7eE, 57M, funded ~09-11) on Oct 6.
+```
+
+9 is before 8 deliberately: three rows are silent now and the fix is a chore, not a
+build.
+
+```
+ADDENDUM (2026-09-15) — before item 10, and before treating ORDER's demotion as final:
+
+ORDER's first real cliff verdict is a DEMOTE at ratio 2.74 against a MIN_RATIO of
+3.0, with 21 claimants. A first real verdict landing 9% under the bar is exactly
+the case a derivation exists for.
+
+  PREMISE CORRECTED: a grid DID run at promotion — w∈{3,5,7} × r∈{2,3,5}, nine
+  points, recorded on the spec. What did NOT run is the finer derivation from the
+  observed cluster ratios themselves. And the grid already says something: w5/r2
+  replayed 7/8, w5/r3 only 6/8. The better-replaying bar was passed over for 3.0,
+  and 2.74 passes under r=2. Choosing 3.0 from {2,3,5} was a DECLARED cut among
+  derived candidates — the same class one level down.
+
+  - Derive MIN_RATIO (and WINDOW_DAYS) from the distribution of ORDER's own
+    observed cluster ratios — the 13 clusters (6 on-index + 7 off-index) — e.g. a
+    low percentile of the observed ratios, the way the pressure floor and the
+    tolerance bands were derived. Record the basis on the spec.
+  - If 2.74 sits inside the derived band, the 09-07 verdict becomes CONFIRM and
+    this demotion is a CALIBRATION ARTIFACT — the third kind of void, after
+    "never fetched" and "hand-corrupted". Void it through annotate-verdict.js
+    with that reason; do not hand-edit.
+  - Item 10's rule must key on MARGIN, not on the binary. ENA missed at 0.427 —
+    a break below thirteen months of floor. ORDER missed at 0.91 of bar on a
+    falsifier already labelled WEAK. A re-promotion rule treating those identically
+    measures the wrong thing. Scale the post-demotion evidence requirement with
+    how far below the bar the miss fell.
+
+  THE CLASS: an underived threshold produced the first real verdict on the only
+  row that uses it — "constant fitted to one instance", arriving on the row with
+  the weakest falsifier, where a wrong verdict is hardest to tell from a right one.
+
+ALSO QUEUED, small, whenever there is room:
+  - The version bump should ask each file's PREMISE what "Written against" means
+    rather than sed-ing a number across every .md. The 2026-09-13 blanket sed
+    reached a parked patch and a brief that each had a different claim to make
+    about the same version, and created a collision that had to be corrected by
+    hand. A blanket sed is a hand-maintained-list operation in disguise.
+```
+
+**ORDER's first real cliff verdict is IN — do not wait for it.** Landed 2026-09-13T21:21,
+eighteen minutes after the void was cleared through `annotate-verdict.js`:
+
+    ORDER:2026-09-07  DEMOTE  ratio 2.74 · recipients 21 · inWindow 266,504
+
+A real fetch: 266,504 ORDER to 21 claimants in the window. Cleared the recipient gate
+(21 ≥ 5), **failed the ratio gate by 9%** (2.74× vs 3×). The void verdict was
+accidentally right on the action and wrong on every number. This is a cluster-shaped
+event slightly under threshold, not a schedule stopping — and it should inform item 10:
+a DEMOTE at 2.74/21 and ENA's at 0.427 are not the same object, and re-promotion logic
+should not treat them identically. The entry has no `notified` field (the cliff path's
+fire-and-forget delivery, logged in PENDING-cliff-cache-staleness.pending, not yet in
+the queue) — operator to confirm the DM arrived.
+
 ## RECURRING CHORE — refresh the unlock index (monthly, or when the heartbeat warns)
 
 **Trigger:** the heartbeat's "Sourced firing:" line shows `⚠️ index 14d old` (or
