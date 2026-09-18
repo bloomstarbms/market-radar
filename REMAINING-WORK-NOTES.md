@@ -3727,3 +3727,50 @@ survives a history reset would lose its month entry and R2 would then read "unkn
 → deep miss" — which is the safe direction, and stated in the refusal.
 
 Suite 768 green via boot-check.js.
+
+## 2026-09-18 — v0.32.3: THE DIET REMAINDER — one rendering discipline across every FACT type
+
+Inventory first: MESSAGE-FIELD-INVENTORY.md section F, 34 IDs (F1 funding 11, F2
+listings 6, F3 announcements 10, F4 Upbit 7) cited to the v0.32.2 tree BEFORE the
+edit, each with a destination; F5 adds three coverage obligations (executable size
+where computed; unrecognised product flagged; a suspension says whether a
+resumption was stated).
+
+Then the builders: fundingMessage, listingMessage / listingBatchMessage,
+announcementMessage / announcementBatchMessage, upbitMarketMessage /
+upbitNoticeMessage — pure, exported, returning {title, lines, operatorLines, url};
+the pollers spread them into dispatch. renderMessage(msg, audience) in dispatcher.js
+is the ONE entry point (unlocks' renderFact delegates to it), so fixture 66 lints the
+same output shape fixture 64 does. gateLine shortened to the brief's form
+(`Executable ~$922 @50bps · spread 30.7bps — not sizeable at your range`).
+
+What moved or went, by class:
+- Predictions wearing a fact's clothes → gone from public, quoted in operator as the
+  detector's reading: "⚡ Squeeze BUILDING", "real money entering, not just noise",
+  "extreme positioning is where reversals fire", "product-line rollout — not N
+  catalysts". The FIGURES they decorated (velocity Δ, OI Δ, positioning %) stay public.
+- Frequency claims with no sample → DROP: "Korean retail concentration makes the open
+  violent".
+- Advice → DROP: "this is your lead time".
+- Mechanism → operator: threshold value, detector reason, reminder schedule, why a
+  routine suspension was reported, batching rationale, "detected from the live
+  market list".
+
+Fixture 66: render-lint on 13 CEX shapes with the fixture-64 list PLUS the CEX
+vocabulary (squeeze, precursor, expect wider swings, lead time, violent, reversal,
+catalyst, surge rule, velocity, detector); SELF-TEST plants each of the three pre-diet
+lines the reviewer named and shows the lint catching them; cap on every shape —
+funding at full decoration is EXACTLY six with the executable line, never over;
+obligations both ways (a suspension with a stated resumption carries no ⚠️; strip the
+clause and it fails); field preservation over all 34 IDs (33 rendered, F4.3 declared
+DROP with reason); operator ⊇ public; formatAlert routes operatorLines for CEX types;
+and a source-level check that no `lines: [` survives in any CEX poll path.
+
+Suite 809 green via boot-check.js. Channel now ships ONE rendering discipline —
+unlock, funding, listing, announcement, Upbit — with the operator DM the superset
+of every one.
+
+Not on the list: funding's `severity` still keys on `building || oiConfirm` (HIGH),
+i.e. the detector reading that no longer renders publicly still decides the badge.
+Behaviour, not rendering — out of this scope; recorded. And the digestPool
+UNRECOGNISED title (announcements.js:341) is operator-only telemetry already.

@@ -160,36 +160,41 @@ export async function pollFunding() {
     const severity = (severe && (building || oiConfirm)) ? 'HIGH'
       : (severe || building || oiConfirm) ? 'HIGH' : 'MEDIUM';
 
-    const lines = [
-      // FACT phrasing: state who pays whom and how extreme it is for THIS pair.
-      // "squeeze fuel" / "flush risk" were directional editorialising on an unscored
-      // fact — the annualised figure and the percentile say more and assert less.
-      `${shortsPay ? 'Shorts paying longs' : 'Longs paying shorts'} ${Math.abs(c.f).toFixed(3)}%/8h · ${(c.f * 3 * 365).toFixed(0)}% annualised`,
-      `Threshold for this pair: ${c.thresh.toFixed(3)}% (99th pctile of its own 90d funding)`
-        + (c.reason === 'entered' ? ' — just entered the extreme state'
-          : c.reason === 'flipped' ? ' — funding FLIPPED SIGN'
-          : ' — intensified 50%+ since entry'),
-    ];
-    if (building) lines.push(`⚡ Squeeze BUILDING: funding moved ${velocity > 0 ? '+' : ''}${velocity.toFixed(3)}% since last check`);
-    if (oiConfirm) lines.push(`📈 Open interest +${oiChange.toFixed(1)}% — real money entering, not just noise`);
-    else if (oiChange !== null) lines.push(`Open interest ${oiChange >= 0 ? '+' : ''}${oiChange.toFixed(1)}%`);
-    // Long/short crowd confirmation: extreme positioning is where reversals fire
-    if (ls) {
-      const crowded = ls.longPct >= 70 ? 'long' : ls.shortPct >= 65 ? 'short' : null;
-      let posLine = `Positioning: ${ls.longPct.toFixed(0)}% of traders LONG vs ${ls.shortPct.toFixed(0)}% SHORT`;
-      if (crowded) posLine += ` — positioning heavily ${crowded}`;
-      if (crowded && shortsPay === (crowded === 'short')) posLine += ' ⚡ matches funding';
-      lines.push(posLine);
-    }
-    lines.push(`Mark price: $${c.mark}`);
-
+    const msg = fundingMessage(c, { building, velocity, oiChange, oiConfirm, ls });
     if (await dispatch({
       source: 'CEX', type: 'FUNDING', severity, key: c.symbol, cooldownMin: RULES.cooldownMin,
-      title: `${c.symbol} funding ${c.f.toFixed(3)}%/8h${building ? ' (building)' : ''}${oiConfirm ? ' + OI surge' : ''}`,
-      lines, url: `https://www.binance.com/en/futures/${c.symbol}`,
+      title: msg.title, lines: msg.lines, operatorLines: msg.operatorLines, url: msg.url,
       track: { kind: 'cex', exchange: 'binance', symbol: c.symbol, price: c.mark },
     })) n++;
   }
   console.log(`[funding] ${data.length} perps · ${candidates.length} extremes${n ? ` · ${n} alerts` : ''}`);
 }
 export { RULES };
+
+// FUNDING MESSAGE, pure (message diet, CEX remainder). Public: the rate, who pays,
+// the percentile, what moved, positioning, mark — numbers a reader weighs. Operator:
+// the threshold value and the detector's own reading of it ("building", "OI surge").
+// "Squeeze building" / "real money entering" / "reversals fire" were predictions
+// wearing a fact's clothes; the figures they decorated stay, the clothes go.
+export function fundingMessage(c, { building = false, velocity = null, oiChange = null, oiConfirm = false, ls = null } = {}) {
+  const shortsPay = c.f < 0;
+  const entered = c.reason === 'entered' ? 'just entered' : c.reason === 'flipped' ? 'sign flipped' : 'intensified 50%+ since entry';
+  const lines = [
+    `${(c.f * 3 * 365).toFixed(0)}% annualised · ${shortsPay ? 'shorts paying longs' : 'longs paying shorts'}`,
+    `99th pctile of its own 90d · ${entered}`,
+    ...(velocity !== null ? [`Moved ${velocity > 0 ? '+' : ''}${velocity.toFixed(3)}% since last check`] : []),
+    ...(oiChange !== null ? [`Open interest ${oiChange >= 0 ? '+' : ''}${oiChange.toFixed(1)}%`] : []),
+    `${ls ? `${ls.longPct.toFixed(0)}% long / ${ls.shortPct.toFixed(0)}% short · ` : ''}mark $${c.mark}`,
+  ];
+  const crowded = ls ? (ls.longPct >= 70 ? 'long' : ls.shortPct >= 65 ? 'short' : null) : null;
+  const operatorLines = [
+    `Threshold for this pair: ${c.thresh.toFixed(3)}% (99th pctile of its own 90d funding) · detector reason: ${c.reason}`,
+    ...(building ? [`Detector: velocity ${velocity.toFixed(3)}% ≥ ${RULES.velocityPct} in the funding's own direction (was rendered as "squeeze building")`] : []),
+    ...(oiConfirm ? [`Detector: OI +${oiChange.toFixed(1)}% ≥ ${RULES.oiSurgePct}% surge rule`] : []),
+    ...(crowded ? [`Positioning ${crowded}-heavy (${crowded === 'long' ? '≥70% long' : '≥65% short'})${shortsPay === (crowded === 'short') ? ' · same side as funding' : ''}`] : []),
+  ];
+  return {
+    title: `⚡ FUNDING · ${c.symbol} ${c.f > 0 ? '+' : ''}${c.f.toFixed(3)}%/8h`,
+    lines, operatorLines, url: `https://www.binance.com/en/futures/${c.symbol}`,
+  };
+}

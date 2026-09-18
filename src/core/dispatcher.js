@@ -165,7 +165,7 @@ export function gateLine(gate) {
   const usd = gate.executableUsd;
   const amt = usd >= 1000 ? `$${Math.round(usd / 1000)}k` : `~$${Math.round(usd)}`;
   const verdict = gate.pass ? 'tradeable' : 'not sizeable at your range';
-  return `Executable: ${amt} at 50bps both sides · spread ${gate.spreadBps}bps — ${verdict}`;
+  return `Executable ${amt} @50bps · spread ${gate.spreadBps}bps — ${verdict}`;
 }
 
 // TWO RENDERINGS, ONE ALERT (message diet, 2026-09-18). `a.lines` is the PUBLIC
@@ -175,6 +175,14 @@ export function gateLine(gate) {
 // operator audience, appended after the public lines so operator ⊇ public.
 // Nothing is deleted from the system; it is deleted from the channel.
 export const AUDIENCES = ['public', 'operator'];
+// The lines an audience sees, from a message object {title, lines, operatorLines,
+// url}. One function for every builder (unlocks, funding, listings, announcements,
+// upbit) so the render-lint has one entry point per audience.
+export function renderMessage(msg, audience) {
+  if (!AUDIENCES.includes(audience)) throw new Error(`renderMessage: unknown audience '${audience}'`);
+  const lines = audience === 'operator' ? [...msg.lines, ...(msg.operatorLines || [])] : msg.lines;
+  return { title: msg.title, lines, url: msg.url, text: [msg.title, ...lines].join('\n') };
+}
 export function formatAlert(a, meta = {}, audience = 'public') {
   if (!AUDIENCES.includes(audience)) throw new Error(`formatAlert: unknown audience '${audience}'`);
   const tag = TAG[`${a.source}:${a.type}`] || `${a.source} ${a.type}`;

@@ -7,8 +7,8 @@ Assumes:
   can be re-checked mechanically.
 - Covers the four public FACT types the message diet re-renders (sourced unlock,
   verified unlock, contract-cliff unlock, and the formatAlert wrapper all of them
-  pass through). CEX types (funding, listing, suspension) are NOT yet inventoried —
-  marked TODO at the end.
+  pass through). CEX types (funding, listing, announcement, Upbit) added in
+  section F on 2026-09-18, cited to the pre-diet v0.32.2 tree.
 Status: DESCRIPTIVE — an inventory of what exists today, not a plan.
   NOTE: written first as "STATUS:" (all caps), which fixture 37 does NOT match
   (/Status:\s*DESCRIPTIVE/ is case-sensitive). That would have exempted this file
@@ -30,7 +30,7 @@ Without this, "nothing was lost in the move" is a hope; with it, it is an assert
 - No message makes a directional claim or an unsupported frequency claim [fixture: 30. message prose is linted — direction ban + unsupported-statistics ban]
 - The field tables in sections A–D below list every field the four public FACT builders emitted as of v0.31.6, and every ID has a destination that a rendering exhibits or a declared reason [fixture: 64. MESSAGE DIET — two renderings, one row; public is lint-clean, capped, and loses no field]
 - `note` and `claimCoverage().line` no longer mix audiences: `note`/`operatorNote` are split and `claimCoverage` returns parts; the render-lint inspects the public OUTPUT with a planted-violation self-test [fixture: 64. MESSAGE DIET — two renderings, one row; public is lint-clean, capped, and loses no field]
-- The CEX message types (funding, listing, suspension) are NOT inventoried here [UNENFORCED: section F records the omission deliberately — an inventory that silently covered three of seven types would be worse than one that names its own gap.]
+- The CEX message types (funding, listing, announcement/suspension, Upbit) are inventoried in section F and every ID has a destination a rendering exhibits or a declared reason [fixture: 66. MESSAGE DIET, CEX remainder — one rendering discipline across every FACT type]
 
 
 Part 5 of `MESSAGE-DIET.md` asserts that **no field present in the current message is
@@ -156,15 +156,72 @@ them mechanically:
 | weak falsifier stated | D6's WEAK clause | `falsifier.verdict === 'WEAK'` |
 | data age when stale | A8 | collector age over threshold |
 
-## F. TODO — not yet inventoried
+## F. CEX FACT types — inventoried 2026-09-18 (citations are to the v0.32.2 tree, pre-diet)
 
-`funding.js`, `listings.js`, `announcements.js`, `upbit.js`, `cascade.js`,
-`revival.js`, `confluence.js`, `whale.js`, and `executability.js`'s executable-size
-line. The diet brief gives templates for FUNDING, LISTING and DELISTING/SUSPENSION,
-so those three must be inventoried before Part 5's fixture can be written. Same
-method: grep `title:` / `lines:` / `url:` and cite file:line.
+Same method: every field the builder emitted, cited to file:line, with its
+destination. Executed in the same release as the table; fixture 66 pins it.
 
----
+### F1. Funding — `funding.js:162-185`, `:186-189`
+
+| # | Field | Line | Proposed |
+|---|---|---|---|
+| F1.1 | title `SYM funding ±X%/8h (building) + OI surge` | `:188` | PUBLIC (as `⚡ FUNDING · SYM ±X%/8h`); "(building)"/"+ OI surge" → OPERATOR |
+| F1.2 | who pays whom + rate + annualised | `:167` | PUBLIC |
+| F1.3 | threshold value + "99th pctile of its own 90d" | `:168` | percentile → PUBLIC; the threshold VALUE → OPERATOR |
+| F1.4 | reason: entered / flipped / intensified | `:169-171` | PUBLIC |
+| F1.5 | "⚡ Squeeze BUILDING: funding moved Δ since last check" | `:173` | Δ → PUBLIC; "squeeze building" → OPERATOR (detector reading, prediction-shaped) |
+| F1.6 | "📈 Open interest +X% — real money entering, not just noise" | `:174` | OI % → PUBLIC; the gloss → DROP (interpretation) |
+| F1.7 | open interest Δ (non-surge) | `:175` | PUBLIC |
+| F1.8 | positioning long/short % | `:179` | PUBLIC |
+| F1.9 | "positioning heavily long/short" + "⚡ matches funding" | `:180-181` | OPERATOR |
+| F1.10 | mark price | `:184` | PUBLIC |
+| F1.11 | executable-size line (dispatcher `gateLine`, `dispatcher.js:163-168`) | wrapper | PUBLIC — **coverage obligation** |
+
+### F2. Listings — `listings.js:58-63` (batch), `:70-76` (single)
+
+| # | Field | Line | Proposed |
+|---|---|---|---|
+| F2.1 | title `SYM just listed on VENUE` | `:70` | PUBLIC (as `🆕 LISTING · SYM on VENUE`) |
+| F2.2 | "New spot pair detected" | `:72` | OPERATOR |
+| F2.3 | price + Vol24h, or "No ticker data yet" | `:73` | PUBLIC |
+| F2.4 | ⚠️ unrecognised-product reason | `:74` | PUBLIC — **coverage obligation** (the symbol was not classified) |
+| F2.5 | batch title + names list | `:58,60` | PUBLIC |
+| F2.6 | "Batched: N listings in one poll cycle — one event, not N" | `:61` | OPERATOR |
+
+### F3. Announcements — `announcements.js:364-369` (batch), `:385-398` (single)
+
+| # | Field | Line | Proposed |
+|---|---|---|---|
+| F3.1 | title `VENUE: notice title` | `:385` | PUBLIC |
+| F3.2 | suspension: what halted | `:388` | PUBLIC |
+| F3.3 | suspension: routine → "scheduled with a stated resumption, but reported because: …" | `:389` | "resumption stated" → PUBLIC; the reasons → OPERATOR |
+| F3.4 | suspension: open-ended → "no resumption stated" (the precursor sentence was removed in v0.32.0) | `:390` | PUBLIC — **coverage obligation** |
+| F3.5 | scheduled delisting + effective date | `:391` | PUBLIC; "reminders at T-7d and T-1d" → OPERATOR |
+| F3.6 | unlock / TGE / perp kind lines | `:392-394` | PUBLIC |
+| F3.7 | delisting notice line | `:395` | PUBLIC |
+| F3.8 | listing "published before trading opens" | `:396` | PUBLIC |
+| F3.9 | batch: up to 8 titles | `:366` | PUBLIC |
+| F3.10 | batch: "product-line rollout — one event, not N catalysts" | `:367` | OPERATOR |
+
+### F4. Upbit — `upbit.js:91-96` (market diff), `:127-136` (notice)
+
+| # | Field | Line | Proposed |
+|---|---|---|---|
+| F4.1 | title `UPBIT listed X — KRW, USDT markets` | `:91` | PUBLIC (as `🆕 LISTING · X on UPBIT — …`) |
+| F4.2 | "Now trading on Upbit (Korea) — detected from the live market list" | `:93` | fact → PUBLIC; detector → OPERATOR |
+| F4.3 | "Korean retail concentration makes the open violent — magnitude, not direction" | `:94` | DROP (a frequency claim with no sample) |
+| F4.4 | notice titles: will list / delisting / investment warning | `:127-129` | PUBLIC |
+| F4.5 | "Announced BEFORE trading opens — this is your lead time" | `:131` | fact → PUBLIC; "your lead time" → DROP (advice) |
+| F4.6 | delisting / investment-warning lines | `:132-133` | PUBLIC |
+| F4.7 | notice title | `:134` | PUBLIC |
+
+### F5. Coverage obligations added by this section
+
+| Obligation | Field | Fires when |
+|---|---|---|
+| executable size where computed | F1.11 | gated types with a depth read |
+| unrecognised product flagged | F2.4 | `verdict.state === 'UNRECOGNISED'` |
+| suspension states whether a resumption was given | F3.3/F3.4 | `type === 'SUSPENSION'` |
 
 ## Enforcement, not convention — lint the RENDERED PUBLIC OUTPUT
 

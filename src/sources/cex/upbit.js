@@ -88,12 +88,7 @@ export async function pollUpbit() {
         if (await dispatch({
           source: 'CEX', type: 'UPBIT', severity: 'HIGH',
           key: `upbit:market:${tk}`, dedupeKey: `UPBIT:${tk}`, cooldownMin: 24 * 60,
-          title: `UPBIT listed ${label(tk)} — ${quotes.join(', ')} market${quotes.length > 1 ? 's' : ''}`,
-          lines: [
-            'Now trading on Upbit (Korea) — detected from the live market list.',
-            'Korean retail concentration makes the open violent — magnitude, not direction.',
-          ],
-          url: `https://upbit.com/exchange?code=CRIX.UPBIT.${quotes[0]}-${tk}`,
+          ...upbitMarketMessage(tk, label(tk), quotes),
         })) fired++;
       }
     }
@@ -124,16 +119,7 @@ export async function pollUpbit() {
           // Same dedupeKey as the market diff: whichever detector sees it first wins.
           dedupeKey: tks.length ? `UPBIT:${tks[0]}` : `UPBIT:notice:${id}`,
           cooldownMin: 24 * 60,
-          title: isList ? `UPBIT will list ${who}`
-            : isDelist ? `UPBIT delisting ${who}`
-            : `UPBIT investment warning on ${who}`,
-          lines: [
-            isList ? 'Announced BEFORE trading opens — this is your lead time.'
-              : isDelist ? '⚠️ Delisting notice — trading support ends on Upbit.'
-              : '⚠️ Upbit "investment warning" designation — a formal venue risk flag.',
-            title.slice(0, 110),
-          ],
-          url: 'https://upbit.com/service_center/notice',
+          ...upbitNoticeMessage(who, title, { isList, isDelist }),
         })) fired++;
       }
       state.upbitNotices = [...new Set([...list.map((n) => String(n.id)), ...seen])].slice(0, 300);
@@ -141,4 +127,28 @@ export async function pollUpbit() {
     }
   }
   if (fired) console.log(`[upbit] ${fired} alert(s)`);
+}
+
+// UPBIT MESSAGES, pure (message diet, CEX remainder). "Korean retail concentration
+// makes the open violent" was a frequency claim with no sample; "this is your lead
+// time" was advice. The facts: listed, on which markets, or announced (before/after
+// trading), with the notice title.
+export function upbitMarketMessage(tk, name, quotes) {
+  return {
+    title: `🆕 LISTING · ${name} on UPBIT — ${quotes.join(', ')} market${quotes.length > 1 ? 's' : ''}`,
+    lines: ['Now trading on Upbit (Korea)'],
+    operatorLines: ['Detected from the live market list (detector 2); the notice detector may have seen it first'],
+    url: `https://upbit.com/exchange?code=CRIX.UPBIT.${quotes[0]}-${tk}`,
+  };
+}
+export function upbitNoticeMessage(who, title, { isList = false, isDelist = false } = {}) {
+  return {
+    title: isList ? `UPBIT will list ${who}` : isDelist ? `UPBIT delisting ${who}` : `UPBIT investment warning on ${who}`,
+    lines: [
+      isList ? 'Announced before trading opens' : isDelist ? '⚠️ Delisting notice — trading support ends on Upbit' : '⚠️ Upbit "investment warning" designation — a formal venue risk flag',
+      title.slice(0, 110),
+    ],
+    operatorLines: [],
+    url: 'https://upbit.com/service_center/notice',
+  };
 }

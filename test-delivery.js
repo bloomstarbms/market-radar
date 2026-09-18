@@ -2326,6 +2326,90 @@ console.log('65. RE-PROMOTION requires POST-DEMOTION evidence — the gate refus
   check('the CLI consults the gate before promoteRow (source-level: no override flag exists)', /repromotionProblems\(/.test(readFileSync('promote-unlock.js', 'utf8')) && !/force|override/i.test(readFileSync('promote-unlock.js', 'utf8').split('ITEM 10')[1].split('const row = promoteRow')[0].replace(/^\s*\/\/.*$/gm, '')));
 }
 
+console.log('66. MESSAGE DIET, CEX remainder — one rendering discipline across every FACT type');
+{
+  const { fundingMessage } = await import('./src/sources/cex/funding.js');
+  const { listingMessage, listingBatchMessage } = await import('./src/sources/cex/listings.js');
+  const { announcementMessage, announcementBatchMessage } = await import('./src/sources/cex/announcements.js');
+  const { upbitMarketMessage, upbitNoticeMessage } = await import('./src/sources/cex/upbit.js');
+  const { renderMessage, gateLine, formatAlert } = await import('./src/core/dispatcher.js');
+  const { PUBLIC_MAX_LINES, PUBLIC_MAX_CHARS } = await import('./src/sources/calendar/unlocks.js');
+  const fund = fundingMessage({ symbol: 'MTLUSDT', f: -0.551, thresh: 0.212, reason: 'entered', mark: 0.3133 }, { building: true, velocity: -0.212, oiChange: 12.3, oiConfirm: true, ls: { longPct: 59, shortPct: 41 } });
+  // The executable line is appended by the dispatcher for gated types; include it in the cap.
+  const fundGated = { ...fund, lines: [...fund.lines, gateLine({ executableUsd: 922, spreadBps: 30.7, pass: false })] };
+  const msgs = {
+    funding: fundGated,
+    fundingFlip: fundingMessage({ symbol: 'XUSDT', f: 0.9, thresh: 0.4, reason: 'flipped', mark: 1 }, { ls: { longPct: 72, shortPct: 28 } }),
+    listing: listingMessage('mexc', 'BATONUSDT', { price: 0.010949, quoteVol24h: 2658 }, { state: 'RECOGNISED' }, 'u'),
+    listingUnrec: listingMessage('mexc', 'XSTOCKUSDT', null, { state: 'UNRECOGNISED', reason: 'product line not classified: xStock' }, 'u'),
+    listingBatch: listingBatchMessage('bitget', Array.from({ length: 14 }, (_, i) => 'P' + i), 'u'),
+    suspension: announcementMessage('upbit', { title: 'MED 입출금 일시 중단 안내', url: 'u' }, { type: 'SUSPENSION', which: 'deposits and withdrawals', routine: false }),
+    suspensionRoutine: announcementMessage('binance', { title: 'Wallet maintenance', url: 'u' }, { type: 'SUSPENSION', which: 'deposits', routine: true, interest: ['held asset', 'pending delist on the same asset'] }),
+    delist: announcementMessage('binance', { title: 'Binance Will Delist X', url: 'u' }, { type: 'DELIST_SCHEDULED', dateText: '2026-10-01' }),
+    perp: announcementMessage('bybit', { title: 'Bybit lists XUSDT perpetual', url: 'u' }, { type: 'PERP' }),
+    annBatch: announcementBatchMessage('okx', 'LISTING', Array.from({ length: 5 }, (_, i) => ({ title: 'OKX lists T' + i })), 'u'),
+    upbitMarket: upbitMarketMessage('BATON', 'Baton', ['KRW', 'USDT']),
+    upbitNotice: upbitNoticeMessage('Baton', '[거래] 바톤(BATON) 신규 거래지원 안내', { isList: true }),
+    upbitWarn: upbitNoticeMessage('X', 'notice', {}),
+  };
+  const pub = Object.fromEntries(Object.entries(msgs).map(([k, m]) => [k, renderMessage(m, 'public')]));
+  const op = Object.fromEntries(Object.entries(msgs).map(([k, m]) => [k, renderMessage(m, 'operator')]));
+  // Same lint as fixture 64 (the unlock diet), plus the CEX prediction vocabulary the
+  // reviewer named: squeeze, precursor, expect wider swings, lead time, violent open.
+  const BANNED = /\b(bucket [A-D]|falsifier|cadence spec|cluster spec|by construction|demot(e|es|ed|ion)|promot(e|es|ed|ion)|dead-man|provenance tier|overlay|quarantine|claim coverage|chance rate|binomial|replay series|enumerated by us|tierHistory|margin bar|detector|squeeze|precursor|expect wider swings|real money|lead time|violent|reversals?|catalysts?|surge rule|velocity)\b/i;
+  const DIRECTION = /(close now|exit here|buy now|sell now|take profit|dump hard|sell off sharply|capitulation bottom|blow-off top|reversal risk|front-run|bleeds into|drift usually|expect wider swings|precursor to|watch for a follow-up|bearish|bullish)/i;
+  const hits = (r) => r.lines.concat(r.title).filter((l) => BANNED.test(l) || DIRECTION.test(l));
+  for (const [k, r] of Object.entries(pub)) check(`render-lint: PUBLIC ${k} is clean`, hits(r).length === 0, hits(r).join(' | '));
+  check('the operator rendering is where the detector reading lives ("squeeze building" survives there, as a quote)', op.funding.lines.some((l) => /squeeze building/.test(l)) && op.funding.lines.some((l) => /surge rule/.test(l)));
+  // SELF-TEST, same run: the lint catches the pre-diet lines if they came back.
+  check('SELF-TEST: the pre-diet perp line would be caught', hits({ title: 'x', lines: ['Perp/futures listing — leverage and a short side open up, so expect wider swings'] }).length === 1);
+  check('SELF-TEST: the pre-diet suspension line would be caught', hits({ title: 'x', lines: ['Possible precursor to a delisting, chain halt or incident — watch for a follow-up notice.'] }).length === 1);
+  check('SELF-TEST: the pre-diet Upbit line would be caught', hits({ title: 'x', lines: ['Korean retail concentration makes the open violent — magnitude, not direction.'] }).length === 1);
+  // Cap, on every shape, executable line included where the dispatcher adds it.
+  for (const [k, r] of Object.entries(pub)) check(`cap: PUBLIC ${k} ≤${PUBLIC_MAX_LINES} lines / ≤${PUBLIC_MAX_CHARS} chars (${r.lines.length}/${r.text.length})`, r.lines.length <= PUBLIC_MAX_LINES && r.text.length <= PUBLIC_MAX_CHARS);
+  check('funding at full decoration is exactly at the cap (6 with the executable line), never over', pub.funding.lines.length === 6);
+  // Coverage obligations (inventory F5).
+  check('obligation: executable size where computed', /Executable ~\$922 @50bps · spread 30\.7bps/.test(pub.funding.text));
+  check('obligation: unrecognised product is flagged in PUBLIC', pub.listingUnrec.lines.some((l) => /⚠️ product line not classified/.test(l)));
+  check('obligation: a suspension says whether a resumption was stated — both ways', /⚠️ no resumption stated/.test(pub.suspension.text) && /resumption stated/.test(pub.suspensionRoutine.text) && !/⚠️/.test(pub.suspensionRoutine.text));
+  check('obligation: who pays whom, the percentile, and the reason survive in PUBLIC funding', /shorts paying longs/.test(pub.funding.text) && /99th pctile/.test(pub.funding.text) && /just entered/.test(pub.funding.text) && /sign flipped/.test(pub.fundingFlip.text));
+  check('MUTATION: strip the resumption clause and the obligation fails', !/resumption/.test(renderMessage({ ...msgs.suspension, lines: ['Deposits halted'] }, 'public').text));
+  // Field preservation against inventory section F.
+  const T = (r, re) => r.lines.concat(r.title).some((l) => re.test(l));
+  const table = [
+    ['F1.1', 'SPLIT', /^⚡ FUNDING · MTLUSDT -0\.551%\/8h$/.test(pub.funding.title) && T(op.funding, /squeeze building/) && T(op.funding, /surge rule/)],
+    ['F1.2', 'PUBLIC', T(pub.funding, /-603% annualised · shorts paying longs/)], ['F1.3', 'SPLIT', T(pub.funding, /99th pctile of its own 90d/) && T(op.funding, /Threshold for this pair: 0\.212%/)],
+    ['F1.4', 'PUBLIC', T(pub.funding, /just entered/)], ['F1.5', 'SPLIT', T(pub.funding, /Moved -0\.212% since last check/) && T(op.funding, /velocity/)],
+    ['F1.6', 'SPLIT', T(pub.funding, /Open interest \+12\.3%/)], ['F1.7', 'PUBLIC', T(renderMessage(fundingMessage({ symbol: 'A', f: 0.5, thresh: 0.1, reason: 'entered', mark: 1 }, { oiChange: -3.2 }), 'public'), /Open interest -3\.2%/)],
+    ['F1.8', 'PUBLIC', T(pub.funding, /59% long \/ 41% short/)], ['F1.9', 'OPERATOR', T(op.fundingFlip, /Positioning long-heavy/) && T(op.fundingFlip, /same side as funding/)],
+    ['F1.10', 'PUBLIC', T(pub.funding, /mark \$0\.3133/)], ['F1.11', 'PUBLIC', T(pub.funding, /^Executable/)],
+    ['F2.1', 'PUBLIC', /^🆕 LISTING · BATONUSDT on MEXC$/.test(pub.listing.title)], ['F2.2', 'OPERATOR', T(op.listing, /New spot pair detected/)],
+    ['F2.3', 'PUBLIC', T(pub.listing, /\$0\.010949 · Vol24h \$2,658/) && T(pub.listingUnrec, /No ticker data yet/)], ['F2.4', 'PUBLIC', T(pub.listingUnrec, /⚠️ product line not classified/)],
+    ['F2.5', 'PUBLIC', /14 new pairs on BITGET/.test(pub.listingBatch.title) && T(pub.listingBatch, /P0, P1.*… \+2 more/)], ['F2.6', 'OPERATOR', T(op.listingBatch, /Batched: 14 listings/)],
+    ['F3.1', 'PUBLIC', /^UPBIT: MED/.test(pub.suspension.title)], ['F3.2', 'PUBLIC', T(pub.suspension, /Deposits and withdrawals halted/)],
+    ['F3.3', 'SPLIT', T(pub.suspensionRoutine, /resumption stated/) && T(op.suspensionRoutine, /reported because: held asset; pending delist/)],
+    ['F3.4', 'PUBLIC', T(pub.suspension, /⚠️ no resumption stated/)], ['F3.5', 'SPLIT', T(pub.delist, /effective 2026-10-01/) && T(op.delist, /reminders at T-7d and T-1d/)],
+    ['F3.6', 'PUBLIC', T(pub.perp, /Perp\/futures listing/)], ['F3.7', 'PUBLIC', T(renderMessage(announcementMessage('x', { title: 't', url: 'u' }, { type: 'LISTING', delist: true }), 'public'), /Delisting notice/)],
+    ['F3.8', 'PUBLIC', T(renderMessage(announcementMessage('x', { title: 't', url: 'u' }, { type: 'LISTING' }), 'public'), /published before trading opens/)],
+    ['F3.9', 'PUBLIC', pub.annBatch.lines.length === 5 && T(pub.annBatch, /OKX lists T4/)], ['F3.10', 'OPERATOR', T(op.annBatch, /product-line rollout/)],
+    ['F4.1', 'PUBLIC', /^🆕 LISTING · Baton on UPBIT — KRW, USDT markets$/.test(pub.upbitMarket.title)], ['F4.2', 'SPLIT', T(pub.upbitMarket, /Now trading on Upbit \(Korea\)/) && T(op.upbitMarket, /live market list/)],
+    ['F4.3', 'DROP', '"Korean retail concentration makes the open violent" — a frequency claim with no sample; the inventory proposed DROP'],
+    ['F4.4', 'PUBLIC', /^UPBIT will list Baton$/.test(pub.upbitNotice.title) && /investment warning on X/.test(pub.upbitWarn.title)],
+    ['F4.5', 'SPLIT', T(pub.upbitNotice, /^Announced before trading opens$/)], ['F4.6', 'PUBLIC', T(pub.upbitWarn, /investment warning" designation/)],
+    ['F4.7', 'PUBLIC', T(pub.upbitNotice, /바톤\(BATON\)/)],
+  ];
+  const rendered = table.filter(([, d]) => d !== 'DROP');
+  const missing = rendered.filter(([, , ok]) => ok !== true).map(([id]) => id);
+  check(`field preservation (section F): every rendered field (${rendered.length}) appears in its rendering${missing.length ? ` — MISSING ${missing.join(',')}` : ''}`, missing.length === 0);
+  check('field preservation (section F): the table covers F1.1–F4.7 (34 IDs)', table.length === 34 && table.filter(([, d]) => d === 'DROP').every(([, , why]) => typeof why === 'string' && why.length > 20));
+  check('operator ⊇ public on every CEX shape', Object.keys(msgs).every((k) => pub[k].lines.every((l) => op[k].lines.includes(l))));
+  check('formatAlert routes operatorLines to the operator audience for CEX types too', /surge rule/.test(formatAlert({ source: 'CEX', type: 'FUNDING', ...fund }, { kind: 'FACT' }, 'operator')) && !/surge rule/.test(formatAlert({ source: 'CEX', type: 'FUNDING', ...fund }, { kind: 'FACT' }, 'public')));
+  // The pollers consume the pure builders (source-level): no inline `lines: [` remains in the four files.
+  const inline = ['src/sources/cex/funding.js', 'src/sources/cex/listings.js', 'src/sources/cex/announcements.js', 'src/sources/cex/upbit.js']
+    .filter((f) => /^\s*lines: \[/m.test(readFileSync(f, 'utf8').split(/\/\/ .*MESSAGE.*pure/)[0].replace(/^\s*\/\/.*$/gm, '')));
+  check('every CEX poller builds its message through its pure builder (no inline lines: [ left in the poll path)', inline.length === 0, inline.join(','));
+}
+
 console.error = origErr;
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

@@ -361,12 +361,7 @@ export async function pollAnnouncements() {
         source: 'CEX', type: c.type === 'LISTING' ? 'ANNOUNCE' : c.type, severity: c.sev,
         venue: exch, delist: !!c.delist,
         key: `${exch}:batch:${c.type}:${new Date().toISOString().slice(0, 10)}`, cooldownMin: 24 * 60,
-        title: `${exch.toUpperCase()}: ${group.length} ${c.type} announcements in one batch`,
-        lines: [
-          ...group.slice(0, 8).map((f) => f.it.title.slice(0, 80)),
-          `Batched: ${group.length} same-type announcements in one poll cycle = a product-line rollout — one event, not ${group.length} catalysts.`,
-        ],
-        url: group[0].it.url,
+        ...announcementBatchMessage(exch, c.type, group.map((f) => f.it), group[0].it.url),
       })) fired++;
       group.length = 0; // consumed
     }
@@ -382,23 +377,41 @@ export async function pollAnnouncements() {
         source: 'CEX', type: c.type === 'LISTING' ? 'ANNOUNCE' : c.type,
         venue: exch, delist: isDelist,
         severity: c.sev, key: `${exch}:${it.id}`, cooldownMin: 24 * 60,
-        title: `${exch.toUpperCase()}: ${it.title.slice(0, 110)}`,
-        lines: [
-          c.type === 'SUSPENSION'
-            ? `${c.which.charAt(0).toUpperCase() + c.which.slice(1)} halted`
-              + (c.routine ? ` · scheduled with a stated resumption, but reported because: ${c.interest.join('; ')}`
-                           : ' · ⚠️ OPEN-ENDED: no resumption stated')
-            : c.type === 'DELIST_SCHEDULED' ? `Scheduled delisting · effective ${c.dateText} — dated forward event; reminders at T-7d and T-1d`
-            : c.type === 'UNLOCK' ? 'Token unlock notice'
-            : c.type === 'TGE' ? 'Token generation / launchpool event'
-            : c.type === 'PERP' ? 'Perp/futures listing'
-            : isDelist ? '⚠️ Delisting notice — trading support ends on the stated venue'
-            : 'Listing announced — published before trading opens',
-        ],
-        url: it.url,
+        ...announcementMessage(exch, it, c),
       })) fired++;
     }
   }
   const noiseStr = Object.entries(noiseDropped).map(([k, v]) => `${v} ${k}`).join(', ');
   console.log(`[announce] ${total} announcements scanned${fired ? ` · ${fired} alerts` : ''}${noiseStr ? ` · dropped ${noiseStr}` : ''}${routineSuppressed ? ` · ${routineSuppressed} routine suspensions -> review log` : ''}`);
+}
+
+// ANNOUNCEMENT MESSAGES, pure (message diet, CEX remainder). Public: the venue, the
+// notice title, and the one fact the classifier established (what halted and
+// whether a resumption was stated; the delisting date; the kind of listing).
+// Operator: why a routine suspension was reported, the reminder schedule, the
+// batching rationale. "Possible precursor to…" and "expect wider swings" were
+// predictions and are gone; the reader knows what a suspension can mean.
+export function announcementMessage(exch, it, c) {
+  const isDelist = !!c.delist;
+  const fact = c.type === 'SUSPENSION'
+    ? `${c.which.charAt(0).toUpperCase() + c.which.slice(1)} halted · ${c.routine ? 'resumption stated' : '⚠️ no resumption stated'}`
+    : c.type === 'DELIST_SCHEDULED' ? `Scheduled delisting · effective ${c.dateText}`
+    : c.type === 'UNLOCK' ? 'Token unlock notice'
+    : c.type === 'TGE' ? 'Token generation / launchpool event'
+    : c.type === 'PERP' ? 'Perp/futures listing'
+    : isDelist ? '⚠️ Delisting notice — trading support ends on this venue'
+    : 'Listing announced — published before trading opens';
+  const operatorLines = [
+    ...(c.type === 'SUSPENSION' && c.routine ? [`Routine suspension reported because: ${(c.interest || []).join('; ')}`] : []),
+    ...(c.type === 'DELIST_SCHEDULED' ? ['Dated forward event; reminders at T-7d and T-1d'] : []),
+  ];
+  return { title: `${exch.toUpperCase()}: ${it.title.slice(0, 110)}`, lines: [fact], operatorLines, url: it.url };
+}
+export function announcementBatchMessage(exch, type, items, url) {
+  return {
+    title: `${exch.toUpperCase()}: ${items.length} ${type} announcements in one batch`,
+    lines: items.slice(0, 8).map((it) => it.title.slice(0, 80)),
+    operatorLines: [`Batched: ${items.length} same-type announcements in one poll cycle = a product-line rollout — one event, not ${items.length}.`],
+    url,
+  };
 }

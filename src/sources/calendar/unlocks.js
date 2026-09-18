@@ -8,7 +8,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { config, ROOT } from '../../config.js';
-import { dispatch } from '../../core/dispatcher.js';
+import { dispatch, renderMessage } from '../../core/dispatcher.js';
 import { loadWatchState, activeDemotions, observedAround, retrospectiveLine, loadRecheckState, effectiveSourced } from './cadence-watch.js';
 import { sourceIsStale, SOURCE_STALE_DAYS, pressureStage, falsifierLine, MIN_FALSIFIER_MARGIN, sourceFreshness, sourceCoverage, SOURCE_STALE_DAYS as STALE_D, UNVERIFIABLE_MECHANISMS } from '../../core/unlock-promote.js';
 
@@ -384,8 +384,7 @@ export function renderFact(t, audience, ctx = {}) {
   const msg = t?.provenance === 'sourced'
     ? sourcedMessage(t, ctx.ev ?? (t.sourceEvents || [])[0], ctx.lead ?? 7, ctx.now ?? new Date(), ctx.second ?? null)
     : verifiedMessage(t, ctx.lead ?? 7, ctx.dateKey ?? '2026-01-01', ctx.retro ?? null);
-  const lines = audience === 'operator' ? [...msg.lines, ...msg.operatorLines] : msg.lines;
-  return { title: msg.title, lines, url: msg.url, text: [msg.title, ...lines].join('\n') };
+  return renderMessage(msg, audience);
 }
 // PUBLIC BUDGET (Part 2): a seventh line means something is prose. Declared here,
 // asserted by fixture on every template with representative rows.

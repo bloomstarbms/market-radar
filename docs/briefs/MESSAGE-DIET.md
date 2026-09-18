@@ -9,7 +9,8 @@ Assumes:
   cannot silently alter what a row claims.
 - Nothing here changes what fires, any threshold, any provenance tier, or any
   falsifier. Rendering only.
-STATUS: EXECUTED 2026-09-18 (the release after v0.31.9) — fixture 64; see REMAINING-WORK-NOTES.md for the per-part report.
+STATUS: EXECUTED 2026-09-18 — unlock types as v0.32.0 (fixture 64), CEX types as v0.32.3
+(fixture 66); per-part reports in REMAINING-WORK-NOTES.md.
 QUEUE POSITION: AFTER the correctness queue. In order: suite → detect-cadence ENA →
 routes.js gate-input fix → loadWatchState quarantine + historyResetAt → determinism
 fixture → cliff cache staleness → annotate-verdict write path → void exclusion →

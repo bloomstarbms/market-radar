@@ -55,25 +55,38 @@ export function checkListings(exchange, tickers) {
       key: `${exchange}:batch:${new Date().toISOString().slice(0, 13)}`,
       dedupeKey: `LISTING:batch:${exchange}:${new Date().toISOString().slice(0, 10)}`,
       cooldownMin: 60,
-      title: `${names.length} new pairs listed on ${exchange.toUpperCase()}`,
-      lines: [
-        names.slice(0, 12).join(', ') + (names.length > 12 ? ` … +${names.length - 12} more` : ''),
-        `Batched: ${names.length} listings in one poll cycle from one venue — one event, not ${names.length}.`,
-      ],
-      url: CHART_URLS[exchange]?.(fresh[0].sym),
+      ...listingBatchMessage(exchange, names, CHART_URLS[exchange]?.(fresh[0].sym)),
     }];
   }
 
   return fresh.map(({ sym, t, verdict }) => ({
     source: 'CEX', type: 'LISTING', severity: 'HIGH', kind: 'FACT', key: `${exchange}:${sym}`,
     cooldownMin: 24 * 60,
-    title: `${sym} just listed on ${exchange.toUpperCase()}`,
-    lines: [
-      'New spot pair detected',
-      t?.price ? `Price: $${t.price} · Vol24h: $${Math.round(t.quoteVol24h || 0).toLocaleString()}` : 'No ticker data yet',
-      ...(verdict.state === 'UNRECOGNISED' ? [`⚠️ ${verdict.reason}`] : []),
-    ],
-    url: CHART_URLS[exchange]?.(sym),
+    ...listingMessage(exchange, sym, t, verdict, CHART_URLS[exchange]?.(sym)),
     track: t?.price ? { kind: 'cex', exchange, symbol: sym, price: t.price } : undefined,
   }));
+}
+
+// LISTING MESSAGES, pure (message diet, CEX remainder). Public: the pair, the venue,
+// price and volume where a ticker exists, the unrecognised-product flag (a coverage
+// obligation: the reader must know the symbol was not classified). Operator: the
+// batching rationale.
+export function listingMessage(exchange, sym, t, verdict, url) {
+  return {
+    title: `🆕 LISTING · ${sym} on ${exchange.toUpperCase()}`,
+    lines: [
+      t?.price ? `$${t.price} · Vol24h $${Math.round(t.quoteVol24h || 0).toLocaleString()}` : 'No ticker data yet',
+      ...(verdict?.state === 'UNRECOGNISED' ? [`⚠️ ${verdict.reason}`] : []),
+    ],
+    operatorLines: ['New spot pair detected from the live market list'],
+    url,
+  };
+}
+export function listingBatchMessage(exchange, names, url) {
+  return {
+    title: `🆕 LISTINGS · ${names.length} new pairs on ${exchange.toUpperCase()}`,
+    lines: [names.slice(0, 12).join(', ') + (names.length > 12 ? ` … +${names.length - 12} more` : '')],
+    operatorLines: [`Batched: ${names.length} listings in one poll cycle from one venue — one event, not ${names.length}.`],
+    url,
+  };
 }
