@@ -461,6 +461,41 @@ export function promoteRow(oldRow, { events, monthlyDay = null, date = null, not
   return row; // constructed — nothing from the estimated era survives except identity
 }
 
+// RE-PROMOTION REQUIRES POST-DEMOTION EVIDENCE (item 10, 2026-09-18). ENA was demoted
+// 2026-09-10 (largest seen 5,148,798 against a 12.07M mean) and detect-cadence still
+// says CADENCE x13 on the same history — because the 09-07 emission is ON the day,
+// just small, and re-analysing the history that contained the miss is not new
+// evidence. Pure; promote-unlock.js REFUSES on it, never advises.
+//   R1  the spec may not count the demoting window's emission as a confirming month:
+//       monthsObserved may not exceed the qualifying emissions OUTSIDE the window.
+//   R2  at least one on-schedule emission dated AFTER the window must exist — two
+//       for a deep miss. Near-miss = largestSeen / bar ≥ NEAR_MISS_RATIO, where bar
+//       is the watch's own CONFIRM threshold (QUALIFY_FRACTION × mean).
+// NEAR_MISS_RATIO is DECLARED at 0.90 on n = 2: the two misses observed sit at 0.85
+// (ENA, 5.15M vs a 6.03M bar) and 0.91 (ORDER, 2.74× vs 3×); the cut between them
+// is a decision, not a derivation, and says so.
+export const QUALIFY_FRACTION = 0.5;   // cadence-watch's CONFIRM bar: peak ≥ 0.5 × mean
+export const NEAR_MISS_RATIO = 0.90;
+export const NEAR_MISS_BASIS = 'declared 2026-09-18 on n=2: ENA missed at 0.85 of bar (deep), ORDER at 0.91 (near); deep misses need two post-demotion emissions, near misses one';
+export function repromotionProblems({ spec, demotion, largestSeen, emissions }) {
+  if (!demotion || demotion.kind !== 'DEMOTE' || !/^\d{4}-\d{2}-\d{2}\.\.\d{4}-\d{2}-\d{2}$/.test(demotion.window || '')) return [];
+  const p = [];
+  const [wStart, wEnd] = demotion.window.split('..');
+  const mean = Array.isArray(spec?.wallets) ? (spec.familyMean ?? spec.wallets.reduce((s, w) => s + (w.meanAmount || 0), 0)) : spec?.meanAmount;
+  if (!(mean > 0)) return ['re-promotion: spec has no mean to judge post-demotion evidence against'];
+  if (!Array.isArray(emissions)) return [`re-promotion: no emission series for the watched wallet(s) — run detect-cadence.js first; a demoted row (${demotion.window}) is not re-promoted on typed numbers`];
+  const bar = QUALIFY_FRACTION * mean;
+  const qualifying = emissions.filter((e) => e.amt >= bar);
+  const inWindow = emissions.filter((e) => e.d >= wStart && e.d <= wEnd);
+  const outside = qualifying.filter((e) => e.d < wStart || e.d > wEnd);
+  if (spec.monthsObserved > outside.length) p.push(`re-promotion R1: monthsObserved ${spec.monthsObserved} exceeds the ${outside.length} qualifying emissions OUTSIDE the demoting window ${demotion.window} — the window's emission${inWindow.length ? ` (${inWindow.map((e) => `${e.d} ${Math.round(e.amt).toLocaleString()}`).join(', ')})` : ''} is the miss, not a confirming month`);
+  const ratio = Number.isFinite(largestSeen) ? +(largestSeen / bar).toFixed(2) : null;
+  const need = ratio !== null && ratio >= NEAR_MISS_RATIO ? 1 : 2;
+  const after = qualifying.filter((e) => e.d > wEnd);
+  if (after.length < need) p.push(`re-promotion R2: ${after.length} on-schedule emission${after.length === 1 ? '' : 's'} after the demoting window ${demotion.window}, ${need} required (${ratio === null ? 'largestSeen unknown → treated as a deep miss' : `largest seen ${Math.round(largestSeen).toLocaleString()} = ${ratio} of the ${Math.round(bar).toLocaleString()} bar → ${need === 1 ? 'near miss' : 'deep miss'}`}; ${NEAR_MISS_BASIS})`);
+  return p;
+}
+
 // NOTE SPLIT, pure: a row whose `note` predates the split (no operatorNote yet) has
 // its note MOVED to operatorNote — nothing is deleted, it changes audience. A row that
 // already has an operatorNote is left alone (its note is post-split and public by

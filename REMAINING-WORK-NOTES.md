@@ -3685,3 +3685,45 @@ shape). Fixture: two consecutive cycles over the same rows give identical counts
 alertable 3). The 2026-09-17 log will read 17 every cycle from here.
 
 Suite 751 green via boot-check.js.
+
+## 2026-09-18 — v0.32.2: ITEM 10, RE-PROMOTION REQUIRES POST-DEMOTION EVIDENCE
+
+`repromotionProblems({spec, demotion, largestSeen, emissions})` (pure,
+unlock-promote.js), consulted by promote-unlock.js whenever a cadence spec is attached
+to a row under an ACTIVE DEMOTE (activeDemotions semantics — a superseded demotion
+does not bind). Inputs are the watch's own record (window, largestSeen) and the
+cadence report's emission series for the spec's wallet(s). No override flag exists;
+the fixture greps the code (not the comments — it caught its own author's comment
+saying "no override flag", third parser-on-author this week) to keep it that way.
+
+  R1  monthsObserved may not exceed the qualifying emissions OUTSIDE the demoting
+      window. detect-cadence counts ENA's 09-07 emission (5.15M, on the day) as the
+      13th month; it is the miss. Re-analysing the history that contained the miss
+      is not new evidence however it is classified.
+  R2  ≥1 on-schedule (≥ bar) emission dated AFTER the window; ≥2 for a deep miss.
+      bar = QUALIFY_FRACTION (0.5, the watch's CONFIRM threshold) × mean. Near miss =
+      largestSeen/bar ≥ NEAR_MISS_RATIO = 0.90 — DECLARED on n=2 (ENA 0.85, ORDER
+      0.91), basis on the constant and repeated in every refusal.
+
+ENA is the test row and the gate fires on exactly its input: R1 (13 > 12 outside the
+window, names 2026-09-07 5,148,798 as the miss) and R2 (0 after the window, 2
+required, 0.85 of the 6,034,718 bar → deep). Run end-to-end on a copy: `node
+promote-unlock.js ENA wallet=… monthsObserved=13 …` → REFUSED, both reasons, nothing
+written. Fixture 65: the ENA case, both rules named; dropping the miss without a
+post-window month still fails R2; one post-window month fails a deep miss, two pass
+(with monthsObserved 14 = 12 + 2); a below-bar post-window emission does not count;
+0.93 of bar → one suffices; 0.89 → deep; unknown largestSeen → deep, said so; no
+series → refused naming detect-cadence; family spec judged on the family mean; no
+active demotion → nothing to satisfy. LIVE: ENA's real record + real report refuse
+today.
+
+What ENA needs to come back: Oct 6 and Nov 6 both ≥ 6.03M from 0x54B8 (or the
+schedule re-appearing on the 4th wallet 0xA7eE, which would be a NEW spec, not a
+re-promotion — and would still need its own two months).
+
+Not on the list: the demotion record has no `largestSeen` on the `demotions` entry —
+it lives on `months[sym][month]`; the CLI joins the two. Fine, but a demotion that
+survives a history reset would lose its month entry and R2 would then read "unknown
+→ deep miss" — which is the safe direction, and stated in the refusal.
+
+Suite 768 green via boot-check.js.

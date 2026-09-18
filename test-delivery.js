@@ -2285,6 +2285,47 @@ console.log('64. MESSAGE DIET — two renderings, one row; public is lint-clean,
   check('LIVE: replay operator renderings carry the pre-diet sentences (superset of today)', replay.every((r) => r.o.lines.some((l) => /NOT independently verified|Verified — source:/.test(l))));
 }
 
+console.log('65. RE-PROMOTION requires POST-DEMOTION evidence — the gate refuses on exactly ENA\'s input');
+{
+  const { repromotionProblems, NEAR_MISS_RATIO, NEAR_MISS_BASIS, QUALIFY_FRACTION } = await import('./src/core/unlock-promote.js');
+  const { loadWatchState, activeDemotions } = await import('./src/sources/calendar/cadence-watch.js');
+  // ENA's history as detect-cadence reports it: 13 on-day emissions, the 13th (09-07)
+  // at 5.15M against a 12.07M mean — the miss that demoted, counted as a month.
+  const mean = 12069436, bar = QUALIFY_FRACTION * mean;
+  const hist = ['2025-09-08', '2025-10-06', '2025-11-06', '2025-12-08', '2026-01-06', '2026-02-06', '2026-03-06', '2026-04-06', '2026-05-06', '2026-06-08', '2026-07-06', '2026-08-06'].map((d) => ({ d, amt: 1.2e7 }));
+  const miss = { d: '2026-09-07', amt: 5148798 };
+  const dem = { kind: 'DEMOTE', month: '2026-09', window: '2026-09-06..2026-09-10', at: '2026-09-12T13:58' };
+  const spec13 = { wallet: '0x' + '5'.repeat(40), meanAmount: mean, monthsObserved: 13 };
+  const ena = repromotionProblems({ spec: spec13, demotion: dem, largestSeen: 5148798, emissions: [...hist, miss] });
+  check('ENA input: REFUSED on both rules', ena.length === 2 && /R1/.test(ena[0]) && /R2/.test(ena[1]));
+  check('R1 names the window\'s emission as the miss, not a confirming month', /monthsObserved 13 exceeds the 12 qualifying emissions OUTSIDE/.test(ena[0]) && /2026-09-07 5,148,798/.test(ena[0]));
+  check('R2 states the ratio to the bar, the class, and the count required', /0\.85 of the 6,034,718 bar → deep miss/.test(ena[1]) && /2 required/.test(ena[1]));
+  check('the near-miss cut is declared with its n=2 basis, not derived', NEAR_MISS_RATIO === 0.9 && /n=2/.test(NEAR_MISS_BASIS) && /ENA/.test(NEAR_MISS_BASIS) && /ORDER/.test(NEAR_MISS_BASIS) && /R2[^]*n=2/.test(ena[1]));
+  // Re-analysing pre-demotion history is not new evidence however it is classified.
+  check('dropping the miss from the count but adding NO post-window emission still fails R2', (() => { const p = repromotionProblems({ spec: { ...spec13, monthsObserved: 12 }, demotion: dem, largestSeen: 5148798, emissions: hist }); return p.length === 1 && /R2/.test(p[0]); })());
+  // What WOULD pass: two post-window on-schedule emissions for a deep miss.
+  const oct = { d: '2026-10-06', amt: 1.1e7 }, nov = { d: '2026-11-06', amt: 1.25e7 };
+  check('deep miss + ONE post-window emission: still refused (needs two)', repromotionProblems({ spec: { ...spec13, monthsObserved: 13 }, demotion: dem, largestSeen: 5148798, emissions: [...hist, miss, oct] }).some((p) => /R2/.test(p)));
+  check('deep miss + TWO post-window emissions, miss not counted: PASSES', repromotionProblems({ spec: { ...spec13, monthsObserved: 14 }, demotion: dem, largestSeen: 5148798, emissions: [...hist, miss, oct, nov] }).length === 0);
+  check('MUTATION: a post-window emission BELOW the bar does not count', repromotionProblems({ spec: { ...spec13, monthsObserved: 12 }, demotion: dem, largestSeen: 5148798, emissions: [...hist, oct, { d: '2026-11-06', amt: 0.4 * mean }] }).some((p) => /R2/.test(p)));
+  check('near miss (0.93 of bar): ONE post-window emission suffices', repromotionProblems({ spec: { ...spec13, monthsObserved: 12 }, demotion: dem, largestSeen: 0.93 * bar, emissions: [...hist, oct] }).length === 0);
+  check('MUTATION: at 0.89 of bar it is a deep miss and one is not enough', repromotionProblems({ spec: { ...spec13, monthsObserved: 12 }, demotion: dem, largestSeen: 0.89 * bar, emissions: [...hist, oct] }).some((p) => /deep miss/.test(p)));
+  check('unknown largestSeen is treated as a deep miss, said so', /treated as a deep miss/.test(repromotionProblems({ spec: spec13, demotion: dem, largestSeen: undefined, emissions: hist }).join()));
+  check('no emission series -> refused, names detect-cadence (typed numbers do not re-promote)', /run detect-cadence/.test(repromotionProblems({ spec: spec13, demotion: dem, largestSeen: 1, emissions: null }).join()));
+  check('a FAMILY spec is judged against the family mean', repromotionProblems({ spec: { wallets: [{ addr: 'a', meanAmount: 7e6 }, { addr: 'b', meanAmount: 5e6 }], monthsObserved: 12 }, demotion: dem, largestSeen: 5e6, emissions: [...hist, oct, nov] }).length === 0);
+  check('no active demotion -> nothing to satisfy', repromotionProblems({ spec: spec13, demotion: null, largestSeen: 1, emissions: [] }).length === 0 && repromotionProblems({ spec: spec13, demotion: { kind: 'review-expired' }, largestSeen: 1, emissions: [] }).length === 0);
+  // LIVE: the real ENA record + the real report refuse today (the row IS the test case).
+  const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
+  const st = loadWatchState();
+  const liveDem = activeDemotions(live, st).ENA;
+  const liveEna = live.find((t) => t.sym === 'ENA');
+  const rep = JSON.parse(readFileSync('data/cadence-report.json', 'utf8')).ENA;
+  const w = (rep?.perWallet || []).find((x) => x.addr.toLowerCase() === liveEna?.cadence?.wallet?.toLowerCase());
+  check('LIVE: ENA is under an active DEMOTE and its report still says CADENCE on the same history', liveDem?.kind === 'DEMOTE' && w?.solo?.verdict === 'CADENCE');
+  check('LIVE: re-promoting ENA from that report is REFUSED today', repromotionProblems({ spec: liveEna.cadence, demotion: liveDem, largestSeen: st.months?.ENA?.[liveDem?.month]?.largestSeen, emissions: w?.solo?.emissions }).length >= 1);
+  check('the CLI consults the gate before promoteRow (source-level: no override flag exists)', /repromotionProblems\(/.test(readFileSync('promote-unlock.js', 'utf8')) && !/force|override/i.test(readFileSync('promote-unlock.js', 'utf8').split('ITEM 10')[1].split('const row = promoteRow')[0].replace(/^\s*\/\/.*$/gm, '')));
+}
+
 console.error = origErr;
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

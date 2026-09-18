@@ -274,6 +274,25 @@ const cadence = famSpec ? {
 const newEvent = { date: eventDate ?? new Date().toISOString().slice(0, 10), source: args.source, detail: args.detail };
 const oldEvents = j.tokens[idx].events ?? [];
 const events = args.keepEvents ? oldEvents : args.addEvent ? [newEvent, ...oldEvents] : [newEvent];
+// ITEM 10 — a row under an ACTIVE cadence demotion is re-promoted only on evidence
+// dated after the demoting window (repromotionProblems). Inputs are the watch's own
+// record and the cadence report's emission series for the spec's wallet(s); nothing
+// is typed, and there is no override flag — the rule refuses, it does not advise.
+if (cadence) {
+  const { repromotionProblems } = await import('./src/core/unlock-promote.js');
+  const { loadWatchState, activeDemotions } = await import('./src/sources/calendar/cadence-watch.js');
+  const st = loadWatchState();
+  const dem = activeDemotions(j.tokens, st)[sym.toUpperCase()];
+  if (dem?.kind === 'DEMOTE') {
+    const rep = existsSync('data/cadence-report.json') ? JSON.parse(readFileSync('data/cadence-report.json', 'utf8'))[sym.toUpperCase()] : null;
+    const addrs = new Set((cadence.wallets?.map((w) => w.addr) ?? [cadence.wallet]).map((a) => a.toLowerCase()));
+    const series = (rep?.perWallet || []).filter((w) => addrs.has(w.addr.toLowerCase()) && typeof w.solo === 'object');
+    const emissions = series.length ? series.flatMap((w) => w.solo.emissions || []) : null;
+    const largestSeen = st.months?.[sym.toUpperCase()]?.[dem.month]?.largestSeen;
+    const problems = repromotionProblems({ spec: cadence, demotion: dem, largestSeen, emissions });
+    if (problems.length) { console.error(`${sym.toUpperCase()}: REFUSED — active demotion ${dem.month} (${dem.window}):\n  ${problems.join('\n  ')}`); process.exit(1); }
+  }
+}
 const row = promoteRow(j.tokens[idx], {
   monthlyDay: args.monthlyDay ? Number(args.monthlyDay) : null,
   date: eventDate,
