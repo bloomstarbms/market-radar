@@ -9,7 +9,11 @@
 // "Verify the fields, not just the date" — enforced by shape, not vigilance.
 
 // Fields a VERIFIED row may carry. Everything else from the estimated era is dropped.
-export const VERIFIED_ROW_FIELDS = ['sym', 'name', 'monthlyDay', 'date', 'verified', 'note', 'events', 'retired', 'retiredAt', 'cadence', 'enforcement', 'reviewBy', 'stage', 'alsoObserve', 'sourceHistory', 'chain', 'token', 'contract', 'clusterSpec', 'cliffDates', 'upgradeable', 'falsifier'];
+// NOTE SPLIT (message diet, 2026-09-18): `note` is PUBLIC context and renders in the
+// channel; `operatorNote` is the build log — architecture vocabulary, provenance
+// mechanics — and renders only in the operator DM. Every live note was operator
+// prose, so promote-unlock.js note-split moved them all; `note` starts empty.
+export const VERIFIED_ROW_FIELDS = ['sym', 'name', 'monthlyDay', 'date', 'verified', 'note', 'operatorNote', 'events', 'retired', 'retiredAt', 'cadence', 'enforcement', 'reviewBy', 'stage', 'alsoObserve', 'sourceHistory', 'chain', 'token', 'contract', 'clusterSpec', 'cliffDates', 'upgradeable', 'falsifier'];
 // Estimated-era fields that must NEVER appear on a verified row (boot-asserted).
 export const ESTIMATED_ONLY_FIELDS = ['pctOfMcap'];
 
@@ -19,7 +23,7 @@ export const ESTIMATED_ONLY_FIELDS = ['pctOfMcap'];
 // falsifier is the source itself: re-read weekly, stale at 21 days. A sourced row
 // without source + sourceFetchedAt is refused at promotion and at boot, the same
 // shape discipline as a verified row without a forward falsifier.
-export const SOURCED_ROW_FIELDS = ['sym', 'name', 'provenance', 'source', 'sourceFetchedAt', 'sourceEvents', 'chain', 'token', 'stage', 'note', 'circSupply', 'totalLocked', 'maxSupply', 'mechanism', 'mechanismBasis'];
+export const SOURCED_ROW_FIELDS = ['sym', 'name', 'provenance', 'source', 'sourceFetchedAt', 'sourceEvents', 'chain', 'token', 'stage', 'note', 'operatorNote', 'circSupply', 'totalLocked', 'maxSupply', 'mechanism', 'mechanismBasis'];
 // MECHANISM (v0.30.1). Route 2 found by failing that a sourced date can describe
 // three different things on chain: a custody batch, a cliff-gated claim, or NOTHING
 // DISCRETE — a continuous-claim stream the index has discretised (L3), or a date the
@@ -162,7 +166,7 @@ export function sourceIsStale(t, now = Date.now()) {
 // falsifier margin (0.17; best point on its own grid 0.26) sits outside the verified
 // population (EIGEN 0.76, ENA 0.67, MOVE 0.64) — see MIN_FALSIFIER_MARGIN.
 export const TIER_CORRECTION_MIN_REASON = 20;
-export function sourceRow(oldRow, { source, sourceFetchedAt, sourceEvents, chain, token = null, stage = 'STANDARD', note = '', circSupply = null, totalLocked = null, maxSupply = null, mechanism = 'pending', mechanismBasis = null, tierCorrection = null }) {
+export function sourceRow(oldRow, { source, sourceFetchedAt, sourceEvents, chain, token = null, stage = 'STANDARD', note = '', circSupply = null, totalLocked = null, maxSupply = null, mechanism = 'pending', mechanismBasis = null, tierCorrection = null, operatorNote = null }) {
   if (!oldRow?.sym) throw new Error('sourceRow: no sym');
   if (oldRow.retired) throw new Error(`sourceRow: ${oldRow.sym} is RETIRED`);
   const wasVerified = Array.isArray(oldRow.events) && oldRow.events.length > 0;
@@ -171,6 +175,7 @@ export function sourceRow(oldRow, { source, sourceFetchedAt, sourceEvents, chain
   }
   if (!wasVerified && tierCorrection) throw new Error(`sourceRow: ${oldRow.sym} is not verified — nothing to correct`);
   const row = { sym: oldRow.sym, name: oldRow.name, provenance: 'sourced', source, sourceFetchedAt, sourceEvents, chain, stage, note, mechanism };
+  if (operatorNote) row.operatorNote = operatorNote;
   if (wasVerified) {
     // The verification the row held travels whole — events, spec, per-cliff replay,
     // stamped falsifier — the same way a sourced row superseded by a verified one keeps
@@ -391,7 +396,7 @@ export function forwardFalsifierProblems(t) {
 // false-demote every quiet month), but summed for the RETROSPECTIVE stage. Forward
 // stages can only claim what is predictable, so they quote the metronome as a floor;
 // T+3 reports what was actually observed. Predict the floor, report the total.
-export function promoteRow(oldRow, { events, monthlyDay = null, date = null, note = '', cadence = null, enforcement = null, reviewBy = null, stage = null, alsoObserve = null, contract = null, clusterSpec = null, cliffDates = null, upgradeable = null }) {
+export function promoteRow(oldRow, { events, monthlyDay = null, date = null, note = '', operatorNote = null, cadence = null, enforcement = null, reviewBy = null, stage = null, alsoObserve = null, contract = null, clusterSpec = null, cliffDates = null, upgradeable = null }) {
   if (stage && !['FULL', 'STANDARD', 'LOGGED'].includes(stage)) throw new Error(`promoteRow: unknown stage '${stage}'`);
   for (const a of alsoObserve || []) {
     if (!/^0x[0-9a-fA-F]{40}$/.test(a)) throw new Error(`promoteRow: alsoObserve entry '${a}' is not a full address`);
@@ -408,6 +413,7 @@ export function promoteRow(oldRow, { events, monthlyDay = null, date = null, not
     if (p.length) throw new Error(`promoteRow: onchain-cadence provenance requires a machine-checkable cadence spec (auto-demote is not optional for behavioural verification): ${p.join('; ')}`);
   }
   const row = { sym: oldRow.sym, name: oldRow.name, verified: true, events, note };
+  if (operatorNote) row.operatorNote = operatorNote;
   // A sourced row promoted to verified is SUPERSEDED, not deleted: the source's
   // events travel as history, and the chain/token resolution survives.
   if (oldRow.provenance === 'sourced') {
@@ -431,6 +437,18 @@ export function promoteRow(oldRow, { events, monthlyDay = null, date = null, not
   const ff = forwardFalsifierProblems(row);
   if (ff.length) throw new Error(`promoteRow: ${ff.join('; ')}`);
   return row; // constructed — nothing from the estimated era survives except identity
+}
+
+// NOTE SPLIT, pure: a row whose `note` predates the split (no operatorNote yet) has
+// its note MOVED to operatorNote — nothing is deleted, it changes audience. A row that
+// already has an operatorNote is left alone (its note is post-split and public by
+// decision). Returns the new row and whether it changed.
+export function splitNote(row) {
+  if (!row || typeof row !== 'object') return { row, moved: false };
+  if (!row.note || row.operatorNote) return { row, moved: false };
+  const out = { ...row, operatorNote: row.note };
+  delete out.note;
+  return { row: out, moved: true };
 }
 
 // Boot-assertion helper: a row with events[] carrying any estimated-only field is a

@@ -9,7 +9,7 @@ Assumes:
   cannot silently alter what a row claims.
 - Nothing here changes what fires, any threshold, any provenance tier, or any
   falsifier. Rendering only.
-STATUS: ACTIVE PLAN — not started.
+STATUS: EXECUTED 2026-09-18 (the release after v0.31.9) — fixture 64; see REMAINING-WORK-NOTES.md for the per-part report.
 QUEUE POSITION: AFTER the correctness queue. In order: suite → detect-cadence ENA →
 routes.js gate-input fix → loadWatchState quarantine + historyResetAt → determinism
 fixture → cliff cache staleness → annotate-verdict write path → void exclusion →
@@ -18,6 +18,8 @@ UNBLOCKED 2026-09-13: the correctness queue items 0-7 are DONE and shipped as
 v0.31.7. Items 8-10 remain and still precede this work. The prerequisite named at the
 foot of this file — a field inventory of the current message builders — now exists as
 docs/briefs/MESSAGE-FIELD-INVENTORY.md.
+REORDERED 2026-09-18: runs BEFORE items 8 and 10. Tree is v0.31.9 (ORDER sourced,
+WEAK gone, `margin bar` on the coverage line); banned list grows — see the opener.
 -->
 
 # Message diet — two renderings, one row

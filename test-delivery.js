@@ -341,7 +341,9 @@ console.log('13. FACT/CALL split — facts are unscored, unbudgeted, never queue
   check('fact is never charged to the budget', v.charge === false);
   const { formatAlert } = await import('./src/core/dispatcher.js');
   const factMsg = formatAlert({ source: 'CEX', type: 'LISTING', severity: 'HIGH', title: 'KII listed', lines: ['x'] }, { kind: 'FACT' });
-  check('fact message carries NO conviction and NO tier', !/conviction/.test(factMsg) && !/TIER/.test(factMsg) && /no directional call/.test(factMsg));
+  // (diet) a FACT carries no subtitle at all: "facts only" is the feed's property and
+  // lives in the channel description, not in every element of the feed.
+  check('fact message carries NO conviction, NO tier and NO per-message disclaimer subtitle', !/conviction/.test(factMsg) && !/TIER/.test(factMsg) && !/no directional call/.test(factMsg));
   const callMsg = formatAlert({ source: 'SIG', type: 'CONFLUENCE', severity: 'HIGH', title: 'c', lines: ['x'] }, { kind: 'CALL', tier: 'B', score: 76 });
   check('call message still carries tier + conviction', /B-TIER/.test(callMsg) && /conviction 76/.test(callMsg));
 }
@@ -1098,14 +1100,14 @@ console.log('53. CROSS-SOURCE AGREEMENT — a second index changes the MESSAGE, 
   // The comparison is against OUR NEXT event, not any event.
   check('compares our NEXT event, not a later one (no manufactured disagreement)', sourceAgreement(row([10, 40]), idx('2026-09-17'), now).state === 'both-agree');
   const msg = sourcedMessage(row([10, 40]), row([10, 40]).sourceEvents[0], 7, new Date(now), idx('2026-09-17'));
-  check('the message carries the agreement line on the NEXT event', msg.lines.some((l) => /agree on this date/.test(l)));
+  check('the message carries the agreement on the NEXT event — collapsed in public, in full for the operator', msg.lines.some((l) => /DefiLlama \+ CryptoRank agree/.test(l)) && msg.operatorLines.some((l) => /agree on this date/.test(l)));
   const later = sourcedMessage(row([10, 40]), row([10, 40]).sourceEvents[1], 7, new Date(now), idx('2026-09-17'));
-  check('a LATER tranche carries no agreement line (the second source made no claim about it)', !later.lines.some((l) => /agree on this date|Sources disagree/.test(l)));
+  check('a LATER tranche carries no agreement line (the second source made no claim about it)', !later.lines.some((l) => /agree|disagree/.test(l)) && !later.operatorLines.some((l) => /agree on this date|Sources disagree/.test(l)));
   // AGREEMENT MUST NOT PROMOTE.
   const agreed = row([10]);
   check('an agreeing row is still provenance sourced, still not verified', agreed.provenance === 'sourced' && agreed.verified !== true && sourcedRowProblems(agreed).length === 0);
   check('nothing in the agreement path writes a provenance or verified field', (() => { const before = JSON.stringify(agreed); sourceAgreement(agreed, idx('2026-09-17'), now); return JSON.stringify(agreed) === before; })());
-  check('the message still says NOT independently verified even when both agree', msg.lines.some((l) => /NOT independently verified/.test(l)));
+  check('the message still says unverified even when both agree (public), NOT independently verified (operator)', msg.lines.some((l) => /unverified/.test(l)) && msg.operatorLines.some((l) => /NOT independently verified/.test(l)));
   // Live: all four states are reachable, and two are actually occupied today.
   const cov = unlockCoverage();
   check('coverage line reports the second-source split', /2nd source: \d+ agree · \d+ DISAGREE · \d+ single-source/.test(cov.line));
@@ -1739,10 +1741,11 @@ console.log('45. SOURCED tier — a named source pushes, labelled; its falsifier
   check('re-ingest AFTER the demotion supersedes it', !effectiveSourced({ ...row, sourceFetchedAt: '2099-02-01T00:00' }, { rows: { TST: { demoted: { at: '2099-01-01T00:00' } } } }).sourceDemoted);
   // Message: visibly weaker than verified, no direction, source named, age stated.
   const m = sourcedMessage(row, row.sourceEvents[0], 7, new Date(now));
-  check('header icon is 📅 UNLOCK LISTED, not 🔓', /^📅 UNLOCK LISTED/.test(m.title));
-  check('first line names the source and says NOT independently verified', /per DefiLlama/.test(m.lines[0]) && /NOT independently verified/.test(m.lines[0]));
+  check('header icon is 📅 UNLOCK, not 🔓', /^📅 UNLOCK · /.test(m.title) && !/🔓/.test(m.title));
+  check('public names the source and says unverified, with the source age', m.lines.some((l) => /DefiLlama, unverified \(\d+d old|today\)/.test(l)));
+  check('operator says NOT independently verified in full', m.operatorLines.some((l) => /per DefiLlama/.test(l) && /NOT independently verified/.test(l)));
   check('amount is labelled as the source figure', /source figure/.test(m.lines.join(' ')));
-  check('message states when the source was last confirmed', /Source last confirmed/.test(m.lines.join(' ')));
+  check('operator states when the source was last confirmed and the silence rule', m.operatorLines.some((l) => /Source last confirmed/.test(l) && /goes silent/.test(l)));
   check('no directional language in the sourced template', !/(close now|drift|sell|buy|dump|bearish|bullish)/i.test(m.title + m.lines.join(' ')));
   check('claim coverage for sourced rows says so', claimCoverage(row).amount === 'sourced' && /not independently verified/.test(claimCoverage(row).line));
   check('sourced rows never look backward (no T+3)', STAGES.STANDARD.every((l) => l >= 0));
@@ -1931,7 +1934,7 @@ console.log('40. claim coverage is stated per row (date/amount/scope, not just d
   check('single-wallet message says the figure is a FLOOR, not a total', /floor, not a total/.test(claimCoverage(oneRow).line));
   check('single-wallet message warns other holders are uncovered', /NOT covered/.test(claimCoverage(oneRow).line));
   check('announcement row: amount is UNCHECKED and says so', claimCoverage(annRow).amount === 'unchecked' && /nothing observes it on-chain/.test(claimCoverage(annRow).line));
-  check('announcement row still discloses its date falsifier', /re-attested by 2026-11-30/.test(claimCoverage(annRow).line));
+  check('announcement row still discloses its date falsifier (operator part; line keeps it)', /Re-attested by 2026-11-30/.test(claimCoverage(annRow).line) && claimCoverage(annRow).operator.some((l) => /Re-attested by 2026-11-30/.test(l)));
   check('a row with no falsifier at all is refused, not narrated', /should not be alerting/.test(claimCoverage({}).line));
   // Every LIVE verified row must state coverage for both date and amount.
   const rows = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens.filter((t) => !t.retired && t.events?.length);
@@ -2118,6 +2121,140 @@ console.log('63. a COPY of the tree cannot send — by construction, not by a ru
     check('makeCopy: .env is NOT in the copy, the marker IS, sources and data are', !ex(join(dst, '.env')) && ex(join(dst, COPY_MARKER)) && ex(join(dst, 'a.js')) && ex(join(dst, 'data', 'x.json')) && !ex(join(dst, 'node_modules')));
     check('the copy it makes is exactly the shape the guard refuses to run with a token', /must not send/.test(copySendGuard(dst, { TELEGRAM_BOT_TOKEN: 't' }) || '') && copySendGuard(dst, {}) === null);
   } finally { rm(src, { recursive: true, force: true }); rm(dst, { recursive: true, force: true }); }
+}
+
+console.log('64. MESSAGE DIET — two renderings, one row; public is lint-clean, capped, and loses no field');
+{
+  const U = await import('./src/sources/calendar/unlocks.js');
+  const { renderFact, sourcedMessage, verifiedMessage, claimCoverage, PUBLIC_MAX_LINES, PUBLIC_MAX_CHARS } = U;
+  const { formatAlert, ageLine } = await import('./src/core/dispatcher.js');
+  const { lagDisclosure, DATA_AGE_DISCLOSE_SEC, LAG_DISCLOSE_MIN } = await import('./src/core/lag.js');
+  const now = new Date(Date.UTC(2026, 8, 13, 12));
+  const day = (d) => Math.floor((now.getTime() + d * 86400e3) / 1000);
+  // Representative rows — one per shape the inventory covers (B sourced, C verified).
+  const srcRow = { sym: 'KAI', name: 'Kaito', provenance: 'sourced', source: 'defillama', sourceFetchedAt: new Date(now - 5 * 86400e3).toISOString(), chain: 'base', token: 'base:0x' + 'a'.repeat(40),
+    sourceEvents: [{ t: day(7), type: 'cliff', n: 17597619, cats: 'noncirculating+insiders+privateSale' }, { t: day(37), type: 'cliff', n: 1e6, cats: 'insiders' }], maxSupply: 1e9, circSupply: 4.6e8, stage: 'STANDARD', mechanism: 'pending',
+    operatorNote: 'bucket C not enumerated by us' };
+  const srcUnconf = { ...srcRow, sym: 'UNC', chain: 'unconfirmed', token: null };
+  const idx = (d) => ({ protocols: [{ symbol: srcRow.sym, nextDate: d }], withheld: 78 });
+  const famRow = { sym: 'EIG', name: 'EigenCloud', verified: true, events: [{ date: '2026-08-30', source: 'onchain-cadence', detail: 'd' }],
+    cadence: { wallets: [{ addr: '0x' + '1'.repeat(40), meanAmount: 7.82e6 }, { addr: '0x' + '2'.repeat(40), meanAmount: 1.69e6 }], monthsObserved: 11, tolerance: 0.13, toleranceBasis: 'b' },
+    falsifier: { verdict: 'STRONG', chanceRate: 0.24, replayRate: 1, replayN: 11, replayHits: 11, windowDays: 5, compound: 1.5e-7, margin: 0.76, basis: 'b' }, operatorNote: 'cadence spec would false-demote by construction' };
+  const oneRow = { sym: 'ENA', name: 'Ethena', verified: true, events: [{ date: '2026-08-06', source: 'onchain-cadence' }], cadence: { wallet: '0x' + '3'.repeat(40), meanAmount: 12069436, monthsObserved: 13 },
+    falsifier: { verdict: 'STRONG', chanceRate: 0.33, replayRate: 1, replayN: 13, replayHits: 13, windowDays: 5, margin: 0.67, basis: 'b' } };
+  const annRow = { sym: 'STK', name: 'Starknet', verified: true, events: [{ date: '2026-09-15', source: 'announcement' }], reviewBy: '2026-11-30', falsifier: { verdict: 'NONE', basis: 'b' }, operatorNote: 'reviewBy dead-man switch; enforcement unverifiable' };
+  const shapes = [
+    ['sourced', () => renderFact(srcRow, 'public', { ev: srcRow.sourceEvents[0], lead: 7, now, second: idx('2026-09-20') }), () => renderFact(srcRow, 'operator', { ev: srcRow.sourceEvents[0], lead: 7, now, second: idx('2026-09-20') })],
+    ['sourced-disagree', () => renderFact(srcRow, 'public', { ev: srcRow.sourceEvents[0], lead: 3, now, second: idx('2026-09-29') }), () => renderFact(srcRow, 'operator', { ev: srcRow.sourceEvents[0], lead: 3, now, second: idx('2026-09-29') })],
+    ['sourced-unconfirmed-chain', () => renderFact(srcUnconf, 'public', { ev: srcUnconf.sourceEvents[0], lead: 0, now, second: { protocols: [], withheld: 78 } }), () => renderFact(srcUnconf, 'operator', { ev: srcUnconf.sourceEvents[0], lead: 0, now, second: { protocols: [], withheld: 78 } })],
+    ['family', () => renderFact(famRow, 'public', { lead: 14, dateKey: '2026-09-30' }), () => renderFact(famRow, 'operator', { lead: 14, dateKey: '2026-09-30' })],
+    ['single', () => renderFact(oneRow, 'public', { lead: 3, dateKey: '2026-10-06' }), () => renderFact(oneRow, 'operator', { lead: 3, dateKey: '2026-10-06' })],
+    ['announcement', () => renderFact(annRow, 'public', { lead: 0, dateKey: '2026-09-15' }), () => renderFact(annRow, 'operator', { lead: 0, dateKey: '2026-09-15' })],
+    ['retro', () => renderFact(oneRow, 'public', { lead: -3, dateKey: '2026-09-06', retro: 'Observed on-chain: 13,318,135 total from the tracked schedule; no other watched holder emitted in this window.' }), () => renderFact(oneRow, 'operator', { lead: -3, dateKey: '2026-09-06', retro: 'Observed on-chain: 13,318,135 total from the tracked schedule; no other watched holder emitted in this window.' })],
+  ];
+  const pub = Object.fromEntries(shapes.map(([k, p]) => [k, p()]));
+  const op = Object.fromEntries(shapes.map(([k, , o]) => [k, o()]));
+
+  // PART 1 — RENDER-LINT over the PUBLIC OUTPUT (not any field), so vocabulary
+  // arriving through any path is caught. Compound forms where the bare word is
+  // plain English ("cadence spec", not "cadence"; "demote" is never plain here).
+  const BANNED = /\b(bucket [A-D]|falsifier|cadence spec|cluster spec|by construction|demot(e|es|ed|ion)|promot(e|es|ed|ion)|dead-man|provenance tier|overlay|quarantine|claim coverage|chance rate|binomial|replay series|enumerated by us|tierHistory|margin bar|not enumerated|auto-demotes|re-attest(ed|s)?|reviewBy|operator note)\b/i;
+  const lintHits = (r) => r.lines.concat(r.title).filter((l) => BANNED.test(l));
+  for (const [k, r] of Object.entries(pub)) check(`render-lint: PUBLIC ${k} carries no architecture vocabulary`, lintHits(r).length === 0, lintHits(r).join(' | '));
+  check('render-lint: the OPERATOR rendering is where that vocabulary lives (family shows falsifier strength)', op.family.lines.some((l) => /Falsifier strength/.test(l)) && op.sourced.lines.some((l) => /bucket C/.test(l)));
+  // SELF-TEST, same run: plant an operator note on a synthetic row via the PUBLIC
+  // field, assert the public render FAILS; the same text as operatorNote passes.
+  const planted = renderFact({ ...famRow, note: 'bucket C not enumerated by us' }, 'public', { lead: 14, dateKey: '2026-09-30' });
+  check('SELF-TEST: a planted operator phrase in the public note is CAUGHT', lintHits(planted).length === 1);
+  const safe = renderFact({ ...famRow, note: 'Team allocation; monthly since Oct 2025.', operatorNote: 'bucket C not enumerated by us' }, 'public', { lead: 14, dateKey: '2026-09-30' });
+  check('SELF-TEST: the same phrase as operatorNote, with an operator-safe public note, PASSES', lintHits(safe).length === 0 && safe.lines.some((l) => /Team allocation/.test(l)));
+  check('SELF-TEST: the lint also catches vocabulary arriving through a non-note path (title)', lintHits({ ...planted, lines: [], title: 'X — demoted' }).length === 1);
+  // No-direction-words on every new public template (the prose-lint rule, applied to output).
+  const DIRECTION = /(close now|exit here|buy now|sell now|take profit|dump hard|sell off sharply|capitulation bottom|blow-off top|reversal risk|front-run|bleeds into|drift usually|expect wider swings|precursor to|watch for a follow-up|bearish|bullish)/i;
+  check('no-direction-words: every public template is clean', Object.values(pub).every((r) => !DIRECTION.test(r.text)));
+
+  // PART 2 — the budget: six lines after the title, ≤420 chars, enforced not preferred.
+  for (const [k, r] of Object.entries(pub)) check(`cap: PUBLIC ${k} is ≤${PUBLIC_MAX_LINES} lines and ≤${PUBLIC_MAX_CHARS} chars (${r.lines.length}/${r.text.length})`, r.lines.length <= PUBLIC_MAX_LINES && r.text.length <= PUBLIC_MAX_CHARS);
+  check('MUTATION: a seventh public line would fail the cap', renderFact({ ...srcRow, note: 'x', sourceRevision: { note: 'moved', at: '2026-09-20' } }, 'public', { ev: srcRow.sourceEvents[0], lead: 7, now, second: idx('2026-09-29') }).lines.length <= PUBLIC_MAX_LINES);
+
+  // PART 4 — coverage obligations survive the cut, per row shape that demands them.
+  check('obligation: VERIFIED vs LISTED unmissable (🔓 vs 📅)', /^📅/.test(pub.sourced.title) && /^🔓/.test(pub.family.title));
+  check('obligation: source NAME when unverified', pub.sourced.lines.some((l) => /DefiLlama, unverified/.test(l)));
+  check('obligation: source AGE when staleness can silence the row', pub.sourced.lines.some((l) => /\(5d old\)/.test(l)));
+  check('obligation: "amount not observed on-chain" on an announcement row', pub.announcement.lines.some((l) => /amount not observed on-chain/.test(l)));
+  check('obligation: "chain unconfirmed" when no on-chain read was attempted', pub['sourced-unconfirmed-chain'].lines.some((l) => /chain unconfirmed — no on-chain read attempted/.test(l)));
+  check('obligation: single-wallet figure says floor, not a total', pub.single.lines.some((l) => /a floor, not a total/.test(l)));
+  check('obligation: second-source state collapses to one of three forms', /DefiLlama \+ CryptoRank agree/.test(pub.sourced.text) && /sources disagree: DefiLlama 20 Sep, CryptoRank 29 Sep/.test(pub['sourced-disagree'].text) && /DefiLlama only/.test(pub['sourced-unconfirmed-chain'].text));
+  check('MUTATION: silence about coverage would read as coverage — a sourced row without its source name fails', !renderFact({ ...srcRow, source: '' }, 'public', { ev: srcRow.sourceEvents[0], lead: 7, now, second: null }).lines.some((l) => /DefiLlama, unverified/.test(l)));
+
+  // PART 5 — FIELD PRESERVATION against docs/briefs/MESSAGE-FIELD-INVENTORY.md (frozen
+  // input). Every inventory ID names its destination; PUBLIC/OPERATOR IDs must match a
+  // rendering; the others carry a declared reason. Nothing is deleted; it moves.
+  const T = (r, re) => r.text.split('\n').some((l) => re.test(l));
+  const ffam = formatAlert({ source: 'CAL', type: 'UNLOCK', title: op.family.title, lines: pub.family.lines, operatorLines: op.family.lines.slice(pub.family.lines.length), url: 'u' }, { kind: 'FACT', updates: 3 }, 'operator');
+  const table = [
+    ['A1', 'PUBLIC', /\[🔓 TOKEN UNLOCK\]/.test(ffam)], ['A2', 'PUBLIC', /EIG — 30 Sep/.test(ffam)],
+    ['A3', 'CHANNEL BIO', 'facts only — no trade calls: a property of the feed, set once in the channel description'],
+    ['A4', 'PUBLIC', /conviction 76/.test(formatAlert({ source: 'SIG', type: 'CONFLUENCE', title: 'c', lines: ['x'] }, { kind: 'CALL', tier: 'B', score: 76 }))],
+    ['A5', 'PUBLIC', /• /.test(ffam)], ['A6', 'PUBLIC', /updated 3x/.test(ffam)], ['A7', 'PUBLIC', /href="u"/.test(ffam)],
+    ['A8', 'PUBLIC', /⏱ data 4m old/.test(formatAlert({ source: 'CAL', type: 'UNLOCK', title: 't', lines: ['x'], snapshotTs: Date.now() - 4 * 60e3 }, { kind: 'FACT' }, 'public'))],
+    ['B1', 'PUBLIC', /^📅 UNLOCK · KAI/.test(pub.sourced.title)], ['B2', 'PUBLIC', T(pub.sourced, /· cliff/)], ['B3', 'PUBLIC', /20 Sep \(7d\)/.test(pub.sourced.title)],
+    ['B4', 'PUBLIC', T(pub.sourced, /DefiLlama, unverified/) && T(op.sourced, /per DefiLlama's schedule — NOT independently verified/)],
+    ['B5', 'OPERATOR', T(op.sourced, /Source lists 2 upcoming batch events/)], ['B6', 'PUBLIC', T(pub.sourced, /noncirculating \/ insiders \/ privateSale/)],
+    ['B7', 'PUBLIC', T(pub.sourced, /17,597,619 KAI/)], ['B8', 'PUBLIC', T(pub.sourced, /1\.76% of max supply/)], ['B9', 'PUBLIC', T(pub.sourced, /46% already unlocked/)],
+    ['B10', 'PUBLIC', T(pub.sourced, /source figure/)], ['B11', 'PUBLIC', T(pub['sourced-unconfirmed-chain'], /chain unconfirmed — no on-chain read attempted/) && T(pub.sourced, /^base ·/)],
+    ['B12', 'PUBLIC', T(pub.sourced, /5d old/)], ['B13', 'OPERATOR', T(op.sourced, /goes silent if not re-confirmed within 21 days/)],
+    ['B14', 'PUBLIC', T(renderFact({ ...srcRow, sourceRevision: { note: 'moved 2 days', at: '2026-09-20' } }, 'public', { ev: srcRow.sourceEvents[0], lead: 7, now, second: null }), /Schedule moved 2 days \(recheck 2026-09-20\)/)],
+    ['B15', 'PUBLIC', T(pub.sourced, /DefiLlama \+ CryptoRank agree/)], ['B16', 'OPERATOR', T(op['sourced-unconfirmed-chain'], /withholds 78 entries/)],
+    ['B17', 'PUBLIC', /basescan/.test(pub.sourced.url) || /defillama/.test(pub['sourced-unconfirmed-chain'].url)],
+    ['C1', 'PUBLIC', /30 Sep \(14d\)/.test(pub.family.title) && /T\+3 \(event 6 Sep\)/.test(pub.retro.title) && /\(today\)/.test(pub.announcement.title)],
+    ['C2', 'OPERATOR', T(op.family, /EigenCloud: scheduled token unlock/)],
+    ['C3', 'UNREACHABLE', 'pctOfMcap is an estimated-era field; a verified row carrying it fails boot (fixture 11d), so the clause never rendered'],
+    ['C4', 'SPLIT', T(op.family, /Operator note: cadence spec would false-demote by construction/) && !T(pub.family, /false-demote/)],
+    ['C5', 'DROP', '"Unlocks add sell-side supply; thin-liquidity tokens absorb it worst" — generic advice, not a fact about the row; the inventory proposed DROP and the reviewer accepted'],
+    ['C6', 'OPERATOR', T(op.family, /Stage T-14: Added supply reaches the market on this date/)], ['C7', 'OPERATOR', T(op.retro, /Stage T\+3: Post-event check/)], ['C8', 'OPERATOR', T(op.announcement, /Stage T-0: Emission is imminent/)],
+    ['C9', 'OPERATOR', T(op.family, /Verified — source: onchain-cadence/)],
+    ['C10', 'SPLIT', T(pub.family, /Verified on-chain · 11 consecutive months · 2 wallets/) && T(op.family, /Auto-demotes if the pattern breaks/) && T(op.family, /record 11\/11 consecutive \(that series by chance alone: p≈1\.5e-7\)/)],
+    ['C11', 'PUBLIC', T(pub.retro, /Observed on-chain: 13,318,135 total/)],
+    ['C12', 'UNREACHABLE', 'verified:true without events[] cannot alert (pollUnlocks skips rows without events before this branch)'],
+    ['C13', 'UNREACHABLE', 'estimated rows are skipped before the message is built — the estimate warning never rendered'],
+    ['C14', 'PUBLIC', /cryptorank\.io\/price\/eigencloud\/vesting/.test(pub.family.url)],
+    ['D1-D7', 'RETIRED', 'contract-cliff messages: the tier is claimable by nobody (v0.31.9); the branch is deleted, not re-rendered'],
+  ];
+  const rendered = table.filter(([, d]) => ['PUBLIC', 'OPERATOR', 'SPLIT'].includes(d));
+  const declared = table.filter(([, d]) => !['PUBLIC', 'OPERATOR', 'SPLIT'].includes(d));
+  const notRendered = rendered.filter(([, , ok]) => ok !== true).map(([id]) => id);
+  check(`field preservation: every rendered inventory field (${rendered.length}) appears in its rendering${notRendered.length ? ` — MISSING ${notRendered.join(',')}` : ''}`, notRendered.length === 0);
+  check(`field preservation: every non-rendered field (${declared.length}) carries a declared destination and a reason`, declared.every(([, d, why]) => ['CHANNEL BIO', 'DROP', 'UNREACHABLE', 'RETIRED'].includes(d) && typeof why === 'string' && why.length > 20));
+  check('field preservation: the table covers the inventory (A1-A8, B1-B17, C1-C14, D)', table.length === 8 + 17 + 14 + 1);
+  check('operator ⊇ public, by construction, on every shape', shapes.every(([k]) => pub[k].lines.every((l) => op[k].lines.includes(l))));
+
+  // PART 3 — ageLine: one rule, shared with macro.js; silent when fresh, ⏱ when not.
+  check('ageLine: fresh REST-polled alert (no snapshot) renders NO footer at all', ageLine({ lines: [] }, now.getTime()) === null && !/data age|REST poll/.test(formatAlert({ source: 'CAL', type: 'UNLOCK', title: 't', lines: ['x'] }, { kind: 'FACT' })));
+  check('ageLine: ≤120s is silent; 4 minutes discloses with the ⏱ marker', ageLine({ snapshotTs: now - 119e3 }, now.getTime()) === null && ageLine({ snapshotTs: now - 4 * 60e3 }, now.getTime()) === '⏱ data 4m old');
+  check('ageLine: the threshold is the declared constant', DATA_AGE_DISCLOSE_SEC === 120);
+  check('one rule: macro.js and the footer both go through lagDisclosure (no parallel ⏱ literal in macro)', /lagDisclosure\(/.test(readFileSync('src/sources/calendar/macro.js', 'utf8')) && !/`⏱/.test(readFileSync('src/sources/calendar/macro.js', 'utf8')));
+  check('lagDisclosure: macro semantics unchanged (5m default; 6m past the mark discloses, 5m does not)', lagDisclosure(6 * 60e3, (m) => `late ${m}m`) === '⏱ late 6m' && lagDisclosure(5 * 60e3, (m) => 'x') === null && LAG_DISCLOSE_MIN === 5);
+
+  // ACCEPTANCE — replay: the 13 Sep sourced pushes (CYBER, RE) plus the verified shapes
+  // that fired 15-16 Sep (EIGEN T-14, STRK T-0), on the LIVE rows at a fixed `now`.
+  // Public ≤6 lines and ≤40% of the operator text (the operator rendering carries
+  // every pre-diet sentence, so it is at least today's message).
+  const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
+  const replay = [
+    ['CYBER', 0, '2026-09-14'], ['RE', 3, '2026-09-17'], ['EIGEN', 14, '2026-09-30'], ['STRK', 0, '2026-09-15'],
+  ].map(([sym, lead, dateKey]) => {
+    const t = live.find((x) => x.sym === sym);
+    if (!t) return null;
+    const ctx = t.provenance === 'sourced' ? { ev: (t.sourceEvents || []).find((e) => new Date(e.t * 1000).toISOString().slice(0, 10) === dateKey) ?? t.sourceEvents[0], lead, now, second: U.loadSecondIndex() } : { lead, dateKey };
+    return { sym, p: renderFact(t, 'public', ctx), o: renderFact(t, 'operator', ctx) };
+  }).filter(Boolean);
+  check('LIVE replay: all four rows exist', replay.length === 4);
+  for (const r of replay) {
+    check(`LIVE replay ${r.sym}: public ≤6 lines, lint-clean, ≤40% of operator length (${r.p.lines.length} lines · ${Math.round(100 * r.p.text.length / r.o.text.length)}%)`, r.p.lines.length <= PUBLIC_MAX_LINES && lintHits(r.p).length === 0 && r.p.text.length <= 0.4 * r.o.text.length, lintHits(r.p).join(' | '));
+  }
+  check('LIVE: no row carries a pre-split note (every note moved to operatorNote through promote-unlock.js note-split)', live.every((t) => !t.note));
+  check('LIVE: replay operator renderings carry the pre-diet sentences (superset of today)', replay.every((r) => r.o.lines.some((l) => /NOT independently verified|Verified — source:/.test(l))));
 }
 
 console.error = origErr;

@@ -14,6 +14,7 @@
 //   4. ET wall-clock + America/New_York, UTC derived per date. Never a fixed offset:
 //      08:30 ET is 12:30Z or 13:30Z depending on DST.
 import { readFileSync, existsSync } from 'node:fs';
+import { lagDisclosure } from '../../core/lag.js';
 import { join } from 'node:path';
 import { config } from '../../config.js';
 import { dispatch } from '../../core/dispatcher.js';
@@ -119,12 +120,11 @@ export async function pollMacro() {
         // Observation window is pre-print -> NOW, which is only "the first 5 minutes"
         // when delivery is on time. State the actual window; disclose lag when late.
         const tPlus = Math.round((now - t0) / 60e3);
-        const lagMin = Math.round((now - due) / 60e3);
         title = `${ev.kind} released — first reaction (T+${tPlus}m)`;
         lines = [
           b !== null ? `BTC ${b > 0 ? '+' : ''}${b}% · ETH ${e > 0 ? '+' : ''}${e}% from just before the print to T+${tPlus}m`
             : 'Reaction basis unavailable (bot was not up pre-print).',
-          ...(lagMin > 5 ? [`⏱ delivered ${lagMin}m after the T+5m mark — the window above is as stated, not live`] : []),
+          ...[lagDisclosure(now - due, (m) => `delivered ${m}m after the T+5m mark — the window above is as stated, not live`)].filter(Boolean),
           'Print value not yet published by the source — reaction is the tradeable part; figure follows at T+30m if available.',
         ];
       } else { // t30m
@@ -134,11 +134,10 @@ export async function pollMacro() {
           ? (Math.sign(b30) === Math.sign(b5) && Math.abs(b30) >= Math.abs(b5) * 0.5 ? 'HOLDING' : 'FADING')
           : 'unknown';
         const tPlus = Math.round((now - t0) / 60e3);
-        const lagMin = Math.round((now - due) / 60e3);
         title = `${ev.kind} +${tPlus}m — initial move is ${held}`;
         lines = [
           b30 !== null ? `BTC ${b30 > 0 ? '+' : ''}${b30}% from pre-print to T+${tPlus}m (was ${b5 > 0 ? '+' : ''}${b5}% at the first reading)` : 'No pre-print basis.',
-          ...(lagMin > 5 ? [`⏱ delivered ${lagMin}m after the T+30m mark — observation window as stated, not live`] : []),
+          ...[lagDisclosure(now - due, (m) => `delivered ${m}m after the T+30m mark — observation window as stated, not live`)].filter(Boolean),
           'No claim about the follow-through rate yet — that statistic starts accumulating from this event forward.',
         ];
       }

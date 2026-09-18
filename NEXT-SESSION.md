@@ -12,35 +12,68 @@ STATUS: mostly EXECUTED. Do not run as a session prompt; read as background.
 
 # Next session
 
-## OPENER — paste this into Claude Code (written 2026-09-13, annotated 2026-09-15)
+## OPENER — paste this into Claude Code (written 2026-09-18: the diet, before items 8 and 10)
 
 ```
 Read CLAUDE.md, then Part 0 of REMAINING-WORK.md.
 
-Items 8 and 10 of docs/briefs/CORRECTNESS-QUEUE.md, in order
-(9 shipped as v0.31.8; the ORDER tier decision shipped as v0.31.9 —
-see the 2026-09-15 entries in REMAINING-WORK-NOTES.md):
+This session: docs/briefs/MESSAGE-DIET.md, all five parts. The
+correctness queue is closed; this is rendering only. If a row's
+behaviour changes, that's out of scope.
 
-  8 — ladder coverage arm. Pre-register N before choosing it.
-    Acceptance: the coverage arm fires on a row with N days of runway
-    while the age arm stays quiet on the same file. YB is the live case.
+Prerequisites, already done — read, don't redo:
+  - docs/briefs/MESSAGE-FIELD-INVENTORY.md — 38 fields cited to
+    file:line with proposed destinations. Part 5's fixture takes this
+    as its frozen input.
+  - The two decompositions it found are PREREQUISITES, not details:
+      claimCoverage().line → return the parts; each rendering joins
+        what it needs. Derived stays derived.
+      note → split into note (public) and operatorNote. The
+        architecture vocabulary lives in operatorNote.
+    A destination table cannot split a string. Do these first.
 
- 10 — re-promotion requires post-demotion evidence. At least one
-    on-schedule emission after the miss. Re-analysing pre-demotion
-    history is not new evidence however detect-cadence classifies it.
-    Encode it in promote-unlock.js so it refuses, not advises. The
-    margin half is DONE: stampStrength refuses below MIN_FALSIFIER_MARGIN
-    (0.40). Only the post-demotion-evidence half remains. ENA is the row.
+The render-lint (Part 1) lints renderFact(row, 'public') — the
+OUTPUT, not any field — so vocabulary arriving through any path is
+caught. Banned list per the brief plus: overlay, quarantine, claim
+coverage, chance rate, binomial, replay series, enumerated by us,
+tierHistory, margin bar. Prefer compound forms where the bare word
+is plain English. Mandatory self-test: plant an operator note on a
+synthetic row, assert the public render FAILS, assert an operator-
+safe note passes — same run.
 
-Then MESSAGE-DIET.md — inventory exists, two decompositions are
-prerequisites, the render-lint needs its self-test.
+Part 5's field-preservation fixture is the safety argument: every
+field in the inventory appears in at least one rendering. Nothing is
+deleted from the system; it moves.
 
-Watch: ZK and ARB on the 14th. FF pushes both dates on the 22nd.
-ENA's fourth wallet (0xA7eE, 57M, funded ~09-11) on Oct 6.
+ageLine: reuse macro.js:120-127's lag-disclosure helper. Suppress
+when fresh, disclose with the same ⏱ marker when not. One rule, two
+call sites — don't write a parallel one.
+
+Six-line public cap, enforced by fixture. Channel bio set once,
+manually — that's the operator's, not the script's.
+
+Acceptance: replay the 13 Sep messages through both renderings.
+Public ≤6 lines, ~60% shorter. Operator a superset of today's.
+Coverage-obligation fixture green. Prose lint green with the new
+no-direction-words assertion. Boot on a copy via boot-check.js only.
+
+Then stop. Report per part.
 ```
 
-9 is before 8 deliberately: three rows are silent now and the fix is a chore, not a
-build.
+AFTER THE DIET (previous opener, still valid): items 8 and 10 of
+docs/briefs/CORRECTNESS-QUEUE.md in that order — 8 (ladder coverage arm, pre-register
+N, YB is the live case), 10 (re-promotion requires post-demotion evidence; the margin
+half is done via MIN_FALSIFIER_MARGIN, ENA is the row). While in unlocks.js: the
+[unlocks] "estimated-only" count climbs across cycles (17 → 51 → 68 → 85 on
+2026-09-17) — estimatedSkipped never resets; fixture: two consecutive cycles, same
+rows, same count. VPS-MIGRATION.md is stale on at least six counts (written v0.24.5:
+predates boot-check.js, the copy-marker refusal, the push guard, verify-tags, the
+ownership split, the Telegram restriction) — the reviewer rewrites it after the diet
+ships, against the tree that will actually migrate.
+
+Watch: index staleness warning on the 21st. FF pushes both dates and ZRO's
+review date lands on the 22nd. ENA's fourth wallet (0xA7eE, 57M, funded ~09-11)
+on Oct 6.
 
 ```
 RESOLVED 2026-09-15 (v0.31.9) — the addendum below is kept as the record of how

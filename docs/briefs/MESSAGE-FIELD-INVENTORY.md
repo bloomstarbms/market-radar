@@ -28,8 +28,8 @@ Without this, "nothing was lost in the move" is a hope; with it, it is an assert
 - A contract-cliff row states that its enforcement was earned by replayed clusters, not declared [fixture: 46. CONTRACT-CLIFF tier (Route 2) — enforcement:contract is EARNED by replayed claim clusters]
 - Every verified row carries a derived falsifier strength, and a WEAK one says so in the message [fixture: 49. FALSIFIER STRENGTH is derived on EVERY verified row (chance rate → replay), not just the suspicious one]
 - No message makes a directional claim or an unsupported frequency claim [fixture: 30. message prose is linted — direction ban + unsupported-statistics ban]
-- The field tables in sections A–D below list every field the four public FACT builders emit as of v0.31.6 [UNENFORCED: nothing asserts the CURRENT field set — that is exactly what MESSAGE-DIET.md Part 5's field-preservation fixture would do, and it is not written. Until it is, this inventory is verified only by the file:line citations beside each row, which a human must re-check. This is the gap, stated rather than hidden.]
-- `note` and `claimCoverage().line` mix public fact with operator mechanism in single free-text strings [UNENFORCED: no lint inspects rendered public output today; the proposed render-lint below is what would catch it.]
+- The field tables in sections A–D below list every field the four public FACT builders emitted as of v0.31.6, and every ID has a destination that a rendering exhibits or a declared reason [fixture: 64. MESSAGE DIET — two renderings, one row; public is lint-clean, capped, and loses no field]
+- `note` and `claimCoverage().line` no longer mix audiences: `note`/`operatorNote` are split and `claimCoverage` returns parts; the render-lint inspects the public OUTPUT with a planted-violation self-test [fixture: 64. MESSAGE DIET — two renderings, one row; public is lint-clean, capped, and loses no field]
 - The CEX message types (funding, listing, suspension) are NOT inventoried here [UNENFORCED: section F records the omission deliberately — an inventory that silently covered three of seven types would be worse than one that names its own gap.]
 
 

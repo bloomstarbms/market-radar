@@ -59,7 +59,6 @@ export function checkListings(exchange, tickers) {
       lines: [
         names.slice(0, 12).join(', ') + (names.length > 12 ? ` … +${names.length - 12} more` : ''),
         `Batched: ${names.length} listings in one poll cycle from one venue — one event, not ${names.length}.`,
-        'Fact only — no directional call.',
       ],
       url: CHART_URLS[exchange]?.(fresh[0].sym),
     }];
@@ -73,7 +72,6 @@ export function checkListings(exchange, tickers) {
       'New spot pair detected',
       t?.price ? `Price: $${t.price} · Vol24h: $${Math.round(t.quoteVol24h || 0).toLocaleString()}` : 'No ticker data yet',
       ...(verdict.state === 'UNRECOGNISED' ? [`⚠️ ${verdict.reason}`] : []),
-      'Fact only — no directional call.',
     ],
     url: CHART_URLS[exchange]?.(sym),
     track: t?.price ? { kind: 'cex', exchange, symbol: sym, price: t.price } : undefined,

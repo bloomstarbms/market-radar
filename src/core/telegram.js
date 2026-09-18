@@ -24,15 +24,19 @@ export async function sendTo(chatId, text) {
 
 // Returns [{chatId, messageId}] so a follow-up can EDIT this message rather than
 // posting a second one (spec §5.3: one live alert per symbol per direction).
-export async function broadcast(text, { toChannel = true } = {}) {
+export async function broadcast(text, { toChannel = true, operatorText } = {}) {
   // Recipients: DM subscribers plus the public channel (@radaralert22) when configured.
   // The channel is the public product; SYS noise (heartbeats) stays DM-only via
   // toChannel:false so subscribers only ever see signals.
+  // AUDIENCE SPLIT (message diet): the DM is the operator surface (telemetry already
+  // lives there, v0.31.0). When an operatorText is supplied, DMs get it and the
+  // channel gets the public text; otherwise both get the same text.
   const subs = getState().subscribers;
   const targets = [...subs];
   if (toChannel && config.telegramChannel) targets.push(config.telegramChannel);
   if (!targets.length) console.log('[telegram] no recipients — send /start or set TELEGRAM_CHANNEL');
-  const results = await Promise.allSettled(targets.map((id) => sendTo(id, text)));
+  const textFor = (id) => (id === config.telegramChannel ? text : (operatorText ?? text));
+  const results = await Promise.allSettled(targets.map((id) => sendTo(id, textFor(id))));
   const ids = [];
   results.forEach((r, i) => {
     const mid = r.status === 'fulfilled' ? r.value?.result?.message_id : null;

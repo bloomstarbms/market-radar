@@ -3524,3 +3524,111 @@ is likely but that copy's output is gone with the sandbox — unconfirmed.
 SEEN IN PASSING, not fixed: the live `[unlocks]` line's "estimated-only" count climbs
 17 → 51 → 68 → 85 across cycles — `estimatedSkipped` looks cumulative across the
 loop rather than per-cycle. Display counter only; queued.
+
+## 2026-09-18 — THE PREMISE BLOCK HAS A LENGTH BUDGET
+
+The PREMISE check (test-delivery.js ~line 876) reads only the first 1,600 characters
+of each .md and looks for the `-->` inside them. A five-line annotation appended to
+MESSAGE-DIET.md's PREMISE pushed the close past the window, and the doc read as
+having NO premise at all — "every .md declares a PREMISE block" went red on a file
+that plainly had one. Second time in a week the parser has caught its own author
+(fixture 37's status word was the first). Trimmed to two lines; green.
+
+The budget is undeclared in the file it constrains. Two honest fixes, either fine:
+raise the window and say why in the fixture, or have the fixture report "PREMISE
+opened but not closed within N chars" as its own failure rather than "missing" —
+because those are different mistakes and the second one is a doc that has grown,
+not a doc that forgot. Annotations belong SHORT and the history belongs in these
+notes; a PREMISE that narrates its own revisions is a changelog wearing a header.
+
+## 2026-09-18 — v0.32.0: THE MESSAGE DIET, PER PART
+
+Operator ask: "some english is not necessary — just state what's happening and let
+every trader decide." Rendering only; no threshold, tier, falsifier or firing rule
+changed (the diff to what fires is zero by construction: builders return the same
+dispatch keys and leads).
+
+PREREQUISITES (done first, as the brief demanded)
+- claimCoverage() returns PARTS — `public[]`, `operator[]` — and `line` is their join,
+  so every existing reader of the sentence still gets it. Derived, never stored.
+- `note` → `operatorNote` for all 53 rows, through `promote-unlock.js note-split`
+  (pure `splitNote`, idempotent; second run "nothing to move"). Every live note was
+  operator prose; `note` is now the PUBLIC field and starts empty everywhere. Both
+  fields whitelisted on verified and sourced rows; every write path carries them.
+  Sourced ingest's default sentence ("Sourced from X's schedule; N upcoming…") moved
+  to operatorNote too — it was a build-log line.
+
+PART 1 — disclaimer to the channel bio. formatAlert renders NO subtitle for a FACT;
+"Fact only — no directional call" bullets removed from listings.js and
+announcements.js. The prose lint (fixture 30) is untouched and still green. Channel
+description is the operator's, set once by hand: "Scheduled and observed crypto
+events. Facts only — no trade calls. Every date states its source."
+  RENDER-LINT: fixture 64 lints renderFact(row,'public') — the OUTPUT — on seven row
+  shapes. Banned: bucket A–D, falsifier, cadence spec, cluster spec, by construction,
+  demote*, promote*, dead-man, provenance tier, overlay, quarantine, claim coverage,
+  chance rate, binomial, replay series, enumerated by us, tierHistory, margin bar,
+  auto-demotes, re-attest*, reviewBy, operator note. Compound forms where the bare
+  word is English. SELF-TEST in the same run: `note: 'bucket C not enumerated by us'`
+  on a synthetic row → public FAILS; same phrase as operatorNote with a safe public
+  note → PASSES; and the phrase arriving through the TITLE is caught too.
+  Mid-diet reviewer additions, done: two prediction-shaped lines in announcements.js
+  ("expect wider swings", "Possible precursor to a delisting… watch for a follow-up")
+  became the bare fact; the no-direction-words assertion names them.
+
+PART 2 — budget. PUBLIC_MAX_LINES 6, PUBLIC_MAX_CHARS 420, declared in unlocks.js and
+asserted on every shape. Measured: sourced 4 lines/219–250 chars, family 2/141,
+single 2/151, announcement 1/81, T+3 2/194.
+
+PART 3 — templates. sourcedMessage and the new verifiedMessage return
+{title, lines (public), operatorLines, url}; renderFact(row, audience, ctx) is the
+one entry point. Public sourced: amount · kind · % unlocked / categories / chain ·
+source, unverified (age) / second-source state in one of THREE forms ("DefiLlama +
+CryptoRank agree", "sources disagree: DefiLlama 20 Sep, CryptoRank 29 Sep", "DefiLlama
+only"). Public verified: amount from the cadence spec (family sum or single-wallet
+floor) · "Verified on-chain · 11 consecutive months · 2 wallets" / "Project-announced
+· amount not observed on-chain" / T+3 observed total. Everything else — batch count,
+silence rule, paid-tier note, source event, auto-demote, falsifier strength, stage
+epistemics, operator note — is operatorLines. The dead contract-cliff alert branch is
+deleted (tier claimable by nobody).
+  ageLine (reviewer's mid-diet spec): src/core/lag.js `lagDisclosure(lagMs, what,
+  threshold)` is the ONE rule; macro.js's two T+5m/T+30m call sites use it (their
+  `⏱` literals and lagMin locals are gone; 5-minute default unchanged and pinned), and
+  the alert footer uses it at DATA_AGE_DISCLOSE_SEC = 120: silent when fresh, "⏱ data
+  4m old" when not. "(REST poll)" is gone — an implementation note, not a fact.
+
+PART 4 — coverage obligations, asserted per row shape: 🔓 vs 📅; source NAME and AGE
+on sourced rows; "amount not observed on-chain" on announcement rows; "chain
+unconfirmed — no on-chain read attempted"; single-wallet "a floor, not a total"; and
+the mutation — a sourced row stripped of its source name fails the obligation, so
+silence about coverage cannot read as coverage.
+
+PART 5 — field preservation. Fixture 64 carries the inventory as a TABLE: 40 IDs
+(A1–A8, B1–B17, C1–C14, D1–D7 as one). 34 are PUBLIC/OPERATOR/SPLIT and each must
+match a regex against the rendering it claims; 6 carry a declared destination and a
+reason: A3 CHANNEL BIO; C5 DROP (generic advice, the inventory's own proposal); C3,
+C12, C13 UNREACHABLE (pctOfMcap fails boot on a verified row; estimated rows are
+skipped before a message is built — those clauses never rendered); D RETIRED with the
+tier. operator ⊇ public asserted on every shape, by construction (operator = public +
+operatorLines). Delivery: broadcast(text, {operatorText}) — DM subscribers (the
+operator surface since v0.31.0) get the superset, the channel the public text; absent
+operatorLines both get the same (CEX types, calls). The console/bot.log record is the
+OPERATOR rendering, so every figure sent in either audience is on disk first.
+
+ACCEPTANCE — replay on the live rows at a fixed now (13 Sep had only two unlock FACTs,
+CYBER and RE, both sourced; EIGEN T-14 and STRK T-0 from 15–16 Sep cover the verified
+shapes): public 4/4/2/1 lines at 24%/22%/12%/11% of the operator rendering — well past
+the ~60% target; lint-clean; operator carries every pre-diet sentence. Coverage-
+obligation, field-preservation, cap, and prose lint (with the new no-direction-words
+assertion) all green. Suite 739 green via boot-check.js; boot banner v0.32.0, four
+gates OK, console-only.
+
+SCOPE STATED, NOT HIDDEN: the inventory covers the four unlock FACT builders (its
+section F names funding/listing/suspension as TODO). Those templates are NOT re-
+rendered here beyond the disclaimer bullet and the two prediction lines; the brief's
+FUNDING/LISTING mock-ups wait on their inventory. Part 5's guarantee holds for what
+was inventoried.
+
+ALSO, while in unlocks.js: `estimatedSkipped` moved from module scope to per-cycle
+(it climbed 17 → 51 → 68 → 85). Two consecutive cycles now report the same count for
+the same rows. No fixture drives two cycles of pollUnlocks (it fetches); the change is
+a declaration moving three lines — recorded, not asserted.

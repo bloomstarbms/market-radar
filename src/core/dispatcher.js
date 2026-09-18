@@ -6,6 +6,7 @@
 // already printed on the next line, and red was shared by "unlock in 3 days" and "new
 // pair, no data". Tier (A/B/C) carries expected value instead, per spec §5.2.
 import { config } from '../config.js';
+import { lagDisclosure, DATA_AGE_DISCLOSE_SEC } from './lag.js';
 import { broadcast, editBroadcast, hasRecipients } from './telegram.js';
 import { markAlerted, onCooldown, getState, save } from './store.js';
 
@@ -147,10 +148,15 @@ export async function checkPendingListings() {
 // Data age is disclosed on every alert. Under REST polling a "5m move" can be up to a
 // poll interval stale; the original system hid that. A stale alert that says so is
 // trustworthy — one that pretends to be live is not (spec §6, acceptance test 10).
-function ageLine(alert) {
-  const ms = alert.snapshotTs ? Date.now() - alert.snapshotTs : null;
-  const age = ms === null ? `≤${config.pollIntervalSec}s (REST poll)` : `${(ms / 1000).toFixed(0)}s`;
-  return `<i>data age ${age}</i>`;
+// DATA-AGE FOOTER (message diet): the same disclosure rule macro.js uses for late
+// delivery. A REST-polled alert with no snapshot is as fresh as the poll and says
+// nothing; a snapshot older than LAG_DISCLOSE_MIN minutes is disclosed with the ⏱
+// marker. The old footer restated "data age ≤60s (REST poll)" on every message —
+// boilerplate when fresh, an implementation note either way; now the footer exists
+// only when the number is older than a reader would assume.
+export function ageLine(alert, now = Date.now()) {
+  const ms = alert.snapshotTs ? now - alert.snapshotTs : 0;
+  return lagDisclosure(ms, (m) => `data ${m}m old`, DATA_AGE_DISCLOSE_SEC * 1000);
 }
 
 // Depth stated in the reader's terms, not as a pass/fail verdict.
@@ -162,20 +168,30 @@ export function gateLine(gate) {
   return `Executable: ${amt} at 50bps both sides · spread ${gate.spreadBps}bps — ${verdict}`;
 }
 
-export function formatAlert(a, meta = {}) {
+// TWO RENDERINGS, ONE ALERT (message diet, 2026-09-18). `a.lines` is the PUBLIC
+// body — the fact, the numbers, the minimum provenance to weigh it. `a.operatorLines`
+// (optional) is everything else the system knows about the row — provenance
+// internals, falsifier mechanics, the build log — and renders only for the
+// operator audience, appended after the public lines so operator ⊇ public.
+// Nothing is deleted from the system; it is deleted from the channel.
+export const AUDIENCES = ['public', 'operator'];
+export function formatAlert(a, meta = {}, audience = 'public') {
+  if (!AUDIENCES.includes(audience)) throw new Error(`formatAlert: unknown audience '${audience}'`);
   const tag = TAG[`${a.source}:${a.type}`] || `${a.source} ${a.type}`;
   const tier = meta.tier && a.source !== 'SYS' ? `${meta.tier}-TIER · ` : '';
   const head = `<b>[${tag}]</b> ${a.title}`;
   // FACTS carry NO tier and NO conviction. Conviction is a property of a prediction;
   // a listing does not have one, and printing 78 on it asserted something we never
-  // meant. The subtitle instead states what kind of message this is.
-  const sub = a.source === 'SYS' ? ''
-    : meta.kind === 'FACT' ? '\n<i>fact · no directional call</i>'
+  // meant. A FACT carries no subtitle at all: "facts only — no trade calls" is a
+  // property of the feed and lives in the channel description, set once by hand.
+  const sub = a.source === 'SYS' || meta.kind === 'FACT' ? ''
     : `\n<i>${tier}conviction ${Math.round(meta.score ?? 0)}</i>`;
-  const body = a.lines.map((l) => `• ${l}`).join('\n');
+  const lines = audience === 'operator' && a.operatorLines?.length ? [...a.lines, '— operator —', ...a.operatorLines] : a.lines;
+  const body = lines.map((l) => `• ${l}`).join('\n');
   const upd = meta.updates ? `\n<i>updated ${meta.updates}x — same setup, not a new event</i>` : '';
   const link = a.url ? `\n<a href="${a.url}">chart</a>` : '';
-  return `${head}${sub}\n${body}${upd}${link}\n${ageLine(a)}`;
+  const age = ageLine(a);
+  return `${head}${sub}\n${body}${upd}${link}${age ? `\n<i>${age}</i>` : ''}`;
 }
 
 const GATED_TYPES = new Set(['PUMP', 'DUMP', 'VOLUME', 'FUNDING', 'MULTIEX', 'CASCADE']);
@@ -348,13 +364,18 @@ async function dispatchInner(alert) {
 
   if (verdict.provisional) alert.lines = [...alert.lines,
     '⚠️ PROVISIONAL: single-factor signal on a gate-passing symbol. Pushed to collect gated-population data; no measured edge claim. Auto-expires when gated n>=100 decides.'];
-  const text = formatAlert(alert, verdict);
+  const text = formatAlert(alert, verdict, 'public');
+  // The operator DM gets the superset rendering; the channel gets the public one.
+  // Absent operatorLines, both audiences see the same text (CEX types, calls).
+  const operatorText = alert.operatorLines?.length ? formatAlert(alert, verdict, 'operator') : undefined;
   const b = budgetStatus();
   const label = verdict.kind === 'FACT' ? 'FACT' : `CALL ${verdict.tier}${verdict.bypass ? '/bypass' : ''} ${Math.round(verdict.score ?? 0)}`;
-  console.log(`\n[ALERT ${label}] ${text.replace(/<[^>]+>/g, '')}\n  [budget] ${b.used}/${b.limit} used today\n`);
+  // Disk record is the OPERATOR rendering (a superset): every figure the bot sends is
+  // on disk before it is a message, in either audience.
+  console.log(`\n[ALERT ${label}] ${(operatorText ?? text).replace(/<[^>]+>/g, '')}\n  [budget] ${b.used}/${b.limit} used today\n`);
   let ids = [];
   if (config.telegramToken) {
-    ids = await broadcast(text);
+    ids = await broadcast(text, { operatorText });
     if (!ids.length && hasRecipients()) {
       // Delivery is part of "dispatched" (Aug 12 CPI lesson): 0/N sends succeeded, so
       // do NOT mark cooldowns, open threads, charge budget, or record — return false

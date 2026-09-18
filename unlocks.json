@@ -1,14 +1,13 @@
 {
  "comment": "Token unlock watchlist. Two entry types: 'monthlyDay' = recurring cliff on that day each month (most vesting contracts release monthly); 'date' = one-off YYYY-MM-DD. Bot pings 7 days and 3 days before. verified:true = confirmed against cryptorank.io/token-unlock on 2026-08-01; others are recurring-schedule estimates — check the date on cryptorank before acting.",
  "source": "https://cryptorank.io/token-unlock (free public page)",
- "lastReviewed": "2026-09-17 (sourced ORDER via promote-unlock.js)",
+ "lastReviewed": "2026-09-18 (note-split 53 rows via promote-unlock.js)",
  "tokens": [
   {
    "sym": "EIGEN",
    "name": "EigenCloud",
    "monthlyDay": 30,
    "verified": true,
-   "note": "Custody-held (BitGo WalletSimple x21, 484M family) — behavioural: announcement described the schedule, custody enforces nothing. TWO metronomes watched (0x34BcF805 ~7.82M/mo + 0x3De6b6b1 ~1.69M/mo, family ~9.5M): every wallet must emit AND the family total must land inside a band DERIVED FROM THIS ROW'S OWN 11 windows — the band exceeds the worst shortfall the row has actually exhibited, and is STATIC until a re-attestation re-derives it. Largest wallet (176.7M) mostly dormant = later tranches.",
    "events": [
     {
      "date": "2026-08-28",
@@ -57,7 +56,8 @@
     "margin": 0.76,
     "replayHits": 11,
     "compound": 1.5e-7
-   }
+   },
+   "operatorNote": "Custody-held (BitGo WalletSimple x21, 484M family) — behavioural: announcement described the schedule, custody enforces nothing. TWO metronomes watched (0x34BcF805 ~7.82M/mo + 0x3De6b6b1 ~1.69M/mo, family ~9.5M): every wallet must emit AND the family total must land inside a band DERIVED FROM THIS ROW'S OWN 11 windows — the band exceeds the worst shortfall the row has actually exhibited, and is STATIC until a re-attestation re-derives it. Largest wallet (176.7M) mostly dormant = later tranches."
   },
   {
    "sym": "ZETA",
@@ -99,12 +99,12 @@
    ],
    "chain": "ethereum",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "token": "ethereum:0xf091867ec603a6628ed83d274e835539d82e9cc8",
    "circSupply": 1603692729.7044322,
    "totalLocked": 496311755.5233135,
-   "maxSupply": 2100004485.2277458
+   "maxSupply": 2100004485.2277458,
+   "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "HOOK",
@@ -112,7 +112,7 @@
    "monthlyDay": 1,
    "pctOfMcap": 5.75,
    "verified": true,
-   "note": "very high % of small mcap"
+   "operatorNote": "very high % of small mcap"
   },
   {
    "sym": "MAV",
@@ -160,12 +160,12 @@
    ],
    "chain": "ethereum",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "token": "ethereum:0x7448c7456a97769f6cd04f1e83a4a23ccdc46abd",
    "circSupply": 1053752742.449887,
    "totalLocked": 946247257.550113,
-   "maxSupply": 2000000000
+   "maxSupply": 2000000000,
+   "operatorNote": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "RLS",
@@ -173,14 +173,13 @@
    "monthlyDay": 1,
    "pctOfMcap": 3.56,
    "verified": true,
-   "note": "only 20% circulating — 80% still locked"
+   "operatorNote": "only 20% circulating — 80% still locked"
   },
   {
    "sym": "STRK",
    "name": "Starknet",
    "monthlyDay": 15,
    "verified": true,
-   "note": "Vesting on Starknet L2 (no eth_call path in our stack): up to 127M STRK on the 15th monthly through Mar 2027 per docs.starknet.io. Enforcement unverifiable from here — reviewBy dead-man's switch; re-attest by the date or the row demotes itself.",
    "events": [
     {
      "date": "2026-09-15",
@@ -195,14 +194,14 @@
     "basis": "reviewBy 2026-11-30 tests freshness, not the claim — no chance rate exists because nothing on chain is checked",
     "at": "2026-09-05T22:04",
     "kind": "dead-man"
-   }
+   },
+   "operatorNote": "Vesting on Starknet L2 (no eth_call path in our stack): up to 127M STRK on the 15th monthly through Mar 2027 per docs.starknet.io. Enforcement unverifiable from here — reviewBy dead-man's switch; re-attest by the date or the row demotes itself."
   },
   {
    "sym": "ARB",
    "name": "Arbitrum",
    "monthlyDay": 16,
    "verified": true,
-   "note": "Team+investor linear vesting, 92.65M ARB monthly on the 16th, through 2027. Announcement path; hundreds of on-chain vesting wallets (bucket C) not enumerated by us, so NOT claimed contract-enforced — reviewBy dead-man's switch instead. Re-attest by the date or the row demotes itself.",
    "events": [
     {
      "date": "2026-09-16",
@@ -217,13 +216,14 @@
     "basis": "reviewBy 2026-11-30 tests freshness, not the claim — no chance rate exists because nothing on chain is checked",
     "at": "2026-09-05T22:04",
     "kind": "dead-man"
-   }
+   },
+   "operatorNote": "Team+investor linear vesting, 92.65M ARB monthly on the 16th, through 2027. Announcement path; hundreds of on-chain vesting wallets (bucket C) not enumerated by us, so NOT claimed contract-enforced — reviewBy dead-man's switch instead. Re-attest by the date or the row demotes itself."
   },
   {
    "sym": "OP",
    "name": "Optimism",
    "monthlyDay": 30,
-   "note": "L2 monthly unlock"
+   "operatorNote": "L2 monthly unlock"
   },
   {
    "sym": "ZK",
@@ -259,41 +259,41 @@
    ],
    "chain": "unconfirmed",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "circSupply": 6867458500,
    "totalLocked": 14132541500,
-   "maxSupply": 21000000000
+   "maxSupply": 21000000000,
+   "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "MANTA",
    "name": "Manta Network",
    "monthlyDay": 18,
-   "note": "L2, low float high unlock ratio"
+   "operatorNote": "L2, low float high unlock ratio"
   },
   {
    "sym": "TAIKO",
    "name": "Taiko",
    "monthlyDay": 5,
-   "note": "L2, thin liquidity"
+   "operatorNote": "L2, thin liquidity"
   },
   {
    "sym": "SCR",
    "name": "Scroll",
    "monthlyDay": 22,
-   "note": "L2, post-TGE vesting"
+   "operatorNote": "L2, post-TGE vesting"
   },
   {
    "sym": "BLAST",
    "name": "Blast",
    "monthlyDay": 26,
-   "note": "L2, heavy airdrop+VC overhang"
+   "operatorNote": "L2, heavy airdrop+VC overhang"
   },
   {
    "sym": "METIS",
    "name": "Metis",
    "monthlyDay": 8,
-   "note": "L2, very low volume vs unlock size"
+   "operatorNote": "L2, very low volume vs unlock size"
   },
   {
    "sym": "CYBER",
@@ -335,18 +335,18 @@
    ],
    "chain": "ethereum",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "token": "ethereum:0x14778860e937f509e651192a90589de711fb88a9",
    "circSupply": 77795983.33333333,
    "totalLocked": 22204016.666666657,
-   "maxSupply": 99999999.99999999
+   "maxSupply": 99999999.99999999,
+   "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "IMX",
    "name": "Immutable X",
    "monthlyDay": 7,
-   "note": "L2 gaming"
+   "operatorNote": "L2 gaming"
   },
   {
    "sym": "SUI",
@@ -430,11 +430,11 @@
    ],
    "chain": "unconfirmed",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "circSupply": 4114081300.0237265,
    "totalLocked": 5885918699.976274,
-   "maxSupply": 10000000000
+   "maxSupply": 10000000000,
+   "operatorNote": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "SEI",
@@ -476,11 +476,11 @@
    ],
    "chain": "unconfirmed",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "circSupply": 7579861083,
    "totalLocked": 2420138877,
-   "maxSupply": 9999999960
+   "maxSupply": 9999999960,
+   "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "APT",
@@ -543,11 +543,11 @@
    ],
    "chain": "unconfirmed",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "circSupply": 863661223.7792661,
    "totalLocked": 1236338776.220734,
-   "maxSupply": 2100000000
+   "maxSupply": 2100000000,
+   "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "TIA",
@@ -1494,29 +1494,29 @@
    ],
    "chain": "unconfirmed",
    "stage": "LOGGED",
-   "note": "Sourced from defillama's unlock schedule; 31 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "circSupply": 1095236808.1672776,
    "totalLocked": 240859102.45143676,
-   "maxSupply": 1336095910.6187143
+   "maxSupply": 1336095910.6187143,
+   "operatorNote": "Sourced from defillama's unlock schedule; 31 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "DYM",
    "name": "Dymension",
    "monthlyDay": 6,
-   "note": "L1, low volume + high unlock % — top risk"
+   "operatorNote": "L1, low volume + high unlock % — top risk"
   },
   {
    "sym": "SAGA",
    "name": "Saga",
    "monthlyDay": 8,
-   "note": "L1, thin book"
+   "operatorNote": "L1, thin book"
   },
   {
    "sym": "BERA",
    "name": "Berachain",
    "monthlyDay": 6,
-   "note": "new L1, first cliffs"
+   "operatorNote": "new L1, first cliffs"
   },
   {
    "sym": "MOVE",
@@ -1524,7 +1524,6 @@
    "monthlyDay": 9,
    "date": "2026-09-05",
    "verified": true,
-   "note": "Behavioural (habit, not commitment): cadence-watch auto-demotes if a window on the 9th passes with no qualifying outflow. SCOPE — one metronome watched; forward stages quote it as a FLOOR. The wallet is an active treasury with large off-schedule moves (73M across Jul 26-27, ~7x the monthly figure) — irregular, so not in the falsifier. Found by the 2026-09-05 hand-curated index rescan; first promotion from the temporal-leg population.",
    "events": [
     {
      "date": "2026-09-05",
@@ -1554,21 +1553,22 @@
     "margin": 0.64,
     "replayHits": 8,
     "compound": 0.00028
-   }
+   },
+   "operatorNote": "Behavioural (habit, not commitment): cadence-watch auto-demotes if a window on the 9th passes with no qualifying outflow. SCOPE — one metronome watched; forward stages quote it as a FLOOR. The wallet is an active treasury with large off-schedule moves (73M across Jul 26-27, ~7x the monthly figure) — irregular, so not in the falsifier. Found by the 2026-09-05 hand-curated index rescan; first promotion from the temporal-leg population."
   },
   {
    "sym": "INJ",
    "name": "Injective",
-   "note": "RETIRED: fully unlocked since Jan 2024 (all vesting complete; deflationary buybacks). retired field is a POSITIVE state asserted at boot — re-adding events/monthlyDay from a stale aggregator list fails startup instead of silently reviving the token.",
    "verified": false,
    "retired": "fully-unlocked",
-   "retiredAt": "2026-08-21"
+   "retiredAt": "2026-08-21",
+   "operatorNote": "RETIRED: fully unlocked since Jan 2024 (all vesting complete; deflationary buybacks). retired field is a POSITIVE state asserted at boot — re-adding events/monthlyDay from a stale aggregator list fails startup instead of silently reviving the token."
   },
   {
    "sym": "S",
    "name": "Sonic",
    "monthlyDay": 3,
-   "note": "rebranded L1"
+   "operatorNote": "rebranded L1"
   },
   {
    "sym": "W",
@@ -1640,24 +1640,23 @@
    ],
    "chain": "unconfirmed",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "circSupply": 6446098562.718169,
    "totalLocked": 3553901437.2819033,
-   "maxSupply": 10000000000.000072
+   "maxSupply": 10000000000.000072,
+   "operatorNote": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "JUP",
    "name": "Jupiter",
    "monthlyDay": 31,
-   "note": "large team/airdrop tranches"
+   "operatorNote": "large team/airdrop tranches"
   },
   {
    "sym": "ENA",
    "name": "Ethena",
    "monthlyDay": 6,
    "verified": true,
-   "note": "Behavioural (habit, not commitment): cadence-watch auto-demotes if a monthly window passes with no qualifying outflow. SCOPE — the FALSIFIER watches ONE metronome (0x54B8, ~12.07M/mo); forward stages quote that as a FLOOR. Irregular co-emitters 0x2146 (1.185B holder, 2.91M on 2026-08-06) and 0xdeDc are deliberately NOT in the cadence band — an irregular emitter would false-demote every quiet month — but ARE summed at T+3, which is retrospective and carries no falsification risk. Predict the floor, report the total.",
    "events": [
     {
      "date": "2026-08-28",
@@ -1691,13 +1690,14 @@
     "margin": 0.67,
     "replayHits": 13,
     "compound": 5.5e-7
-   }
+   },
+   "operatorNote": "Behavioural (habit, not commitment): cadence-watch auto-demotes if a monthly window passes with no qualifying outflow. SCOPE — the FALSIFIER watches ONE metronome (0x54B8, ~12.07M/mo); forward stages quote that as a FLOOR. Irregular co-emitters 0x2146 (1.185B holder, 2.91M on 2026-08-06) and 0xdeDc are deliberately NOT in the cadence band — an irregular emitter would false-demote every quiet month — but ARE summed at T+3, which is retrospective and carries no falsification risk. Predict the floor, report the total."
   },
   {
    "sym": "ALT",
    "name": "AltLayer",
    "monthlyDay": 25,
-   "note": "low float, high unlock ratio — top risk"
+   "operatorNote": "low float, high unlock ratio — top risk"
   },
   {
    "sym": "ZRO",
@@ -1705,7 +1705,6 @@
    "monthlyDay": 20,
    "date": "2026-09-20",
    "verified": true,
-   "note": "Bucket D: 27-contract custody family (BitGo WalletSimple + GnosisSafes), NO observable emission cadence on Ethereum (omnichain token — cadence spec would false-demote by construction). Schedule rests on the Foundation's published rule alone. STRUCTURAL TRIGGER (was prose): reviewBy 2026-09-22 — if the Sep 20 unlock shows no market-visible event, do not re-promote; the row demotes itself.",
    "events": [
     {
      "date": "2026-09-20",
@@ -1720,13 +1719,14 @@
     "basis": "reviewBy 2026-09-22 tests freshness, not the claim — no chance rate exists because nothing on chain is checked",
     "at": "2026-09-05T22:04",
     "kind": "dead-man"
-   }
+   },
+   "operatorNote": "Bucket D: 27-contract custody family (BitGo WalletSimple + GnosisSafes), NO observable emission cadence on Ethereum (omnichain token — cadence spec would false-demote by construction). Schedule rests on the Foundation's published rule alone. STRUCTURAL TRIGGER (was prose): reviewBy 2026-09-22 — if the Sep 20 unlock shows no market-visible event, do not re-promote; the row demotes itself."
   },
   {
    "sym": "PYTH",
    "name": "Pyth Network",
    "monthlyDay": 20,
-   "note": "large scheduled tranches"
+   "operatorNote": "large scheduled tranches"
   },
   {
    "sym": "FORT",
@@ -1864,12 +1864,12 @@
    ],
    "chain": "ethereum",
    "stage": "LOGGED",
-   "note": "Sourced from defillama's unlock schedule; 4 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "token": "ethereum:0x41545f8b9472d758bb669ed8eaeeecd7a9c4ec29",
    "circSupply": 624440000.0000005,
    "totalLocked": 375559999.9999995,
-   "maxSupply": 1000000000
+   "maxSupply": 1000000000,
+   "operatorNote": "Sourced from defillama's unlock schedule; 4 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "HFT",
@@ -1953,12 +1953,12 @@
    ],
    "chain": "ethereum",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "token": "ethereum:0xb3999F658C0391d94A37f7FF328F3feC942BcADC",
    "circSupply": 907186296.2962965,
    "totalLocked": 92813703.70370352,
-   "maxSupply": 1000000000
+   "maxSupply": 1000000000,
+   "operatorNote": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "ORDER",
@@ -2030,7 +2030,6 @@
    ],
    "chain": "ethereum",
    "stage": "LOGGED",
-   "note": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "tierHistory": {
     "from": "verified",
@@ -2236,7 +2235,8 @@
    "token": "ethereum:0xABD4C63d2616A5201454168269031355f4764337",
    "circSupply": 475732038.5818559,
    "totalLocked": 524267961.4181441,
-   "maxSupply": 1000000000
+   "maxSupply": 1000000000,
+   "operatorNote": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "CARV",
@@ -2278,12 +2278,12 @@
    ],
    "chain": "ethereum",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "token": "ethereum:0xc08cd26474722ce93f4d0c34d16201461c10aa8c",
    "circSupply": 720514153.8316613,
    "totalLocked": 279485846.16833866,
-   "maxSupply": 1000000000
+   "maxSupply": 1000000000,
+   "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "YB",
@@ -2302,12 +2302,12 @@
    ],
    "chain": "ethereum",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 0 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "token": "ethereum:0x01791F726B4103694969820be083196cC7c045fF",
    "circSupply": 409949325.93116766,
    "totalLocked": 590050674.0688324,
-   "maxSupply": 1000000000
+   "maxSupply": 1000000000,
+   "operatorNote": "Sourced from defillama's unlock schedule; 0 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "FXN",
@@ -2326,12 +2326,12 @@
    ],
    "chain": "ethereum",
    "stage": "LOGGED",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "token": "ethereum:0x365accfca291e7d3914637abf1f7635db165bb09",
    "circSupply": 1287400.3938704669,
    "totalLocked": 713417.2777485193,
-   "maxSupply": 2000817.6716189862
+   "maxSupply": 2000817.6716189862,
+   "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "H",
@@ -2373,12 +2373,12 @@
    ],
    "chain": "ethereum",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "token": "ethereum:0xe76c5b78f93909d34404e9eb4c1f19e7582a5de1",
    "circSupply": 3698214285.714286,
    "totalLocked": 6301785714.285716,
-   "maxSupply": 10000000000.000002
+   "maxSupply": 10000000000.000002,
+   "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "L3",
@@ -2420,13 +2420,13 @@
    ],
    "chain": "ethereum",
    "stage": "LOGGED",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "continuous-claim",
    "mechanismBasis": "2367 distinct claimants pull from 0x8E02d37b on 100% of days; best replay 0.50 of 4 index cliffs across 9 parameterisations — a stream, not a cliff",
    "token": "ethereum:0x88909D489678dD17aA6D9609F89B0419Bf78FD9a",
    "circSupply": 865976665.8832847,
    "totalLocked": 2467356667.1167154,
-   "maxSupply": 3333333333
+   "maxSupply": 3333333333,
+   "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "REZ",
@@ -2468,13 +2468,13 @@
    ],
    "chain": "ethereum",
    "stage": "LOGGED",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "index-contradicted",
    "mechanismBasis": "0/4 index cliffs (2026-05-30, 2026-06-30, 2026-07-30, 2026-08-30) show a claim cluster from 0x97061282 at any of 9 parameterisations, while the contract clustered 4x off-index (2026-04-30 13.97x/23r, 2026-05-05 8.42x/12r, 2026-05-10 4.76x/11r, 2026-05-25 5.72x/5r) — the listed dates are not where the claims are",
    "token": "ethereum:0x3b50805453023a91a8bf641e279401a0b23fa6f9",
    "circSupply": 9416666666.666645,
    "totalLocked": 583333333.333334,
-   "maxSupply": 9999999999.999979
+   "maxSupply": 9999999999.999979,
+   "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "ACX",
@@ -2516,12 +2516,12 @@
    ],
    "chain": "ethereum",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "token": "ethereum:0x44108f0223a3c3028f5fe7aec7f9bb2e66bef82f",
    "circSupply": 714388850.8236382,
    "totalLocked": 285611149.1763618,
-   "maxSupply": 1000000000
+   "maxSupply": 1000000000,
+   "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "CFG",
@@ -2568,12 +2568,12 @@
    ],
    "chain": "ethereum",
    "stage": "LOGGED",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "token": "ethereum:0xcccccccccc33d538dbc2ee4feab0a7a1ff4e8a94",
    "circSupply": 580614862.9920022,
    "totalLocked": 111185137.00799775,
-   "maxSupply": 691800000
+   "maxSupply": 691800000,
+   "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "ZORA",
@@ -2615,12 +2615,12 @@
    ],
    "chain": "base",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "token": "base:0x1111111111166b7fe7bd91427724b487980afc69",
    "circSupply": 5500000000,
    "totalLocked": 4500000000.000002,
-   "maxSupply": 10000000000.000002
+   "maxSupply": 10000000000.000002,
+   "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "KAITO",
@@ -2662,12 +2662,12 @@
    ],
    "chain": "base",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "token": "base:0x98d0baa52b2d063e780de12f615f963fe8537553",
    "circSupply": 459669047.6190477,
    "totalLocked": 540330952.3809526,
-   "maxSupply": 1000000000.0000004
+   "maxSupply": 1000000000.0000004,
+   "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "WAL",
@@ -2739,11 +2739,11 @@
    ],
    "chain": "unconfirmed",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "circSupply": 2521041666.5900006,
    "totalLocked": 2478958332.969996,
-   "maxSupply": 4999999999.559997
+   "maxSupply": 4999999999.559997,
+   "operatorNote": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "XPL",
@@ -2785,11 +2785,11 @@
    ],
    "chain": "unconfirmed",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "circSupply": 2777777777.777777,
    "totalLocked": 7222222222.222223,
-   "maxSupply": 10000000000
+   "maxSupply": 10000000000,
+   "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "ASTER",
@@ -2844,12 +2844,12 @@
    ],
    "chain": "bsc",
    "stage": "LOGGED",
-   "note": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "token": "bsc:0x000ae314e2a2172a039b26378814c252734f556a",
    "circSupply": 2956379951,
    "totalLocked": 5043620049,
-   "maxSupply": 8000000000
+   "maxSupply": 8000000000,
+   "operatorNote": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "FF",
@@ -2897,12 +2897,12 @@
    ],
    "chain": "ethereum",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "token": "ethereum:0xfa1c09fc8b491b6a4d3ff53a10cad29381b3f949",
    "circSupply": 3140000000,
    "totalLocked": 6860000000,
-   "maxSupply": 10000000000
+   "maxSupply": 10000000000,
+   "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "LISTA",
@@ -2926,12 +2926,12 @@
    ],
    "chain": "bsc",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "token": "bsc:0xfceb31a79f71ac9cbdcf853519c1b12d379edc46",
    "circSupply": 545253546.5067372,
    "totalLocked": 254746453.49326205,
-   "maxSupply": 799999999.9999993
+   "maxSupply": 799999999.9999993,
+   "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "STO",
@@ -2973,12 +2973,12 @@
    ],
    "chain": "ethereum",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "token": "ethereum:0x1d88713b483a8e45cff0e5cd7c2e15e5fab4534d",
    "circSupply": 436202349.2907801,
    "totalLocked": 563797650.7092202,
-   "maxSupply": 1000000000.0000004
+   "maxSupply": 1000000000.0000004,
+   "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "SOLV",
@@ -3026,12 +3026,12 @@
    ],
    "chain": "bsc",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "token": "bsc:0xabe8e5cabe24cb36df9540088fd7ce1175b9bc52",
    "circSupply": 5342947873.025968,
    "totalLocked": 4317052126.974032,
-   "maxSupply": 9660000000
+   "maxSupply": 9660000000,
+   "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified."
   },
   {
    "sym": "RE",
@@ -3067,12 +3067,12 @@
    ],
    "chain": "ethereum",
    "stage": "STANDARD",
-   "note": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "mechanism": "pending",
    "token": "ethereum:0x526526528f35ac738177003b8773b402b8df8143",
    "circSupply": 173783333.3333333,
    "totalLocked": 826216666.6666667,
-   "maxSupply": 1000000000
+   "maxSupply": 1000000000,
+   "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified."
   }
  ]
 }

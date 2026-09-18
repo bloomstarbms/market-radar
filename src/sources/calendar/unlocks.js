@@ -26,7 +26,6 @@ export const STAGES = { FULL: [14, 7, 3, 0, -3], STANDARD: [7, 3, 0], LOGGED: []
 export const leadsFor = (row) => STAGES[row?.stage ?? 'STANDARD'] ?? STAGES.STANDARD;
 const CHECK_EVERY = 6 * 3600e3;    // re-evaluate every 6h
 let lastPoll = 0;
-let estimatedSkipped = 0;
 let cache = null, cacheTs = 0;
 
 function loadSchedule() {
@@ -133,37 +132,49 @@ export function sourcedFiring(now = Date.now(), tokens = null) {
       + ` · ${mute.length - faultMute.length} silent by design · ${fresh.line}` };
 }
 
+// CLAIM COVERAGE returns PARTS (message diet): `public` is the minimum a reader needs
+// to weigh the claim; `operator` is the mechanism behind it. `line` is the join of
+// both, unchanged in substance, so nothing that used to read the sentence loses it.
+// Derived from row shape, never stored — a rendering cannot alter what a row claims.
+const sourceLabel = (src) => (src === 'defillama' ? 'DefiLlama' : src);
+const cov = (o) => ({ ...o, line: [...o.public, ...o.operator].join(' ') });
 export function claimCoverage(t, lead = 3) {
-  if (t?.provenance === 'sourced' && UNVERIFIABLE_MECHANISMS.includes(t.mechanism)) return {
+  if (t?.provenance === 'sourced' && UNVERIFIABLE_MECHANISMS.includes(t.mechanism)) return cov({
     date: 'no-discrete-event', amount: 'sourced', scope: 'mechanism',
-    line: t.mechanism === 'continuous-claim'
-      ? `No discrete event: the vesting contract pays a continuous stream that beneficiaries claim at will; ${t.source}'s date discretises it. Tracked, never announced. Basis: ${t.mechanismBasis}`
-      : `Index contradicted by chain: ${t.source}'s dates do not match where the contract's claims occur. Tracked, never announced. Basis: ${t.mechanismBasis}`,
-  };
-  if (t?.provenance === 'sourced') return {
+    public: [t.mechanism === 'continuous-claim'
+      ? `No discrete event: the vesting contract pays a continuous stream that beneficiaries claim at will; ${t.source}'s date discretises it.`
+      : `Index contradicted by chain: ${t.source}'s dates do not match where the contract's claims occur.`],
+    operator: [`Tracked, never announced. Basis: ${t.mechanismBasis}`],
+  });
+  if (t?.provenance === 'sourced') return cov({
     date: 'sourced', amount: 'sourced', scope: 'source',
-    line: `Date and amount are ${t.source}'s published figures — not independently verified (pending a route). Falsifier: the source itself, re-read weekly; silent after ${SOURCE_STALE_DAYS} days unrefreshed.`,
-  };
+    public: [`Date and amount are ${sourceLabel(t.source)}'s published figures — not independently verified (pending a route).`],
+    operator: [`Falsifier: the source itself, re-read weekly; silent after ${SOURCE_STALE_DAYS} days unrefreshed.`],
+  });
   // (2026-09-15) no claimCoverage branch for enforcement:'contract' — the label is
   // claimable by nobody (see CONTRACT_ENFORCEMENT_RETRACTED); a row cannot reach here with it.
-  if (lead < 0 && (t?.cadence || t?.alsoObserve)) return {
+  if (lead < 0 && (t?.cadence || t?.alsoObserve)) return cov({
     date: 'observed', amount: 'observed-actual', scope: 'retrospective',
-    line: 'Retrospective: the figures below are on-chain observations of what moved, not a forward estimate.',
-  };
+    public: ['Retrospective: the figures below are on-chain observations of what moved, not a forward estimate.'],
+    operator: [],
+  });
   const fam = Array.isArray(t?.cadence?.wallets) ? t.cadence.wallets.length : 0;
-  if (fam) return {
+  if (fam) return cov({
     date: 'observed', amount: 'observed', scope: 'family',
-    line: `Date and amount both observed on-chain — ${fam} custody wallets, each required to emit and the family total to land within ±${Math.round((t.cadence.tolerance ?? 0.25) * 100)}%, over ${t.cadence.monthsObserved} months. Auto-demotes if the pattern breaks.${strengthClause(t)}`,
-  };
-  if (t?.cadence) return {
+    public: [`Date and amount both observed on-chain — ${fam} custody wallets, over ${t.cadence.monthsObserved} months.`],
+    operator: [`Each wallet required to emit and the family total to land within ±${Math.round((t.cadence.tolerance ?? 0.25) * 100)}%. Auto-demotes if the pattern breaks.${strengthClause(t)}`],
+  });
+  if (t?.cadence) return cov({
     date: 'observed', amount: 'observed-partial', scope: 'tranche',
-    line: `Date and amount observed on-chain for ONE custody wallet (${t.cadence.monthsObserved} months). Other holders may emit on the same date and are NOT covered by this figure — treat it as a floor, not a total. Auto-demotes if that wallet's pattern breaks.${strengthClause(t)}`,
-  };
-  if (t?.reviewBy) return {
+    public: [`Date and amount observed on-chain for ONE custody wallet (${t.cadence.monthsObserved} months). Other holders may emit on the same date and are NOT covered by this figure — treat it as a floor, not a total.`],
+    operator: [`Auto-demotes if that wallet's pattern breaks.${strengthClause(t)}`],
+  });
+  if (t?.reviewBy) return cov({
     date: 'announced', amount: 'unchecked', scope: 'announcement',
-    line: `Date is project-announced and re-attested by ${t.reviewBy} (the row demotes itself if that passes). The AMOUNT is announcement-stated — nothing observes it on-chain.${strengthClause(t)}`,
-  };
-  return { date: 'unknown', amount: 'unchecked', scope: 'unknown', line: 'Coverage unstated — this row should not be alerting.' };
+    public: ['Date is project-announced. The AMOUNT is announcement-stated — nothing observes it on-chain.'],
+    operator: [`Re-attested by ${t.reviewBy} (the row demotes itself if that passes).${strengthClause(t)}`],
+  });
+  return cov({ date: 'unknown', amount: 'unchecked', scope: 'unknown', public: ['Coverage unstated — this row should not be alerting.'], operator: [] });
 }
 
 // COVERAGE LINE — what the module knows and, crucially, what it CANNOT know. The
@@ -265,6 +276,22 @@ export function sourceAgreement(t, second, now = Date.now()) {
 
 // `second` is INJECTABLE so fixtures are hermetic: a message test that reads the
 // live index tests today's data, not the code.
+//
+// MESSAGE DIET (2026-09-18): `lines` is the PUBLIC rendering — the fact, the numbers,
+// the minimum provenance to weigh it, six lines at most. `operatorLines` carries the
+// rest of what the system knows (the pre-diet sentences, unchanged in substance) and
+// renders only in the operator DM. Field-by-field destinations are in
+// docs/briefs/MESSAGE-FIELD-INVENTORY.md and pinned by fixture 64.
+const fmtDate = (key) => { const d = new Date(key + 'T00:00:00Z'); return `${d.getUTCDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()]}`; };
+const fmtN = (n) => Math.round(n).toLocaleString();
+// Second-source state collapses to ONE public form; the paid-tier explanation and the
+// "two calendars, not a chain read" caveat go to the operator rendering.
+function agreementPublic(ag, t) {
+  const me = sourceLabel(t.source);
+  if (ag.state === 'both-agree') return `${me} + CryptoRank agree`;
+  if (ag.state === 'both-differ') return `sources disagree: ${me} ${fmtDate(ag.ourDate)}, CryptoRank ${fmtDate(ag.otherDate)}`;
+  return `${me} only`;
+}
 export function sourcedMessage(t, ev, lead, now = new Date(), second) {
   const dateKey = new Date(ev.t * 1000).toISOString().slice(0, 10);
   const ageD = Math.max(0, Math.round((now - new Date(t.sourceFetchedAt)) / 86400e3));
@@ -273,29 +300,95 @@ export function sourcedMessage(t, ev, lead, now = new Date(), second) {
   const future = (t.sourceEvents || []).filter((e) => e.t * 1000 > now.getTime());
   const cats = [...new Set(future.flatMap((e) => String(e.cats || '').split('+')))].filter(Boolean);
   const kind = ev.type === 'linear' ? `linear tranche (${Math.round(ev.rd || 0)}d)` : 'cliff';
-  const when = lead === 0 ? 'today' : `in ${lead} days`;
   const [chain, addr] = String(t.token || '').split(':');
   const explorer = EXPLORER[chain] && addr ? `${EXPLORER[chain]}${addr}` : null;
-  const sourceName = t.source === 'defillama' ? 'DefiLlama' : t.source;
+  const sourceName = sourceLabel(t.source);
+  const isNext = future.length && future.slice().sort((a, b) => a.t - b.t)[0].t === ev.t;
+  const ag = isNext ? sourceAgreement(t, second === undefined ? loadSecondIndex() : second, now.getTime()) : null;
+  const cc = claimCoverage(t, lead);
+  const ageTxt = ageD === 0 ? 'today' : `${ageD}d old`;
   return {
-    title: `📅 UNLOCK LISTED · ${t.sym} — ${kind} ${when} (${dateKey})`,
+    title: `📅 UNLOCK · ${t.sym} — ${fmtDate(dateKey)} (${lead === 0 ? 'today' : `${lead}d`})`,
     lines: [
-      `fact · per ${sourceName}'s schedule — NOT independently verified`,
-      `Source lists ${future.length} upcoming batch event${future.length === 1 ? '' : 's'}${cats.length ? ` (${cats.join(' / ')})` : ''}`,
-      `This tranche: ~${Math.round(ev.n).toLocaleString()} ${t.sym} (source figure${pctOfMax != null ? `, ${pctOfMax.toFixed(2)}% of max supply` : ''})${pctUnlocked != null ? ` · ${pctUnlocked}% of supply unlocked to date` : ''}`,
-      t.chain === 'unconfirmed' ? 'Chain: unconfirmed — no on-chain read has been attempted' : `Chain: ${t.chain}`,
-      `Source last confirmed ${ageD === 0 ? 'today' : `${ageD} day${ageD === 1 ? '' : 's'} ago`} · goes silent if not re-confirmed within ${SOURCE_STALE_DAYS} days`,
+      `${fmtN(ev.n)} ${t.sym} (source figure${pctOfMax != null ? `, ${pctOfMax.toFixed(2)}% of max supply` : ''}) · ${kind}${pctUnlocked != null ? ` · ${pctUnlocked}% already unlocked` : ''}`,
+      ...(cats.length ? [cats.join(' / ')] : []),
+      `${t.chain === 'unconfirmed' ? 'chain unconfirmed — no on-chain read attempted' : t.chain} · ${sourceName}, unverified (${ageTxt})`,
+      ...(ag ? [agreementPublic(ag, t)] : []),
       ...(t.sourceRevision ? [`Schedule ${t.sourceRevision.note} (recheck ${t.sourceRevision.at})`] : []),
-      // Only for the row's NEXT event — the second source publishes one next date
-      // per symbol, so attaching it to a later tranche would compare two different
-      // things and read as a disagreement neither source made.
-      ...(future.length && future.sort((a, b) => a.t - b.t)[0].t === ev.t
-        ? [sourceAgreement(t, second === undefined ? loadSecondIndex() : second, now.getTime()).line] : []),
+      ...(t.note ? [t.note] : []),
+    ],
+    operatorLines: [
+      `per ${sourceName}'s schedule — NOT independently verified · ${cc.line}`,
+      `Source lists ${future.length} upcoming batch event${future.length === 1 ? '' : 's'}${cats.length ? ` (${cats.join(' / ')})` : ''}`,
+      `Source last confirmed ${ageD === 0 ? 'today' : `${ageD} day${ageD === 1 ? '' : 's'} ago`} · goes silent if not re-confirmed within ${SOURCE_STALE_DAYS} days`,
+      ...(ag ? [ag.line] : []),
+      ...(t.mechanism && t.mechanism !== 'pending' ? [`Mechanism: ${t.mechanism}`] : []),
+      ...(t.operatorNote ? [`Operator note: ${t.operatorNote}`] : []),
     ],
     url: explorer ?? 'https://defillama.com/unlocks',
     dateKey,
   };
 }
+
+// VERIFIED unlock message (generic path: cadence rows and reviewBy rows). Public:
+// the date, what is known about the amount, and how it was verified — in reader's
+// terms. Operator: the source event, the coverage mechanism, the falsifier strength,
+// the stage epistemics, and the build log. `retro` is the T+3 observed-total line
+// (an observation, so it is public).
+function amountPublic(t) {
+  const fam = Array.isArray(t?.cadence?.wallets) ? t.cadence.wallets : null;
+  if (fam) return `~${fmtN(fam.reduce((s, w) => s + (w.meanAmount || 0), 0))} ${t.sym} monthly · custody distribution, ${fam.length} wallets`;
+  if (t?.cadence?.meanAmount) return `~${fmtN(t.cadence.meanAmount)} ${t.sym} monthly · one custody wallet · a floor, not a total`;
+  return null;
+}
+function verifiedPublic(t, lead) {
+  const cc = claimCoverage(t, lead);
+  if (cc.scope === 'family') return `Verified on-chain · ${t.cadence.monthsObserved} consecutive months · ${t.cadence.wallets.length} wallets`;
+  if (cc.scope === 'tranche') return `Verified on-chain · ${t.cadence.monthsObserved} consecutive months · one wallet`;
+  if (cc.scope === 'retrospective') return 'Observed on-chain — what moved, not an estimate';
+  if (cc.scope === 'announcement') return 'Project-announced · amount not observed on-chain';
+  return cc.public.join(' ');
+}
+export function verifiedMessage(t, lead, dateKey, retro = null) {
+  const cc = claimCoverage(t, lead);
+  const epistemics = lead >= 7
+    ? 'Added supply reaches the market on this date. No directional claim — the drift around unlocks has not been measured on this corpus.'
+    : lead < 0
+    ? 'Post-event check: emission was scheduled on the stated date. Fact only — no read on what it did.'
+    : 'Emission is imminent. Fact only: what happens next is not something this system has earned an opinion about.';
+  const amt = amountPublic(t);
+  return {
+    title: lead < 0 ? `🔓 UNLOCK · ${t.sym} — T+${-lead} (event ${fmtDate(dateKey)})` : `🔓 UNLOCK · ${t.sym} — ${fmtDate(dateKey)} (${lead === 0 ? 'today' : `${lead}d`})`,
+    lines: [
+      ...(amt && lead >= 0 ? [amt] : []),
+      ...(retro ? [retro] : []),
+      verifiedPublic(t, lead),
+      ...(t.note ? [t.note] : []),
+    ],
+    operatorLines: [
+      `${t.name || t.sym}: scheduled token unlock · Verified — source: ${t.events[0].source}. ${cc.line}`,
+      `Stage T${lead >= 0 ? '-' : '+'}${Math.abs(lead)}: ${epistemics}`,
+      ...(t.operatorNote ? [`Operator note: ${t.operatorNote}`] : []),
+    ],
+    url: `https://cryptorank.io/price/${(t.name || t.sym).toLowerCase().replace(/\s+/g, '-')}/vesting`,
+    dateKey,
+  };
+}
+
+// renderFact(row, audience, ctx): the one entry point the render-lint runs over.
+// Picks the builder by row shape and returns the lines that audience would see —
+// public = `lines`; operator = `lines` + `operatorLines` (a superset, by construction).
+export function renderFact(t, audience, ctx = {}) {
+  const msg = t?.provenance === 'sourced'
+    ? sourcedMessage(t, ctx.ev ?? (t.sourceEvents || [])[0], ctx.lead ?? 7, ctx.now ?? new Date(), ctx.second ?? null)
+    : verifiedMessage(t, ctx.lead ?? 7, ctx.dateKey ?? '2026-01-01', ctx.retro ?? null);
+  const lines = audience === 'operator' ? [...msg.lines, ...msg.operatorLines] : msg.lines;
+  return { title: msg.title, lines, url: msg.url, text: [msg.title, ...lines].join('\n') };
+}
+// PUBLIC BUDGET (Part 2): a seventh line means something is prose. Declared here,
+// asserted by fixture on every template with representative rows.
+export const PUBLIC_MAX_LINES = 6;
+export const PUBLIC_MAX_CHARS = 420;
 
 async function pushSourced(t, now) {
   let fired = 0;
@@ -313,7 +406,7 @@ async function pushSourced(t, now) {
         source: 'CAL', type: 'UNLOCK',
         severity: 'MEDIUM',               // one band: a sourced notice carries no severity ladder
         key: `${t.sym}:${msg.dateKey}:${lead}:sourced`, cooldownMin: 2 * 24 * 60,
-        title: msg.title, lines: msg.lines, url: msg.url,
+        title: msg.title, lines: msg.lines, operatorLines: msg.operatorLines, url: msg.url,
       })) fired++;
     }
   }
@@ -327,7 +420,10 @@ export async function pollUnlocks() {
   if (!sched?.tokens?.length) return;
 
   const now = new Date();
-  let fired = 0, staleSourced = 0;
+  // Per-cycle counters. estimatedSkipped lived at module scope and climbed 17 → 51 → 68
+  // → 85 across cycles (2026-09-17) — a stored value that never reset, one reader away
+  // from being a rate.
+  let fired = 0, staleSourced = 0, estimatedSkipped = 0;
   // Cadence overlay: a behavioural row whose watch window passed empty is demoted by
   // OBSERVATION, recorded in bot-owned data/ — unlocks.json keeps its single human
   // writer. A demotion is superseded only by a re-promotion with newer evidence.
@@ -354,26 +450,8 @@ export async function pollUnlocks() {
       continue;
     }
     if (!Array.isArray(t.events) || !t.events.length) { estimatedSkipped++; continue; }
-    // CONTRACT-CLIFF rows (route 2) carry a LIST of cliff dates, like sourced rows but
-    // verified: each future cliff alerts on its own stages in the verified format.
-    if (t.enforcement === 'contract' && Array.isArray(t.cliffDates)) {
-      for (const c of t.cliffDates.filter((x) => x.cluster === null)) {
-        const target = new Date(c.date + 'T00:00:00Z');
-        const daysOut = Math.round((target - now) / 86400e3);
-        for (const lead of leadsFor(t)) {
-          if (lead < 0 || daysOut !== lead) continue;
-          if (await dispatch({
-            source: 'CAL', type: 'UNLOCK', severity: lead === 3 || lead === 0 ? 'HIGH' : 'MEDIUM',
-            key: `${t.sym}:${c.date}:${lead}:cliff`, cooldownMin: 2 * 24 * 60,
-            title: lead === 0 ? `${t.sym} contract cliff today — ${c.date}` : `${t.sym} contract cliff in ${lead} days — ${c.date}`,
-            lines: [`${t.name || t.sym}: scheduled cliff on a vesting contract`, t.note ? `Context: ${t.note}` : 'Claims open on this date; beneficiaries pull individually over the following days.',
-              'Fact only — no read on what claimants do with it.', `Verified — source: contract-cliff. ${claimCoverage(t, lead).line}`],
-            url: t.contract ? `https://etherscan.io/address/${t.contract}` : undefined,
-          })) fired++;
-        }
-      }
-      continue;
-    }
+    // (2026-09-18) the contract-cliff alert branch that lived here is gone with the
+    // tier: enforcement:'contract' is claimable by nobody, so no row reaches it.
     const when = t.date ? new Date(t.date + 'T00:00:00Z') : (t.monthlyDay ? nextMonthlyDate(t.monthlyDay, new Date()) : null);
     const prev = t.date ? new Date(t.date + 'T00:00:00Z') : (t.monthlyDay ? lastMonthlyDate(t.monthlyDay, new Date()) : null);
 
@@ -383,7 +461,6 @@ export async function pollUnlocks() {
       const daysOut = Math.round((target - now) / 86400e3);
       if (daysOut !== lead) continue;
       const dateKey = target.toISOString().slice(0, 10);
-      const pct = t.pctOfMcap ? ` (~${t.pctOfMcap}% of market cap)` : '';
       // Provenance stated precisely: an events[]-backed date says HOW it was verified
       // (contract read / announcement / on-chain backtest), not a generic calendar
       // claim. The first live push carried 'verified against the public unlock
@@ -401,30 +478,12 @@ export async function pollUnlocks() {
         const obs = addrs.length ? await observedAround(addrs, t.sym, dateKey, t.cadence?.graceDays ?? 3).catch(() => null) : null;
         retro = retrospectiveLine(obs, t.cadence);
       }
-      const confidence = (Array.isArray(t.events) && t.events.length)
-        ? `Verified — source: ${t.events[0].source}. ${claimCoverage(t, lead).line}${retro ? ' ' + retro : ''}`
-        : t.verified
-        ? 'Date verified against the public unlock calendar.'
-        : '⚠️ Recurring-schedule estimate — confirm the exact date on cryptorank.io/token-unlock.';
-      const stageLine = lead === 0 ? `${t.sym} unlock today — ${dateKey}`
-        : lead < 0 ? `${t.sym} unlock T+${-lead} — event was ${dateKey}`
-        : `${t.sym} unlock in ${lead} days — ${dateKey}`;
+      const msg = verifiedMessage(t, lead, dateKey, retro);
       if (await dispatch({
         source: 'CAL', type: 'UNLOCK',
         severity: lead === 3 || lead === 0 ? 'HIGH' : lead < 0 ? 'LOW' : 'MEDIUM',
         key: `${t.sym}:${dateKey}:${lead}`, cooldownMin: 2 * 24 * 60,
-        title: stageLine,
-        lines: [
-          `${t.name || t.sym}: scheduled token unlock${pct}`,
-          t.note ? `Context: ${t.note}` : 'Unlocks add sell-side supply; thin-liquidity tokens absorb it worst.',
-          lead >= 7
-            ? 'Added supply reaches the market on this date. No directional claim — the drift around unlocks has not been measured on this corpus.'
-            : lead < 0
-            ? 'Post-event check: emission was scheduled on the stated date. Fact only — no read on what it did.'
-            : 'Emission is imminent. Fact only: what happens next is not something this system has earned an opinion about.',
-          confidence,
-        ],
-        url: `https://cryptorank.io/price/${(t.name || t.sym).toLowerCase().replace(/\s+/g, '-')}/vesting`,
+        title: msg.title, lines: msg.lines, operatorLines: msg.operatorLines, url: msg.url,
       })) fired++;
     }
   }

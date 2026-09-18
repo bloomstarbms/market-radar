@@ -30,6 +30,20 @@ function reportAddresses() {
 }
 
 const [sym, ...kvs] = process.argv.slice(2);
+// NOTE SPLIT (message diet): `node promote-unlock.js note-split` moves every row's
+// pre-split `note` to `operatorNote` through this write path (never a hand edit).
+// Idempotent: rows that already carry an operatorNote are untouched.
+if (sym === 'note-split') {
+  const { splitNote } = await import('./src/core/unlock-promote.js');
+  const j = JSON.parse(readFileSync('unlocks.json', 'utf8'));
+  const moved = [];
+  j.tokens = j.tokens.map((t) => { const r = splitNote(t); if (r.moved) moved.push(t.sym); return r.row; });
+  if (!moved.length) { console.log('note-split: nothing to move'); process.exit(0); }
+  j.lastReviewed = new Date().toISOString().slice(0, 10) + ` (note-split ${moved.length} rows via promote-unlock.js)`;
+  writeFileSync('unlocks.json.tmp', JSON.stringify(j, null, 1)); renameSync('unlocks.json.tmp', 'unlocks.json');
+  console.log(`note-split: moved note → operatorNote on ${moved.length} rows: ${moved.join(' ')}`);
+  process.exit(0);
+}
 if (!sym) {
   console.log('usage: node promote-unlock.js SYM [monthlyDay=N] [date=YYYY-MM-DD] source=... detail="..." [note="..."]');
   process.exit(1);
@@ -92,9 +106,10 @@ if (args.provenance === 'sourced') {
   }
   const row = sourceRow(j.tokens[idx] ?? { sym: sym.toUpperCase(), name: args.name ?? p.name }, {
     source: args.source, sourceFetchedAt: indexFile.fetchedAt, sourceEvents, chain, token,
-    stage: args.stage ?? defaultStage, note: args.note ?? `Sourced from ${args.source}'s unlock schedule; ${sourceEvents.filter((e) => e.t * 1000 > Date.now()).length} upcoming batch events at ingest. Not independently verified.`,
+    stage: args.stage ?? defaultStage, note: args.note ?? prior.note ?? '',
     circSupply: p.circSupply ?? null, totalLocked: p.totalLocked ?? null, maxSupply: p.maxSupply ?? null,
     mechanism, mechanismBasis, tierCorrection: wasVerified ? { reason: args.reason, evidence } : null,
+    operatorNote: args.operatorNote ?? prior.operatorNote ?? `Sourced from ${args.source}'s unlock schedule; ${sourceEvents.filter((e) => e.t * 1000 > Date.now()).length} upcoming batch events at ingest.`,
   });
   if (idx < 0) j.tokens.push(row); else j.tokens[idx] = row;
   j.lastReviewed = new Date().toISOString().slice(0, 10) + ` (sourced ${row.sym} via promote-unlock.js)`;
@@ -137,7 +152,8 @@ if (args.mechanism) {
   const ev = mechanismEvidence(args.mechanism, res, rep.pastCliffs || []);
   if (!ev.ok) { console.error(`${sym}: report does not support mechanism '${args.mechanism}': ${ev.why}`); process.exit(1); }
   const row = sr({ sym: t.sym, name: t.name }, { source: t.source, sourceFetchedAt: t.sourceFetchedAt, sourceEvents: t.sourceEvents, chain: t.chain, token: t.token ?? null,
-    stage: 'LOGGED', note: (t.note ? t.note + ' ' : '') + `MECHANISM ${args.mechanism} (${new Date().toISOString().slice(0, 10)}): ${ev.basis}`,
+    stage: 'LOGGED', note: t.note ?? '',
+    operatorNote: (t.operatorNote ? t.operatorNote + ' ' : '') + `MECHANISM ${args.mechanism} (${new Date().toISOString().slice(0, 10)}): ${ev.basis}`,
     circSupply: t.circSupply ?? null, totalLocked: t.totalLocked ?? null, maxSupply: t.maxSupply ?? null, mechanism: args.mechanism, mechanismBasis: ev.basis });
   j.tokens[idx] = row;
   j.lastReviewed = new Date().toISOString().slice(0, 10) + ` (mechanism ${row.sym} via promote-unlock.js)`;
@@ -262,6 +278,7 @@ const row = promoteRow(j.tokens[idx], {
   monthlyDay: args.monthlyDay ? Number(args.monthlyDay) : null,
   date: eventDate,
   note: args.note ?? j.tokens[idx].note ?? '',
+  operatorNote: args.operatorNote ?? j.tokens[idx].operatorNote ?? null,
   events,
   cadence,
   enforcement: args.enforcement ?? null,
