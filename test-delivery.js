@@ -1034,7 +1034,7 @@ console.log('51. a sourced row that CANNOT fire is counted as coverage — the h
   check('a stale row is MUTE for a different reason, and says which', r.faultMute.some((m) => m === 'OLD:stale'));
   check('a LOGGED row is silent BY DESIGN, not a fault (the alarm must not cry wolf)', r.mute.includes('QUIET:silent-by-stage') && !r.faultMute.some((m) => m.startsWith('QUIET')));
   check('the line names the firing rows and raises 🚨 only on fault-mute', /29|6 rows/.test(r.line) && /🚨 2 MUTE/.test(r.line) && /1 silent by design/.test(r.line));
-  check('no fault-mute -> no siren', !/🚨/.test(sourcedFiring(now, [rows[0], rows[4]]).line));
+  check('no fault-mute -> no MUTE siren (the coverage arm is its own siren, asserted below)', !/🚨 \d+ MUTE/.test(sourcedFiring(now, [rows[0], rows[4]]).line));
   // INVARIANTS, not today's data. These two were written as `LIVE:` assertions on
   // 2026-09-07 ("all 29 rows can fire") and went RED on 2026-09-13 without a line of
   // code changing: SEI, APT and CARV simply ran out of listed events. A fixture that
@@ -1048,6 +1048,34 @@ console.log('51. a sourced row that CANNOT fire is counted as coverage — the h
   check('a row with a future event is NOT fault-mute', !mixed.faultMute.some((m) => m.startsWith('ALIVE')));
   check('MUTATION: give the exhausted row a future event and it leaves faultMute', sourcedFiring(now, row(['EXH', 10])).faultMute.length === 0);
   check('withFuture counts exactly the rows with an event after now', mixed.withFuture === 1 && mixed.sourced === 2);
+  // ITEM 8 — COVERAGE ARM. The age arm reads the file's age; the coverage arm reads how
+  // far ahead the file LOOKS (horizon = the latest listed event across rows). N = 14
+  // was pre-registered before the rows were measured (REMAINING-WORK-NOTES.md
+  // 2026-09-18). Acceptance: the coverage arm fires on a FRESH file whose horizon is
+  // short, while the age arm stays FRESH on the same file.
+  const { sourceCoverage, COVERAGE_WARN_DAYS } = await import('./src/core/unlock-promote.js');
+  const freshShort = [...row(['A', 3]), ...row(['B', 9]), ...row(['C', -2])];            // fetched now, horizon 9d
+  const rs = sourcedFiring(now, freshShort);
+  check('N is a declared constant, pre-registered (14)', COVERAGE_WARN_DAYS === 14);
+  check('coverage arm FIRES on a fresh file whose horizon is 9d', rs.coverage.level === 'SHORT' && rs.coverage.horizonDays === 9 && /🚨 coverage horizon 9d < 14d/.test(rs.line));
+  check('…while the AGE arm stays FRESH on the same file', rs.freshness.level === 'FRESH' && /index age 2d/.test(rs.line) && !/index \d+d old/.test(rs.line));
+  check('a row with no listed event inside the horizon is named, with the remedy (refresh, not age)', rs.coverage.exhausted.join() === 'C' && /a refresh extends the horizon, age does not/.test(rs.line));
+  check('MUTATION: horizon at exactly N is OK (>=); 30d is OK and still names the exhausted row', sourceCoverage([...row(['A', 14])], now).level === 'OK' && sourcedFiring(now, [...row(['A', 30]), ...row(['C', -2])]).coverage.level === 'OK');
+  check('MUTATION: every event behind us -> PASSED, its own state', sourceCoverage([...row(['A', -1])], now).level === 'PASSED');
+  check('no sourced rows -> NONE, not OK', sourceCoverage([], now).level === 'NONE' && sourceCoverage([{ sym: 'V', verified: true }], now).level === 'NONE');
+  check('the heartbeat line carries BOTH arms', /index age \d+d/.test(rs.line) && /coverage horizon/.test(rs.line));
+  // THE COUNTER. estimatedSkipped climbed 17 → 51 → 68 → 85 across cycles because it
+  // lived at module scope. The counts are now sums over a pure classifier the loop
+  // itself consults: two consecutive cycles over the same rows give the same numbers.
+  const { cycleCounts, rowSilence } = await import('./src/sources/calendar/unlocks.js');
+  const cycleRows = [...freshShort, { sym: 'EST', monthlyDay: 1 }, { sym: 'DEM', verified: true, events: [{ date: '2026-01-01', source: 'x' }] }, { sym: 'RET', retired: 'gone' },
+    { ...base, sym: 'OLDR', stage: 'STANDARD', sourceEvents: [ev(7)], sourceFetchedAt: new Date(now - 40 * D).toISOString().slice(0, 16) }];
+  const cctx = { demoted: { DEM: { at: '2026-09-01' } }, recheck: null, now };
+  const c1 = cycleCounts(cycleRows, cctx), c2 = cycleCounts(cycleRows, cctx);
+  check('two consecutive cycles, same rows, same count (estimated 2 = EST + DEM · demoted 1 · stale 1)', JSON.stringify(c1) === JSON.stringify(c2) && c1.estimatedSkipped === 2 && c1.cadenceDemoted === 1 && c1.staleSourced === 1 && c1.alertable === 3);
+  check('the classifier names each silence', rowSilence({ sym: 'EST', monthlyDay: 1 }, cctx) === 'estimated' && rowSilence(cycleRows[4], cctx) === 'cadence-demoted' && rowSilence(cycleRows[5], cctx) === 'retired' && rowSilence(cycleRows[6], cctx) === 'stale' && rowSilence(freshShort[0], cctx) === null);
+  check('no module-scope counter survives in unlocks.js (the shape that accumulated)', !/^let (estimatedSkipped|cadenceDemoted|staleSourced)/m.test(readFileSync('src/sources/calendar/unlocks.js', 'utf8')));
+  check('LIVE: the live file reports a horizon and names its exhausted rows (the arm is arithmetic over rows)', (() => { const l = sourcedFiring(); return Number.isFinite(l.coverage.horizonDays) && Array.isArray(l.coverage.exhausted); })());
   check('MUTATION: two live rows -> withFuture === sourced; two dead rows -> 0', sourcedFiring(now, [...row(['A', 5]), ...row(['B', 9])]).withFuture === 2
     && sourcedFiring(now, [...row(['A', -5]), ...row(['B', -9])]).withFuture === 0);
 }
@@ -1068,7 +1096,7 @@ console.log('52. staleness LADDER — the 21-day cliff warns before it bites');
   check('an unparseable timestamp is its own level, never quietly FRESH', sourceFreshness({ sourceFetchedAt: 'soon' }, now).level === 'UNPARSEABLE');
   // The warning must state the ACTION — the refresh is manual and browser-pane-only.
   const mk = (days) => [{ provenance: 'sourced', source: 'defillama', chain: 'ethereum', maxSupply: 1e9, sym: 'X', stage: 'STANDARD',
-    sourceEvents: [{ t: Math.floor((now + 9 * D) / 1000), n: 1e7, cats: 'insiders' }], ...at(days) }];
+    sourceEvents: [{ t: Math.floor((now + 30 * D) / 1000), n: 1e7, cats: 'insiders' }], ...at(days) }];   // 30d horizon: the age arm is what these assert
   check('WARN line names the action and the deadline, not just the age', /⚠️ index 14d old · 7d until every sourced row goes silent — browser-pane refresh required/.test(sourcedFiring(now, mk(14)).line));
   check('URGENT escalates the marker, same sentence', /🚨 index 18d old · 3d/.test(sourcedFiring(now, mk(18)).line));
   check('past the cliff it reports the consequence in the past tense, not a countdown', /🚨 index 22d old — sourced rows are SILENT/.test(sourcedFiring(now, mk(22)).line));

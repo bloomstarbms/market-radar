@@ -3632,3 +3632,56 @@ ALSO, while in unlocks.js: `estimatedSkipped` moved from module scope to per-cyc
 (it climbed 17 → 51 → 68 → 85). Two consecutive cycles now report the same count for
 the same rows. No fixture drives two cycles of pollUnlocks (it fetches); the change is
 a declaration moving three lines — recorded, not asserted.
+
+## 2026-09-18 — ITEM 8, PRE-REGISTRATION (written BEFORE measuring the rows)
+
+Coverage arm N = 14 days. Basis: the age ladder's first warning fires at 14 days of
+index age (SOURCE_WARN_DAYS), i.e. the operator is asked to refresh on a 14-day
+cadence. A row whose last LISTED event is fewer than 14 days away can exhaust its
+schedule before the age arm would say anything — on a fresh file the age arm is
+correctly silent and the row goes mute anyway (YB, 0-day-old index). So the coverage
+arm must lead by the same interval the age arm trusts: runway < 14d ⇒ warn.
+Runway = days from now to the row's LAST sourceEvent (not the next). A row with no
+future event is already "no future event" in faultMute — the coverage arm is the
+arm BEFORE that state. Expectation, stated in advance: on today's file at least one
+row (YB) is already exhausted, and I expect 0–4 rows inside 14d runway. Measured
+after this entry, not before.
+
+## 2026-09-18 — v0.32.1: ITEM 8 (COVERAGE ARM) + THE COUNTER
+
+ITEM 8 — measured AFTER the pre-registration above, and the expectation was WRONG in
+an informative way. Expected 0–4 rows inside 14d runway; found 14 of 30, and the
+index's own horizon is 26–27 days from a 2026-09-15 fetch. The DefiLlama snapshot
+carries ~30 days of listed events. So "runway" is a property of the SNAPSHOT, not
+the row, for every row whose period is ≥ the horizon: YB's last listed event was
+the fetch date, its next is presumably ~30d out, and the index cannot see it. YB,
+ZK, RE, SOLV (and FXN, LOGGED) are "no future event" on a 3-day-old index for that
+reason alone — the age arm is correctly FRESH and the row is correctly mute, and the
+remedy is a refresh that EXTENDS THE HORIZON, which the age arm would not ask for
+for another 11 days.
+
+Shipped: `sourceCoverage(rows, now)` (pure, unlock-promote.js) — horizon = latest
+listed event across sourced rows; levels OK / SHORT (< COVERAGE_WARN_DAYS = 14,
+pre-registered) / PASSED / NONE; names the rows without a listed event inside the
+horizon with the remedy. Rides the "Sourced firing" heartbeat line beside the age
+arm: `index age 3d · coverage horizon 26d · 5 rows without a listed event inside it
+(ZK, YB, FXN, SOLV, RE) — a refresh extends the horizon, age does not`.
+Fixture (section 51): a FRESH file with a 9d horizon fires the coverage arm while the
+age arm reads FRESH on the same file; N at exactly 14 is OK; every-event-behind-us is
+PASSED, its own state; no rows is NONE, not OK. Two older fixtures asserted "no siren"
+on single rows 3–9 days out and now needed a 30-day horizon to keep asserting the AGE
+arm — they were never about coverage, and said so once the arm existed.
+
+Not on the list: the refresh cadence is really bounded by the horizon, not by the
+21-day staleness rule. A 30-day snapshot refreshed every 14 days keeps ≥16 days of
+horizon; refreshed at 21 it keeps 9. The chore's trigger should be the coverage line
+as much as the age line — NEXT-SESSION.md's chore text updated to say so.
+
+THE COUNTER — `rowSilence(t, ctx)` (pure) names why a row does not alert this cycle;
+`cycleCounts(tokens, ctx)` sums it; pollUnlocks consults the SAME classifier for its
+skips and logs the sums. No module-scope counter remains (fixture greps for the
+shape). Fixture: two consecutive cycles over the same rows give identical counts
+(estimated 2 = one estimated row + one cadence-demoted; demoted 1; stale 1;
+alertable 3). The 2026-09-17 log will read 17 every cycle from here.
+
+Suite 751 green via boot-check.js.

@@ -1,6 +1,9 @@
 <!-- PREMISE
 Written against: v0.24.5
 Reviewed: 2026-08-29
+SUPERSEDED 2026-09-18 by docs/briefs/VPS-MIGRATION.md (written against v0.32.0:
+boot-check.js, the copy-marker refusal, the push guard, verify-tags, the ownership
+split, the Telegram restriction). Kept for its timing reasoning; do not run it.
 Assumes:
 - Bot runs on the desktop; migration happens ON OR AFTER 31 Aug (never mid-window).
 - The agent CANNOT SSH — steps 1-4 are operator-executed, step 5 needs a second reader.

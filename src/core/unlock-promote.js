@@ -142,6 +142,28 @@ export function pressureStage(t, floor = SOURCED_PRESSURE_FLOOR) {
 // sandbox and the desktop), so the warning states the action, not just the fact.
 export const SOURCE_WARN_DAYS = 14;   // ⚠️  one week of slack left
 export const SOURCE_URGENT_DAYS = 18; // 🚨  three days of slack left
+// COVERAGE ARM (item 8, 2026-09-18). The age arm measures how old the file is; it
+// says nothing about how far ahead the file LOOKS. The DefiLlama snapshot carries
+// ~30 days of listed events, so a row whose next tranche is 31 days out has "no
+// future event" on a 0-day-old index (YB, ZK, RE on 2026-09-18) — the ladder reads
+// FRESH and the row is mute. Runway is a property of the SNAPSHOT for those rows,
+// not of their schedules. N = 14 was pre-registered before the rows were measured:
+// the age arm asks for a refresh every 14 days, so the coverage horizon must lead
+// by at least that or the schedule runs out before the age arm would speak.
+export const COVERAGE_WARN_DAYS = 14;
+export function sourceCoverage(rows, now = Date.now()) {
+  const runway = (rows || []).filter((t) => t?.provenance === 'sourced' && !t.retired && (t.sourceEvents || []).length)
+    .map((t) => ({ sym: t.sym, days: Math.floor((Math.max(...t.sourceEvents.map((e) => e.t)) * 1000 - now) / 86400e3) }));
+  if (!runway.length) return { horizonDays: null, level: 'NONE', exhausted: [], line: 'coverage horizon: no sourced rows' };
+  const horizonDays = Math.max(...runway.map((r) => r.days));
+  const exhausted = runway.filter((r) => r.days < 0).map((r) => r.sym);
+  const level = horizonDays < 0 ? 'PASSED' : horizonDays < COVERAGE_WARN_DAYS ? 'SHORT' : 'OK';
+  const tail = exhausted.length ? ` · ${exhausted.length} row${exhausted.length === 1 ? '' : 's'} without a listed event inside it (${exhausted.join(', ')}) — a refresh extends the horizon, age does not` : '';
+  const line = level === 'OK' ? `coverage horizon ${horizonDays}d${tail}`
+    : level === 'SHORT' ? `🚨 coverage horizon ${horizonDays}d < ${COVERAGE_WARN_DAYS}d — listed events run out before the age arm would warn; browser-pane refresh required (see NEXT-SESSION.md)${tail}`
+    : `🚨 coverage horizon PASSED (${horizonDays}d) — every listed event is behind us; browser-pane refresh required (see NEXT-SESSION.md)`;
+  return { horizonDays, level, exhausted, line };
+}
 export function sourceFreshness(t, now = Date.now()) {
   const at = Date.parse(t?.sourceFetchedAt);
   if (!Number.isFinite(at)) return { level: 'UNPARSEABLE', ageDays: null, daysLeft: null };

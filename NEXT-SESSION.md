@@ -151,7 +151,9 @@ the queue) — operator to confirm the DM arrived.
 ## RECURRING CHORE — refresh the unlock index (monthly, or when the heartbeat warns)
 
 **Trigger:** the heartbeat's "Sourced firing:" line shows `⚠️ index 14d old` (or
-`🚨` at 18d). At 21d every sourced row goes silent — correctly, but silent. Do not
+`🚨` at 18d) — OR `🚨 coverage horizon <14d`. The snapshot carries ~30 days of listed
+events, so the horizon runs out on its own schedule regardless of age (item 8,
+2026-09-18). At 21d every sourced row goes silent — correctly, but silent. Do not
 wait for the siren if a session is happening anyway.
 
 **Why manual:** `defillama.com/unlocks` returns Cloudflare 403 to the sandbox AND to

@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { config, ROOT } from '../../config.js';
 import { dispatch } from '../../core/dispatcher.js';
 import { loadWatchState, activeDemotions, observedAround, retrospectiveLine, loadRecheckState, effectiveSourced } from './cadence-watch.js';
-import { sourceIsStale, SOURCE_STALE_DAYS, pressureStage, falsifierLine, MIN_FALSIFIER_MARGIN, sourceFreshness, SOURCE_STALE_DAYS as STALE_D, UNVERIFIABLE_MECHANISMS } from '../../core/unlock-promote.js';
+import { sourceIsStale, SOURCE_STALE_DAYS, pressureStage, falsifierLine, MIN_FALSIFIER_MARGIN, sourceFreshness, sourceCoverage, SOURCE_STALE_DAYS as STALE_D, UNVERIFIABLE_MECHANISMS } from '../../core/unlock-promote.js';
 
 const FILE = join(ROOT, 'unlocks.json');
 // STAGE TIERING (coverage-session Part 3): at 25+ tracked tokens, un-tiered monthly
@@ -123,13 +123,15 @@ export function sourcedFiring(now = Date.now(), tokens = null) {
       : worst.level === 'STALE' ? `🚨 index ${worst.ageDays}d old — sourced rows are SILENT; browser-pane refresh required (see NEXT-SESSION.md)`
       : worst.level === 'UNPARSEABLE' ? '🚨 a sourced row has an unparseable sourceFetchedAt'
       : `${worst.level === 'URGENT' ? '🚨' : '⚠️'} index ${worst.ageDays}d old · ${worst.daysLeft}d until every sourced row goes silent — browser-pane refresh required (see NEXT-SESSION.md)` };
+  // Two arms, one line: age (how old the file is) and coverage (how far ahead it looks).
+  const coverage = sourceCoverage(sourced, now);
   return { sourced: sourced.length, withFuture: withFuture.length, firing7d: firing.length, firing,
     mute, faultMute,
-    freshness: fresh,
+    freshness: fresh, coverage,
     line: `Sourced firing: ${sourced.length} rows · ${withFuture.length} with a future event · ${firing.length} firing in 7d`
       + (firing.length ? ` (${firing.join(', ')})` : '')
       + (faultMute.length ? ` · 🚨 ${faultMute.length} MUTE: ${faultMute.join(', ')}` : '')
-      + ` · ${mute.length - faultMute.length} silent by design · ${fresh.line}` };
+      + ` · ${mute.length - faultMute.length} silent by design · ${fresh.line} · ${coverage.line}` };
 }
 
 // CLAIM COVERAGE returns PARTS (message diet): `public` is the minimum a reader needs
@@ -413,6 +415,35 @@ async function pushSourced(t, now) {
   return fired;
 }
 
+// ROW SILENCE, pure: why a row does NOT alert this cycle, or null when it may. The
+// loop below consults THIS (not its own inline conditions) and the counters it logs
+// are sums over it — so the same rows on two consecutive cycles give the same
+// counts by construction, which is the property that was lost when
+// estimatedSkipped lived at module scope (17 → 51 → 68 → 85, 2026-09-17).
+export function rowSilence(t, { demoted = {}, recheck = null, now = Date.now() } = {}) {
+  if (demoted[t.sym]) return 'cadence-demoted';
+  if (t.retired) return 'retired';
+  if (t.provenance === 'sourced') {
+    const eff = effectiveSourced(t, recheck);
+    if (eff.sourceDemoted) return 'source-retracted';
+    if (sourceIsStale(eff, now)) return 'stale';
+    return null;
+  }
+  if (!Array.isArray(t.events) || !t.events.length) return 'estimated';
+  return null;
+}
+export function cycleCounts(tokens, ctx) {
+  const c = { estimatedSkipped: 0, cadenceDemoted: 0, staleSourced: 0, alertable: 0 };
+  for (const t of tokens || []) {
+    const why = rowSilence(t, ctx);
+    if (why === 'cadence-demoted') { c.cadenceDemoted++; c.estimatedSkipped++; }
+    else if (why === 'source-retracted' || why === 'estimated') c.estimatedSkipped++;
+    else if (why === 'stale') c.staleSourced++;
+    else if (why === null) c.alertable++;
+  }
+  return c;
+}
+
 export async function pollUnlocks() {
   if (Date.now() - lastPoll < CHECK_EVERY) return;
   lastPoll = Date.now();
@@ -420,36 +451,34 @@ export async function pollUnlocks() {
   if (!sched?.tokens?.length) return;
 
   const now = new Date();
-  // Per-cycle counters. estimatedSkipped lived at module scope and climbed 17 → 51 → 68
-  // → 85 across cycles (2026-09-17) — a stored value that never reset, one reader away
-  // from being a rate.
-  let fired = 0, staleSourced = 0, estimatedSkipped = 0;
+  let fired = 0;
   // Cadence overlay: a behavioural row whose watch window passed empty is demoted by
   // OBSERVATION, recorded in bot-owned data/ — unlocks.json keeps its single human
   // writer. A demotion is superseded only by a re-promotion with newer evidence.
   const demoted = activeDemotions(sched.tokens, loadWatchState());
   const recheck = loadRecheckState();
-  let cadenceDemoted = 0;
+  // Per-cycle counts from the pure classifier — never module state.
+  const ctx = { demoted, recheck, now: now.getTime() };
+  const { estimatedSkipped, cadenceDemoted, staleSourced } = cycleCounts(sched.tokens, ctx);
   for (const t of sched.tokens) {
-    if (demoted[t.sym]) { cadenceDemoted++; estimatedSkipped++; continue; } // alerts as nothing until re-verified
+    const why = rowSilence(t, ctx);
+    if (why === 'cadence-demoted') continue; // alerts as nothing until re-verified
     // THREE-STATE DISCIPLINE (spec §4.2): only a VERIFIED DATE may alert — a date
     // read from the vesting contract or a project announcement, stored in
     // t.events[]. `monthlyDay` recurrences and pct-only rows are ESTIMATED:
     // logged, ranked for integration priority, never alerted. The module degrades
     // to silence, not to guessing — a 🔴 directive on an admitted guess was the
     // original defect here.
-    if (t.retired) continue; // positive state, asserted at boot — never alert
+    if (why === 'retired') continue; // positive state, asserted at boot — never alert
     // SOURCED tier: a named third party's schedule, pushed as a fact ABOUT THE
     // SOURCE, labelled, at STANDARD. Stops when the source has not been re-read in
     // 21 days — a stale source is a memory, not a source.
     if (t.provenance === 'sourced') {
-      const eff = effectiveSourced(t, recheck);      // overlay: refreshed/revised/demoted
-      if (eff.sourceDemoted) { estimatedSkipped++; continue; } // source retracted — silent
-      if (sourceIsStale(eff, now.getTime())) { staleSourced++; continue; }
-      fired += await pushSourced(eff, now);
+      if (why) continue; // source-retracted or stale — counted above
+      fired += await pushSourced(effectiveSourced(t, recheck), now);
       continue;
     }
-    if (!Array.isArray(t.events) || !t.events.length) { estimatedSkipped++; continue; }
+    if (why === 'estimated') continue;
     // (2026-09-18) the contract-cliff alert branch that lived here is gone with the
     // tier: enforcement:'contract' is claimable by nobody, so no row reaches it.
     const when = t.date ? new Date(t.date + 'T00:00:00Z') : (t.monthlyDay ? nextMonthlyDate(t.monthlyDay, new Date()) : null);
