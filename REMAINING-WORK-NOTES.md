@@ -3383,3 +3383,144 @@ correction to a verdict, and it belongs to the reviewer with these numbers in ha
 Queued ahead of item 10: the spec basis must record WHY a grid point was chosen, or
 state that the choice was arbitrary — and a row whose best margin is ≤0.26 should
 say so on the row, not only in a notes entry.
+
+## 2026-09-15 — v0.31.9: ORDER → SOURCED, THE VERIFIED TIER GETS AN ADMISSION BAR, WEAK IS RETIRED
+
+Reviewer's decision on the grid above: ORDER does not belong in the verified tier,
+and the grid is the evidence. Four parts, all shipped here.
+
+1. ORDER → sourced, as a TIER CORRECTION, not a verdict correction. Through
+   promote-unlock.js (`ORDER provenance=sourced source=defillama reason="..."`):
+   sourceRow now refuses a verified row WITHOUT a reason (≥20 chars) and, with one,
+   records what was retracted — events, note, enforcement, contract, clusterSpec,
+   falsifier, cliffDates, upgradeable — as `tierHistory {from, retractedAt, reason,
+   retracted}`. Nothing deleted; the row can be read as "was verified, why it isn't".
+   Re-ingested from the 2026-09-15 index (10 events, stage LOGGED by the pressure
+   rule, mechanism pending). ORDER's 09-07 DEMOTE stays in data/cadence-watch.json as
+   history: activeDemotions() now skips a row whose provenance is sourced — the tier
+   the demotion applied to no longer exists. Without that line unlocks.js would have
+   skipped the sourced ORDER as "alerts as nothing" (line 337) — a corrected row
+   silenced by the verdict against the tier it left. Fixture + mutation.
+
+2. enforcement:'contract' is claimable by nobody again. forwardFalsifierProblems
+   returns CONTRACT_ENFORCEMENT_RETRACTED for any row carrying the label, evidence or
+   not; the provenance=contract-cliff CLI path refuses up front. The METHOD stands:
+   clusterVerdicts, chanceRate, clusterMargin (new: hits/n − chance), cliffClusterDecision
+   and clusterSpecProblems remain and are tested — it has simply not produced a row
+   that clears the bar. The claimCoverage contract branch is deleted, not left as a
+   dead branch that agrees with the prior.
+
+3. MIN_FALSIFIER_MARGIN = 0.40, declared, with MIN_FALSIFIER_MARGIN_BASIS naming the
+   observed distribution (EIGEN 0.76, ENA 0.67, MOVE 0.64 admitted; ORDER 0.17, grid
+   best 0.26, retracted). Enforced twice: stampStrength derives the verdict from the
+   margin — never copies the report's — and REFUSES below the bar naming the sourced
+   tier; falsifierProblems (boot) refuses a stored margin below the bar, a stored
+   margin that disagrees with replay−chance, a stored WEAK, and a missing replayRate.
+   derive-falsifier-strength.js reports STRONG / BELOW-BAR / NONE. The bar rides the
+   heartbeat coverage line with the LOWEST live margin beside it (`margin bar 0.4
+   (lowest MOVE 0.64)`) so drift toward it is seen, not remembered.
+
+4. WEAK retired as a verified-tier state. WEAK_CHANCE, falsifierWeak, the
+   weakFalsifier count, the "WEAK on both" clause, the CONFIRM-message "WEAK test"
+   sentence, and cadenceStatus's inline chance-rate copy (a second implementation of
+   chanceRate that rendered its own label) are gone. Below the bar a row is sourced;
+   above it verified; there is no middle.
+
+SIDE EFFECT, recorded: ORDER re-entering the sourced population moved the derived
+pressure floor 0.0688/n29 → 0.0585/n30 (ORDER's median tranche 0.05% is the 4th
+smallest). Re-recorded with basis. CFG (0.0585) now sits exactly AT the floor; its
+stored LOGGED stage is unchanged (pressureStage keeps a stored LOGGED), a re-ingest
+would default it STANDARD. The percentile was declared to hold the silence set
+constant and a tier change just moved the set by one row at the boundary — the
+percentile is fitted to the set it decides. Logged, not fixed: the floor is not this
+change's subject.
+
+Suite 680 green on a tree copy (the mount run died on EACCES renaming
+data/excluded-symbols.json — the live bot holds it; environment, not logic). Boot on
+the copy: all four gates OK, no sends, coverage line `6 verified (3 cadence-watched ·
+0 contract-cliff · 3 review-dated) … 30 sourced`, ORDER absent from activeDemotions,
+ENA still demoted (genuine).
+
+Item 10 (re-promotion requires post-demotion evidence) now has its second key: a
+re-promotion must ALSO clear the bar, which stampStrength already enforces — the
+remaining work is the post-demotion-evidence half.
+
+## 2026-09-17 — THE EVIDENCE TRAVELS WITH THE DECISION; AND A BOOT CHECK THAT SENT
+
+Reviewer on the write path: the demotion to sourced must keep the grid and the cluster
+history on the row, the way a sourced row superseded by a verified one keeps its
+source events — otherwise a future session re-derives the same grid, reaches the same
+margin, and has no record the question was settled. Shipped in v0.31.9 before it went
+live:
+
+- `clusterGridMargins(res)` (pure, unlock-promote.js): the report's grid with a margin
+  per point and the best named. `sourceRow` REFUSES a tier correction on a row that
+  held a clusterSpec unless `tierCorrection.evidence.grid` is present; promote-unlock.js
+  builds it from data/cliff-cluster-report.json for the row's own contract (never
+  typed) and refuses if the report lacks it. Recorded as
+  `tierHistory.evidence {bar, grid {spanDays, points[9], best}, stampedMargin}` beside
+  the reason; `tierHistory.retracted` keeps events, note, enforcement, contract,
+  clusterSpec (with the 8-cliff backtest basis), cliffDates (8 backtested + 3 future),
+  falsifier, upgradeable. ORDER re-run from the committed v0.31.8 row (the /tmp
+  backup died with the sandbox; unlocks.json is committed, so `git checkout HEAD --
+  unlocks.json` restored the exact pre-correction file, ORDER the only row differing).
+
+- Found by doing it: `clusterMargin` rounded TWICE (rounded replay − rounded chance)
+  and drifted 0.01 at three of nine points against the 2026-09-15 table (0.27 for
+  0.26 at the best point). Now rounded once from raw quantities; the nine margins on
+  the row match the table exactly. Fixture pins w3/r2 0.26 · w5/r3 0.17 · w7/r5 −0.12.
+
+- retractedAt is 2026-09-17 (the write), reason text says "decided 2026-09-15". Both
+  true; the field records the write.
+
+Suite 686 green on a copy. Boot on the copy: four gates OK, v0.31.9 banner.
+
+INCIDENT, mine: the boot-on-copy `--once` run carried `.env` and SENT — SOLV and RE
+"cliff today" reminders left from /tmp/mr with its own data/ (so nothing suppressed
+them), and the live bot will have sent its own. Duplicates in the channel: operator
+to confirm; I cannot look. The v0.31.8 boot check on 2026-09-15 almost certainly did
+the same and nobody checked the `reminders sent` line. Rule added to CLAUDE.md: every
+boot on a copy runs `TELEGRAM_BOT_TOKEN= node src/index.js --once` — the empty-but-
+present variable beats the .env loader (`!(name in process.env)`), and the banner
+must read `telegram OFF (console-only)`. Verified on the copy. Same class as the
+2026-09-07 "push reported success on a push that never happened": a check that has
+side effects is not a check.
+
+ZK's 173M tranche (2026-09-16) alerted T-3 and T-0 from the live bot per bot.log;
+ARB's 16th-of-month announcement row has no on-chain read (amount not observed).
+
+## 2026-09-18 — A COPY CANNOT SEND, BY CONSTRUCTION (v0.31.9, before it went live)
+
+Reviewer: "TELEGRAM_BOT_TOKEN= node src/index.js --once" is the memory-dependent kind
+of fix, and two-for-two on duplicates is the same evidence that justified the carry
+guard. Structural version shipped:
+
+- `boot-check.js` is the only way a tree copy is made. `makeCopy` skips `.env`
+  (NEVER_COPIED, also refused by name in `withDataCopy`), `.git`, `node_modules`, and
+  writes `.copy-marker` into the copy. It then runs the suite there with
+  COPY_STUB_TOKEN and a `--once` boot with no token, and reports the banner.
+- `src/config.js` `copySendGuard`: a tree carrying `.copy-marker` with any token other
+  than the declared stub REFUSES to load (exit 3), whatever put the token there.
+  Verified: `TELEGRAM_BOT_TOKEN=realtoken node src/index.js --once` inside the copy →
+  `[boot] REFUSED … a tree copy must not send`, exit 3. The live tree (no marker)
+  is untouched; `.copy-marker` is gitignored so it can never be committed into it.
+- The suite needs a token PRESENT (it stubs fetch; skips without one) — so the copy
+  admits exactly one sentinel, `COPY-SUITE-STUB-NOT-A-TOKEN`, which Telegram would
+  401 if anything reached the network with it. Nothing does: fetch is stubbed.
+- Fixture 63: guard refuses marker+token, admits marker+stub and marker+nothing,
+  ignores the live tree; makeCopy on a synthetic tree leaves .env behind and writes
+  the marker; and the suite asserts, wherever it runs, that it is not itself the
+  incident (marker present ⇒ loaded token is stub or empty).
+
+`node boot-check.js`: suite 694 green in the copy, boot banner `telegram OFF
+(console-only)`, four gates OK.
+
+DUPLICATES CONFIRMED FROM DISK (not from the channel — I cannot look): live
+data/bot.log 2026-09-17 shows SOLV and RE "cliff today" sent (`2 reminders sent`, no
+delivery failure), and the copy's own run reported `2 reminders sent` with no failure
+line. Both senders succeeded; the channel holds each twice. Same shape on 2026-09-15
+is likely but that copy's output is gone with the sandbox — unconfirmed.
+
+SEEN IN PASSING, not fixed: the live `[unlocks]` line's "estimated-only" count climbs
+17 → 51 → 68 → 85 across cycles — `estimatedSkipped` looks cumulative across the
+loop rather than per-cycle. Display counter only; queued.

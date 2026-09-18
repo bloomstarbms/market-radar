@@ -10,14 +10,18 @@
 //     windowDays: the width the watch actually accepts (cadence: expected-1 ..
 //     expected+grace = grace+2 days).
 //   replayRate  = confirmed windows / windows observed (the falsifier's own record).
-//   WEAK when chanceRate >= 0.5; NONE for a dead-man switch (reviewBy tests
-//   freshness, not the claim); otherwise STRONG — with both numbers shown.
+//   NONE for a dead-man switch (reviewBy tests freshness, not the claim). Otherwise
+//   the REPORT verdict is STRONG when margin (replay − chance) clears
+//   MIN_FALSIFIER_MARGIN and BELOW-BAR when it does not; a BELOW-BAR row cannot be
+//   stamped verified — promote-unlock.js refuses it and names the sourced tier.
 //
 // Writes data/falsifier-strength.json (a REPORT). The row is stamped only through
 // promote-unlock.js SYM strength=auto, which reads this report. Never typed.
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { outflowsByDay } from './detect-cadence.js';
+import { MIN_FALSIFIER_MARGIN } from './src/core/unlock-promote.js';
+export const reportVerdict = (chance, replay) => (replay != null && +(replay - chance).toFixed(2) >= MIN_FALSIFIER_MARGIN ? 'STRONG' : 'BELOW-BAR');
 
 export function strengthFromSeries(spec, byDayPerWallet, { now = Date.now() } = {}) {
   const grace = spec.graceDays ?? 3;
@@ -56,7 +60,7 @@ if (IS_CLI) (async () => {
     if (t.enforcement === 'contract' && t.clusterSpec) {
       const s = strengthFromClusterSpec(t.clusterSpec);
       if (!s) { console.log(`${t.sym}: clusterSpec lacks spanDays/offIndex — re-promote`); continue; }
-      out[t.sym] = { kind: 'contract-cliff', ...s, replayHits: t.clusterSpec.hits, verdict: s.chanceRate >= 0.5 ? 'WEAK' : 'STRONG', basis: `${s.qualifyingDays} clusters in ${s.spanDays}d, w${s.windowDays} → chance ${s.chanceRate}; replay ${s.replayRate} of ${s.replayN}`, at: new Date().toISOString().slice(0, 16) };
+      out[t.sym] = { kind: 'contract-cliff', ...s, replayHits: t.clusterSpec.hits, verdict: reportVerdict(s.chanceRate, s.replayRate), basis: `${s.qualifyingDays} clusters in ${s.spanDays}d, w${s.windowDays} → chance ${s.chanceRate}; replay ${s.replayRate} of ${s.replayN}`, at: new Date().toISOString().slice(0, 16) };
       console.log(`${t.sym}: ${out[t.sym].verdict} chance ${s.chanceRate} replay ${s.replayRate}`); continue;
     }
     if (!t.cadence) continue;
@@ -76,7 +80,7 @@ if (IS_CLI) (async () => {
     const confirmed = stamps.filter((v) => v.action === 'CONFIRM').length;
     const replayN = (spec.monthsObserved || 0) + stamps.length, replayHits = (spec.monthsObserved || 0) + confirmed;
     const replayRate = replayN ? +(replayHits / replayN).toFixed(2) : null;
-    out[t.sym] = { kind: Array.isArray(spec.wallets) ? 'cadence-family' : 'cadence', ...s, replayRate, replayN, replayHits, verdict: s.chanceRate >= 0.5 ? 'WEAK' : 'STRONG',
+    out[t.sym] = { kind: Array.isArray(spec.wallets) ? 'cadence-family' : 'cadence', ...s, replayRate, replayN, replayHits, verdict: reportVerdict(s.chanceRate, replayRate),
       basis: `${s.qualifyingDays} days ≥50% of mean in ${s.spanDays}d (since ${s.oldest}), w${s.windowDays} → chance ${s.chanceRate}; replay ${replayHits}/${replayN}`, at: new Date().toISOString().slice(0, 16) };
     console.log(`${t.sym}: ${out[t.sym].verdict} chance ${s.chanceRate} (${s.qualifyingDays} qualifying days / ${s.spanDays}d) replay ${replayHits}/${replayN}`);
   }

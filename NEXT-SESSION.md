@@ -17,21 +17,20 @@ STATUS: mostly EXECUTED. Do not run as a session prompt; read as background.
 ```
 Read CLAUDE.md, then Part 0 of REMAINING-WORK.md.
 
-Items 8–10 of docs/briefs/CORRECTNESS-QUEUE.md, in order:
-
-  9 FIRST — index refresh. SEI, APT and CARV have exhausted their
-    listed events and are silent; the ladder reads FRESH because it
-    measures age, not runway. Browser-pane route per the RECURRING
-    CHORE section below. Re-record derivePressureFloor if it moved.
+Items 8 and 10 of docs/briefs/CORRECTNESS-QUEUE.md, in order
+(9 shipped as v0.31.8; the ORDER tier decision shipped as v0.31.9 —
+see the 2026-09-15 entries in REMAINING-WORK-NOTES.md):
 
   8 — ladder coverage arm. Pre-register N before choosing it.
     Acceptance: the coverage arm fires on a row with N days of runway
-    while the age arm stays quiet on the same file.
+    while the age arm stays quiet on the same file. YB is the live case.
 
  10 — re-promotion requires post-demotion evidence. At least one
     on-schedule emission after the miss. Re-analysing pre-demotion
     history is not new evidence however detect-cadence classifies it.
-    Encode it in promote-unlock.js so it refuses, not advises.
+    Encode it in promote-unlock.js so it refuses, not advises. The
+    margin half is DONE: stampStrength refuses below MIN_FALSIFIER_MARGIN
+    (0.40). Only the post-demotion-evidence half remains. ENA is the row.
 
 Then MESSAGE-DIET.md — inventory exists, two decompositions are
 prerequisites, the render-lint needs its self-test.
@@ -44,6 +43,16 @@ ENA's fourth wallet (0xA7eE, 57M, funded ~09-11) on Oct 6.
 build.
 
 ```
+RESOLVED 2026-09-15 (v0.31.9) — the addendum below is kept as the record of how
+the question was reached; its answer: ORDER is SOURCED (tier correction, reason on
+the row as tierHistory), enforcement:'contract' is claimable by nobody, the verified
+tier has a declared admission bar MIN_FALSIFIER_MARGIN = 0.40 with the observed
+distribution as basis, and WEAK is retired — below the bar sourced, above it
+verified, no middle. The 09-07 DEMOTE is neither voided nor final: it is history of
+a tier the row no longer holds, and activeDemotions ignores it. MIN_RATIO derivation
+from observed ratios is moot for ORDER (no verified row uses a clusterSpec) and
+stays with the method for whichever row next tries to clear the bar.
+
 ADDENDUM (2026-09-15) — before item 10, and before treating ORDER's demotion as final:
 
 ORDER's first real cliff verdict is a DEMOTE at ratio 2.74 against a MIN_RATIO of

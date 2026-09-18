@@ -150,6 +150,11 @@ export function activeDemotions(tokens, state) {
   const out = {};
   for (const [sym, dem] of Object.entries(state?.demotions || {})) {
     const row = (tokens || []).find((t) => t.sym === sym);
+    // A demotion applies to the VERIFIED tier. If the row has since been corrected to
+    // sourced (tierHistory), the tier it demoted no longer exists — treating it as
+    // still demoted would silence the sourced row entirely (unlocks.js skips demoted
+    // syms as "alerts as nothing"). ORDER 2026-09-15 was the case.
+    if (row?.provenance === 'sourced') continue;
     const newest = row?.events?.map((e) => e.date).sort().pop() ?? null;
     if (newest && newest > dem.at.slice(0, 10)) continue; // superseded
     out[sym] = dem;
@@ -549,10 +554,9 @@ export async function pollCliffWatch(loadTokens) {
       st.cliffs[`${t.sym}:${c.date}`] = { ...dec, at: now.toISOString().slice(0, 16) };
       dirty = true;
       if (dec.action === 'CONFIRM') {
-        const weak = t.falsifier?.verdict === 'WEAK' ? ` WEAK test: a random ${t.clusterSpec.windowDays}-day window catches a cluster ${Math.round(t.falsifier.chanceRate * 100)}% of the time, so this adds little.` : '';
         await broadcast(formatAlert({ source: 'SYS', type: 'CADENCE', severity: 'LOW',
           title: `${t.sym} cliff ${c.date} CONFIRMED · ${dec.ratio}x baseline · ${dec.recipients} claimants`,
-          lines: [`Watch verdict, not a market event: ${dec.inWindow.toLocaleString()} ${t.sym} claimed in the ${t.clusterSpec.windowDays}-day window.${weak}`] }), { toChannel: false }).catch(() => []);
+          lines: [`Watch verdict, not a market event: ${dec.inWindow.toLocaleString()} ${t.sym} claimed in the ${t.clusterSpec.windowDays}-day window.`] }), { toChannel: false }).catch(() => []);
       }
       if (dec.action === 'DEMOTE') {
         st.demotions[t.sym] = { at: now.toISOString().slice(0, 16), type: 'cliff-cluster-absent', cliff: c.date, ratio: dec.ratio, recipients: dec.recipients };
@@ -610,8 +614,9 @@ export function cadenceStatus(tokens = null, state = loadWatchState(), now = new
       const stamps = Object.entries(state.cliffs || {}).filter(([k]) => k.startsWith(t.sym + ':')).map(([, v]) => v);
       const ok = stamps.filter((v) => v.action === 'CONFIRM').length;
       const nextCliff = (t.cliffDates || []).filter((c) => c.cluster === null).map((c) => c.date).sort()[0];
-      const cr = t.clusterSpec.spanDays > 0 && Number.isFinite(t.clusterSpec.offIndex) ? Math.min(1, (t.clusterSpec.hits + t.clusterSpec.offIndex) * t.clusterSpec.windowDays / t.clusterSpec.spanDays) : null;
-      return `${t.sym} cliff ${ok}/${stamps.length} confirmed${nextCliff ? ` · next ${nextCliff}` : ''}${cr !== null && cr >= 0.5 ? ` · falsifier WEAK (chance ${Math.round(cr * 100)}%)` : ''}`;
+      // Margin from the stamped falsifier (one derivation, in unlock-promote.js) — the
+      // inline chance-rate copy that lived here rendered a WEAK label that no longer exists.
+      return `${t.sym} cliff ${ok}/${stamps.length} confirmed${nextCliff ? ` · next ${nextCliff}` : ''}${t.falsifier?.margin != null ? ` · margin ${t.falsifier.margin}` : ''}`;
     }
     if (!t.cadence) {
       // A switch that fires without warning turns demotion into a discovery instead

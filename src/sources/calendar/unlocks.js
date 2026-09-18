@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { config, ROOT } from '../../config.js';
 import { dispatch } from '../../core/dispatcher.js';
 import { loadWatchState, activeDemotions, observedAround, retrospectiveLine, loadRecheckState, effectiveSourced } from './cadence-watch.js';
-import { sourceIsStale, SOURCE_STALE_DAYS, pressureStage, falsifierWeak, chanceRate, falsifierLine, sourceFreshness, SOURCE_STALE_DAYS as STALE_D, UNVERIFIABLE_MECHANISMS } from '../../core/unlock-promote.js';
+import { sourceIsStale, SOURCE_STALE_DAYS, pressureStage, falsifierLine, MIN_FALSIFIER_MARGIN, sourceFreshness, SOURCE_STALE_DAYS as STALE_D, UNVERIFIABLE_MECHANISMS } from '../../core/unlock-promote.js';
 
 const FILE = join(ROOT, 'unlocks.json');
 // STAGE TIERING (coverage-session Part 3): at 25+ tracked tokens, un-tiered monthly
@@ -80,7 +80,7 @@ function strengthClause(t) {
   if (f.verdict === 'NONE') return ' Falsifier strength: none (dead-man switch tests freshness, not the claim).';
   const series = f.replayHits != null ? `${f.replayHits}/${f.replayN}${f.replayHits === f.replayN ? ' consecutive' : ''}` : 'n/a';
   const comp = f.compound != null ? ` (that series by chance alone: p≈${f.compound.toExponential(1)})` : '';
-  return ` Falsifier strength: each ${f.windowDays}-day window passes by chance ${Math.round(f.chanceRate * 100)}% of the time; record ${series}${comp}${f.verdict === 'WEAK' ? ' — WEAK on both' : ''}.`;
+  return ` Falsifier strength: each ${f.windowDays}-day window passes by chance ${Math.round(f.chanceRate * 100)}% of the time; record ${series}${comp}.`;
 }
 // CAN THIS ROW ACTUALLY FIRE? (v0.31.1) A sourced row can be perfectly configured
 // and still never alert — if its snapshot held only PAST events, if it went stale,
@@ -144,10 +144,8 @@ export function claimCoverage(t, lead = 3) {
     date: 'sourced', amount: 'sourced', scope: 'source',
     line: `Date and amount are ${t.source}'s published figures — not independently verified (pending a route). Falsifier: the source itself, re-read weekly; silent after ${SOURCE_STALE_DAYS} days unrefreshed.`,
   };
-  if (t?.enforcement === 'contract' && t?.clusterSpec) return {
-    date: 'observed', amount: 'source-stated', scope: 'contract',
-    line: `Date verified on-chain — contract-enforced: post-cliff claim clusters replayed on ${t.clusterSpec.hits}/${t.clusterSpec.n} past cliffs from the vesting contract. Amount is the schedule's stated tranche (claims vary by beneficiary). Falsifier: the next cliff's cluster; ${falsifierWeak(t.clusterSpec) ? `WEAK — the contract clusters ${t.clusterSpec.hits + t.clusterSpec.offIndex}x in ${t.clusterSpec.spanDays} days, so a random ${t.clusterSpec.windowDays}-day window catches one ${Math.round(chanceRate(t.clusterSpec) * 100)}% of the time and ${t.clusterSpec.hits}/${t.clusterSpec.n} on-index is barely above chance; ` : ''}upgradeable proxy ${t.upgradeable ? 'YES — re-read scheduled' : 'no'}.${strengthClause(t)}`,
-  };
+  // (2026-09-15) no claimCoverage branch for enforcement:'contract' — the label is
+  // claimable by nobody (see CONTRACT_ENFORCEMENT_RETRACTED); a row cannot reach here with it.
   if (lead < 0 && (t?.cadence || t?.alsoObserve)) return {
     date: 'observed', amount: 'observed-actual', scope: 'retrospective',
     line: 'Retrospective: the figures below are on-chain observations of what moved, not a forward estimate.',
@@ -193,9 +191,12 @@ export function unlockCoverage(tokens = null) {
     sourcedUnverifiable: sourced.filter((t) => UNVERIFIABLE_MECHANISMS.includes(t.mechanism)).length,
     continuousClaim: sourced.filter((t) => t.mechanism === 'continuous-claim').length,
     indexContradicted: sourced.filter((t) => t.mechanism === 'index-contradicted').length,
-    weakFalsifier: verified.filter((t) => t.falsifier?.verdict === 'WEAK').length,
     underived: verified.filter((t) => (t.cadence || t.enforcement === 'contract' || t.reviewBy) && !t.falsifier).length,
     strength: verified.filter((t) => t.cadence || t.enforcement === 'contract' || t.reviewBy).map(falsifierLine).join(' · '),
+    // The admission bar rides the heartbeat with the LOWEST live margin beside it —
+    // a row drifting toward the bar is seen, not remembered. Arithmetic over rows.
+    marginBar: MIN_FALSIFIER_MARGIN,
+    lowestMargin: verified.filter((t) => Number.isFinite(t.falsifier?.margin)).map((t) => ({ sym: t.sym, margin: t.falsifier.margin })).sort((a, b) => a.margin - b.margin)[0] ?? null,
     estimated: tokens.filter((t) => !t.retired && !t.events?.length && t.provenance !== 'sourced').length,
     retired: tokens.filter((t) => t.retired).length,
     cadence: verified.filter((t) => t.cadence).length,
@@ -204,7 +205,7 @@ export function unlockCoverage(tokens = null) {
     stages,
   };
   c.sourceDemoted = sourceDemoted;
-  c.line = `Unlock coverage: ${c.tracked} tracked · ${c.verified} verified (${c.cadence} cadence-watched · ${c.contractCliff} contract-cliff · ${c.reviewBy} review-dated) · falsifier chance→replay: ${c.strength}${c.underived ? ` (${c.underived} UNDERIVED)` : ''} · ${c.sourced} sourced (${c.sourcedPending} pending verification · ${c.sourcedUnverifiable} unverifiable by mechanism: ${c.continuousClaim} continuous-claim, ${c.indexContradicted} index-contradicted)${c.staleSourced ? ` (${c.staleSourced} STALE, silent)` : ''}${c.belowFloor ? ` (${c.belowFloor} below pressure floor, silent)` : ''} · 2nd source: ${c.agreement['both-agree']} agree · ${c.agreement['both-differ']} DISAGREE · ${c.agreement['single-source']} single-source${c.agreement['not-checked'] ? ` · ${c.agreement['not-checked']} unchecked` : ''}${sourceDemoted ? ` (${sourceDemoted} retracted by source)` : ''} · ${c.estimated} estimated (silent) · ${c.retired} retired · stages ${Object.entries(stages).map(([k, v]) => k + ':' + v).join(' ')} · verified reads are Ethereum/EVM only — sourced rows cite a named calendar and are not independently checked`;
+  c.line = `Unlock coverage: ${c.tracked} tracked · ${c.verified} verified (${c.cadence} cadence-watched · ${c.contractCliff} contract-cliff · ${c.reviewBy} review-dated) · falsifier chance→replay: ${c.strength}${c.underived ? ` (${c.underived} UNDERIVED)` : ''} · margin bar ${c.marginBar}${c.lowestMargin ? ` (lowest ${c.lowestMargin.sym} ${c.lowestMargin.margin})` : ' (no margins live)'} · ${c.sourced} sourced (${c.sourcedPending} pending verification · ${c.sourcedUnverifiable} unverifiable by mechanism: ${c.continuousClaim} continuous-claim, ${c.indexContradicted} index-contradicted)${c.staleSourced ? ` (${c.staleSourced} STALE, silent)` : ''}${c.belowFloor ? ` (${c.belowFloor} below pressure floor, silent)` : ''} · 2nd source: ${c.agreement['both-agree']} agree · ${c.agreement['both-differ']} DISAGREE · ${c.agreement['single-source']} single-source${c.agreement['not-checked'] ? ` · ${c.agreement['not-checked']} unchecked` : ''}${sourceDemoted ? ` (${sourceDemoted} retracted by source)` : ''} · ${c.estimated} estimated (silent) · ${c.retired} retired · stages ${Object.entries(stages).map(([k, v]) => k + ':' + v).join(' ')} · verified reads are Ethereum/EVM only — sourced rows cite a named calendar and are not independently checked`;
   return c;
 }
 

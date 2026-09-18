@@ -13,7 +13,28 @@ if (existsSync(envPath)) {
   }
 }
 
-export const VERSION = '0.31.8';
+export const VERSION = '0.31.9';
+
+// A COPY OF THE TREE MUST NOT SEND. Twice (2026-09-15, 2026-09-17) a boot check on a
+// tree copy carried .env and pushed "cliff today" reminders that the live bot then
+// sent again. A rule to blank the token is memory-dependent; this is not:
+// boot-check.js writes `.copy-marker` into every copy it makes and never copies
+// .env, and this module REFUSES to load with a live token inside a marked copy —
+// whatever put the token there. Pure, so it is fixture-checkable.
+export const COPY_MARKER = '.copy-marker';
+// The suite needs a token PRESENT (it stubs fetch; line 14 of test-delivery.js skips
+// without one). Inside a copy the only token admitted is this sentinel, which
+// Telegram rejects (401) if anything ever does reach the network with it.
+export const COPY_STUB_TOKEN = 'COPY-SUITE-STUB-NOT-A-TOKEN';
+export function copySendGuard(root, env = process.env, exists = existsSync) {
+  if (!exists(join(root, COPY_MARKER))) return null;
+  if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_BOT_TOKEN !== COPY_STUB_TOKEN) return `${COPY_MARKER} present in ${root} and TELEGRAM_BOT_TOKEN is set — a tree copy must not send (it did, 2026-09-15 and 2026-09-17). Refusing to start.`;
+  return null;
+}
+{
+  const g = copySendGuard(ROOT);
+  if (g) { console.error(`[boot] REFUSED: ${g}`); process.exit(3); }
+}
 
 export const config = {
   minSeverity: ['LOW','MEDIUM','HIGH'].includes((process.env.ALERT_MIN_SEVERITY || 'LOW').toUpperCase())

@@ -73,16 +73,34 @@ if (args.provenance === 'sourced') {
   // Default stage is the PRESSURE rule's answer (derived floor, farming/staking-only
   // or unverifiable mechanism -> LOGGED); an explicit stage= still wins.
   const defaultStage = pressureStage({ sourceEvents, maxSupply: p.maxSupply ?? null, stage: 'STANDARD', mechanism });
+  // TIER CORRECTION: a VERIFIED row may come back through this path only with
+  // reason="..." — sourceRow records what was retracted as tierHistory and refuses
+  // without the reason. The tier is corrected, not the verdict; the demotion state in
+  // data/cadence-watch.json is left as history (activeDemotions ignores sourced rows).
+  const wasVerified = Array.isArray(prior.events) && prior.events.length > 0;
+  if (wasVerified && !args.reason) { console.error(`${sym} is VERIFIED — returning it to sourced is a tier correction and needs reason="..." (>=20 chars, the evidence, e.g. the falsifier margin against the bar)`); process.exit(1); }
+  // Evidence beside the reason: for a row that held a clusterSpec, the grid margins
+  // from the tool's own report (never typed). Refused if the report lacks the contract.
+  let evidence = null;
+  if (wasVerified && prior.clusterSpec) {
+    const { clusterGridMargins } = await import('./src/core/unlock-promote.js');
+    const rep = existsSync('data/cliff-cluster-report.json') ? JSON.parse(readFileSync('data/cliff-cluster-report.json', 'utf8'))[sym.toUpperCase()] : null;
+    const res = (rep?.results || []).find((r) => r.contract?.toLowerCase() === String(prior.contract).toLowerCase());
+    const grid = clusterGridMargins(res);
+    if (!grid) { console.error(`${sym}: carried a clusterSpec but data/cliff-cluster-report.json has no grid for ${prior.contract} — the tier correction must carry the grid it cites; run detect-cliff-cluster.js ${sym} first`); process.exit(1); }
+    evidence = { grid, stampedMargin: prior.falsifier?.margin ?? null };
+  }
   const row = sourceRow(j.tokens[idx] ?? { sym: sym.toUpperCase(), name: args.name ?? p.name }, {
     source: args.source, sourceFetchedAt: indexFile.fetchedAt, sourceEvents, chain, token,
     stage: args.stage ?? defaultStage, note: args.note ?? `Sourced from ${args.source}'s unlock schedule; ${sourceEvents.filter((e) => e.t * 1000 > Date.now()).length} upcoming batch events at ingest. Not independently verified.`,
     circSupply: p.circSupply ?? null, totalLocked: p.totalLocked ?? null, maxSupply: p.maxSupply ?? null,
-    mechanism, mechanismBasis,
+    mechanism, mechanismBasis, tierCorrection: wasVerified ? { reason: args.reason, evidence } : null,
   });
   if (idx < 0) j.tokens.push(row); else j.tokens[idx] = row;
   j.lastReviewed = new Date().toISOString().slice(0, 10) + ` (sourced ${row.sym} via promote-unlock.js)`;
   writeFileSync('unlocks.json.tmp', JSON.stringify(j, null, 1));
   renameSync('unlocks.json.tmp', 'unlocks.json');
+  if (row.tierHistory) console.log(`${row.sym} TIER CORRECTION verified → sourced (${row.tierHistory.retractedAt}): ${row.tierHistory.reason}${row.tierHistory.evidence?.grid ? `\n   evidence: ${row.tierHistory.evidence.grid.points.map((p) => `w${p.w}/r${p.r} ${p.margin}`).join(' · ')} · best ${row.tierHistory.evidence.grid.best.margin} vs bar ${row.tierHistory.evidence.bar}` : ''}`);
   console.log(`${row.sym} SOURCED (${args.source}, ${sourceEvents.length} batch events, chain ${chain}, stage ${row.stage}${args.stage ? ' (explicit)' : ` (pressure rule: ${defaultStage})`}${mechanism !== 'pending' ? `, mechanism ${mechanism} carried` : ''}).`);
   if (datesMoved && mechanism !== 'pending') console.log(`   [OPERATOR] ${row.sym}: the index dates MOVED and this row carries mechanism '${mechanism}' — re-run detect-cliff-cluster.js ${row.sym} and re-stamp; the old verdict was against the old dates.`);
   process.exit(0);
@@ -133,6 +151,9 @@ if (args.mechanism) {
 // recipients) so nothing is typed. enforcement:'contract' is EARNED here: it requires
 // the cluster falsifier, >=2 replayed cliffs, and an explicit upgradeable flag.
 if (args.provenance === 'contract-cliff') {
+  const { CONTRACT_ENFORCEMENT_RETRACTED } = await import('./src/core/unlock-promote.js');
+  console.error(`${sym}: refused — ${CONTRACT_ENFORCEMENT_RETRACTED}`); process.exit(1);
+  // eslint-disable-next-line no-unreachable
   if (!args.contract) { console.error('provenance=contract-cliff requires contract=<ref>'); process.exit(1); }
   const rep = JSON.parse(readFileSync('data/cliff-cluster-report.json', 'utf8'))[sym.toUpperCase()];
   if (!rep?.results) { console.error(`${sym} has no cliff-cluster report — run detect-cliff-cluster.js first`); process.exit(1); }

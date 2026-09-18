@@ -136,6 +136,20 @@ suite, or at minimum `node -e "import('./path.js').then(m => m.theFunction(...))
 "A patch's exit code is not evidence the function changed" applies to the checker as
 much as to the patcher.
 
+## A boot check on a copy is a live sender
+
+Verifying boot on a tree copy copies `.env` with it. On 2026-09-17 a `--once` run on
+`/tmp` pushed two "cliff today" reminders to the channel from the copy, and the live
+bot then sent its own — duplicates the operator had to confirm. The state that
+suppresses re-sends lives in `data/`, and the copy has its own.
+
+**Copies are made by `node boot-check.js`, nothing else.** It never copies `.env`,
+writes `.copy-marker` into the copy, runs the suite and a `--once` boot there with
+the token blanked, and reports the banner. `src/config.js` refuses to load inside a
+marked copy that has a live token, whatever put it there — so a copy cannot send by
+construction, and the rule above does not need remembering. An ad-hoc `tar`/`cp` of
+the tree is the thing that sent, twice.
+
 ## Project
 
 Crypto alert system. Zero-dependency Node, JSON storage under `data/`, $0/month —

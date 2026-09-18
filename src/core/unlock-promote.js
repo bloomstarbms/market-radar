@@ -83,10 +83,10 @@ export function sourcedRowProblems(t) {
 // Re-derive with derivePressureFloor() when the index is refreshed; record the new
 // value, do not let the floor move under the rows at runtime.
 export const SOURCED_PRESSURE_FLOOR = {
-  pctOfMaxSupply: 0.0688,
+  pctOfMaxSupply: 0.0585,
   percentile: 15,
-  n: 29,
-  basis: '15th percentile of PER-ROW MEDIAN tranche/maxSupply across 29 sourced rows, index 2026-09-07T15:59 (p5 0.0137 p25 0.2775 p50 0.824); statistic is per-row because the floor is APPLIED to a row median',
+  n: 30,
+  basis: '15th percentile of PER-ROW MEDIAN tranche/maxSupply across 30 sourced rows, index 2026-09-15T03:49 (p5 0.0137 p25 0.1419 p50 0.824); statistic is per-row because the floor is APPLIED to a row median. Re-derived 2026-09-15 when ORDER (median 0.05) returned to the sourced population by tier correction: was 0.0688/n29; CFG (0.0585) now sits exactly AT the floor — its stored LOGGED stage is unchanged, a re-ingest would default it STANDARD',
 };
 export const NON_PRESSURE_CATS = ['farming', 'staking'];
 // PER-ROW, not per-event. The first derivation (v0.30.0) took the percentile over
@@ -156,11 +156,35 @@ export function sourceIsStale(t, now = Date.now()) {
 }
 
 // Pure constructor for a sourced row — whitelist copy, same discipline as promoteRow.
-export function sourceRow(oldRow, { source, sourceFetchedAt, sourceEvents, chain, token = null, stage = 'STANDARD', note = '', circSupply = null, totalLocked = null, maxSupply = null, mechanism = 'pending', mechanismBasis = null }) {
+// TIER CORRECTION (2026-09-15): a verified row may return to sourced ONLY with a
+// stated reason, and the verification it held travels as tierHistory — recorded, not
+// deleted, the same discipline as a voided verdict. ORDER was the first: its
+// falsifier margin (0.17; best point on its own grid 0.26) sits outside the verified
+// population (EIGEN 0.76, ENA 0.67, MOVE 0.64) — see MIN_FALSIFIER_MARGIN.
+export const TIER_CORRECTION_MIN_REASON = 20;
+export function sourceRow(oldRow, { source, sourceFetchedAt, sourceEvents, chain, token = null, stage = 'STANDARD', note = '', circSupply = null, totalLocked = null, maxSupply = null, mechanism = 'pending', mechanismBasis = null, tierCorrection = null }) {
   if (!oldRow?.sym) throw new Error('sourceRow: no sym');
   if (oldRow.retired) throw new Error(`sourceRow: ${oldRow.sym} is RETIRED`);
-  if (Array.isArray(oldRow.events) && oldRow.events.length) throw new Error(`sourceRow: ${oldRow.sym} is VERIFIED — a verified row is not downgraded to sourced by this path`);
+  const wasVerified = Array.isArray(oldRow.events) && oldRow.events.length > 0;
+  if (wasVerified && !(typeof tierCorrection?.reason === 'string' && tierCorrection.reason.trim().length >= TIER_CORRECTION_MIN_REASON)) {
+    throw new Error(`sourceRow: ${oldRow.sym} is VERIFIED — a verified row returns to sourced only as a TIER CORRECTION with a stated reason (>=${TIER_CORRECTION_MIN_REASON} chars)`);
+  }
+  if (!wasVerified && tierCorrection) throw new Error(`sourceRow: ${oldRow.sym} is not verified — nothing to correct`);
   const row = { sym: oldRow.sym, name: oldRow.name, provenance: 'sourced', source, sourceFetchedAt, sourceEvents, chain, stage, note, mechanism };
+  if (wasVerified) {
+    // The verification the row held travels whole — events, spec, per-cliff replay,
+    // stamped falsifier — the same way a sourced row superseded by a verified one keeps
+    // its source events. And the EVIDENCE the decision was made on (the grid with a
+    // margin per point, against the bar) sits beside the reason: a row that carried a
+    // clusterSpec is refused without it, because "the grid" as a reason with no grid
+    // on the row is a claim a future session cannot check without re-deriving it.
+    const retracted = {};
+    for (const k of ['events', 'note', 'enforcement', 'contract', 'clusterSpec', 'cadence', 'reviewBy', 'falsifier', 'cliffDates', 'upgradeable', 'alsoObserve']) if (oldRow[k] !== undefined) retracted[k] = oldRow[k];
+    const ev = tierCorrection.evidence ?? null;
+    if (oldRow.clusterSpec && !(ev?.grid?.points?.length)) throw new Error(`sourceRow: ${oldRow.sym} carried a clusterSpec — its tier correction must carry the grid margins as evidence (clusterGridMargins over data/cliff-cluster-report.json)`);
+    row.tierHistory = { from: 'verified', retractedAt: new Date().toISOString().slice(0, 10), reason: tierCorrection.reason.trim(), retracted };
+    if (ev) row.tierHistory.evidence = { bar: MIN_FALSIFIER_MARGIN, ...ev };
+  }
   if (mechanismBasis) row.mechanismBasis = mechanismBasis;
   if (token) row.token = token;
   if (circSupply != null) row.circSupply = circSupply;
@@ -234,8 +258,12 @@ export function resolveWalletRef(ref, knownAddresses) {
 // on-chain; everything else must carry one of the two. Boot refuses the rest.
 // ROUTE 2 (2026-09-05): enforcement:'contract' is EARNED, never declared. A row may
 // carry it only with a contract address, a cluster spec (the forward falsifier: the
-// next cliff's post-cliff claim cluster), and backtested cliff dates. Until this
-// session the label was claimable by nobody; ORDER's LockedTokenVault is the first.
+// next cliff's post-cliff claim cluster), and backtested cliff dates. ORDER's
+// LockedTokenVault was the first — and (2026-09-15) the last so far: its margin never
+// cleared the admission bar, so the label is again CLAIMABLE BY NOBODY. The method
+// stands (clusterVerdicts, chanceRate, clusterMargin all remain and are tested); it
+// has not yet produced a row that clears the bar. clusterSpecProblems is kept so a
+// future spec is still shape-checked before anyone argues about its margin.
 export function clusterSpecProblems(spec) {
   if (!spec || typeof spec !== 'object') return ['missing clusterSpec'];
   const p = [];
@@ -247,32 +275,62 @@ export function clusterSpecProblems(spec) {
 // A presence test on an index date is near-vacuous when the contract clusters so
 // often that a random window of the same length would catch one anyway. Chance
 // rate = clusters (on + off index) x windowDays / covered span. ORDER: 13 clusters
-// over 101 days, w5 -> 0.64; its 6/8 = 0.75 replay is barely above chance. The row
-// stays verified — the schedule did replay — but the falsifier is WEAK, and a weak
-// falsifier is stated everywhere the verification is. Derived, recorded, not felt.
+// over 113 days, w5 -> 0.58; its 6/8 = 0.75 replay was barely above chance
+// (margin 0.17). Derived, recorded, not felt — and, since 2026-09-15, below the
+// admission bar: such a row is sourced, not "verified but weak".
 export function chanceRate(spec) {
   if (!spec || !(spec.spanDays > 0) || !Number.isFinite(spec.offIndex)) return null;
   return +Math.min(1, (spec.hits + spec.offIndex) * spec.windowDays / spec.spanDays).toFixed(2);
 }
-export function falsifierWeak(spec) {
-  const c = chanceRate(spec);
-  return c !== null && c >= 0.5;
+// The whole grid, with a margin per point — the evidence a tier decision is made on.
+// Pure over a cliff-cluster report result ({grid:[{windowDays,minRatio,hits,n,off}],
+// spanDays}). Recorded beside the decision (tierHistory.evidence) so a future session
+// that re-derives the grid finds the question already settled, with the numbers.
+export function clusterGridMargins(res) {
+  if (!res || !Array.isArray(res.grid) || !(res.spanDays > 0)) return null;
+  const points = res.grid.map((g) => {
+    const spec = { windowDays: g.windowDays, hits: g.hits, offIndex: g.off, spanDays: res.spanDays, n: g.n };
+    return { w: g.windowDays, r: g.minRatio, hits: g.hits, n: g.n, replay: +(g.hits / g.n).toFixed(2), chance: chanceRate(spec), margin: clusterMargin(spec) };
+  });
+  const best = points.filter((p) => p.margin !== null).sort((a, b) => b.margin - a.margin)[0] ?? null;
+  return { spanDays: res.spanDays, points, best: best ? { w: best.w, r: best.r, margin: best.margin } : null };
+}
+// margin of a cluster spec = its own replay record minus its chance rate. Rounded
+// ONCE, from the raw quantities: subtracting two already-rounded figures drifted
+// 0.01 at three of ORDER's nine grid points (0.27 for 0.26) against the recorded table.
+export function clusterMargin(spec) {
+  if (chanceRate(spec) === null || !(spec.n > 0) || !Number.isFinite(spec.hits)) return null;
+  const raw = Math.min(1, (spec.hits + spec.offIndex) * spec.windowDays / spec.spanDays);
+  return +(spec.hits / spec.n - raw).toFixed(2);
 }
 // FALSIFIER STRENGTH on every verified row (v0.30.2). chanceRate: how often a window
 // of the watch's own width would pass by accident; replayRate: the falsifier's own
-// record; margin = replay - chance. WEAK_CHANCE is a DECLARED cut, not derived — it
-// is recorded as such; the numbers are what the row carries, the label is a summary.
-// A verified row whose falsifier has no derived strength is refused at boot: a weak
-// falsifier nobody flagged is worse than ORDER's, because ORDER's says so.
-export const WEAK_CHANCE = 0.5;
+// record; margin = replay - chance.
+// ADMISSION BAR (2026-09-15). A verified row's falsifier must clear a minimum margin.
+// The bar is DECLARED, not derived; its basis is the observed distribution: the three
+// cadence rows sit at 0.64-0.76, and the one contract-cliff row (ORDER) at 0.17 with
+// 0.26 the best point on its own 9-cell grid — two populations with nothing between
+// them. There is no "verified but WEAK" state any more: below the bar a row is
+// SOURCED (tier correction, reason recorded), above it VERIFIED. A stored WEAK
+// verdict is refused at boot. A verified row whose falsifier has no derived strength
+// is refused too: an unmeasured falsifier is not a strong one.
+export const MIN_FALSIFIER_MARGIN = 0.40;
+export const MIN_FALSIFIER_MARGIN_BASIS = 'declared 2026-09-15 against observed margins (replay − chance): EIGEN 0.76, ENA 0.67, MOVE 0.64 admitted; ORDER 0.17 (best grid point w3/r2 0.26) retracted to sourced';
+export const FALSIFIER_VERDICTS = ['STRONG', 'NONE'];
 export function falsifierProblems(t) {
   if (!t?.verified || t.retired || !(t.cadence || t.enforcement === 'contract' || t.reviewBy)) return [];
   const f = t.falsifier;
   if (!f || typeof f !== 'object') return ['verified row has no derived falsifier strength (derive-falsifier-strength.js → promote-unlock.js strength=auto)'];
   const p = [];
-  if (!['WEAK', 'STRONG', 'NONE'].includes(f.verdict)) p.push(`falsifier.verdict '${f.verdict}' unknown`);
-  if (f.verdict !== 'NONE' && !(f.chanceRate >= 0 && f.chanceRate <= 1)) p.push('falsifier.chanceRate must be in [0,1]');
-  if (f.verdict !== 'NONE' && (f.chanceRate >= WEAK_CHANCE) !== (f.verdict === 'WEAK')) p.push('falsifier.verdict disagrees with its own chanceRate');
+  if (f.verdict === 'WEAK') p.push(`falsifier.verdict WEAK is no longer a verified-tier state — below the ${MIN_FALSIFIER_MARGIN} margin bar a row is SOURCED (tier correction), not verified`);
+  else if (!FALSIFIER_VERDICTS.includes(f.verdict)) p.push(`falsifier.verdict '${f.verdict}' unknown`);
+  if (f.verdict !== 'NONE') {
+    if (!(f.chanceRate >= 0 && f.chanceRate <= 1)) p.push('falsifier.chanceRate must be in [0,1]');
+    if (!(f.replayRate >= 0 && f.replayRate <= 1)) p.push('falsifier.replayRate must be in [0,1] — a verified row has a replay record');
+    const m = +(f.replayRate - f.chanceRate).toFixed(2);
+    if (!(Number.isFinite(f.margin) && Math.abs(f.margin - m) < 0.011)) p.push(`falsifier.margin ${f.margin} disagrees with replay−chance ${m}`);
+    if (!(f.margin >= MIN_FALSIFIER_MARGIN)) p.push(`falsifier margin ${f.margin} is below the verified-tier admission bar ${MIN_FALSIFIER_MARGIN} — this row belongs in the sourced tier (promote-unlock.js SYM provenance=sourced source=<name> reason="...")`);
+  }
   if (!f.basis) p.push('falsifier.basis required');
   return p;
 }
@@ -290,7 +348,9 @@ export function compoundChance(chanceRate, hits, n) {
 }
 export function stampStrength(row, rep) {
   if (!rep) throw new Error(`stampStrength: ${row.sym} has no entry in data/falsifier-strength.json — run derive-falsifier-strength.js`);
-  const f = { verdict: rep.verdict, basis: rep.basis, at: rep.at, kind: rep.kind };
+  // The verdict is DERIVED here from the margin, never copied: the report says what
+  // it measured; the bar decides the tier.
+  const f = { verdict: rep.verdict === 'NONE' ? 'NONE' : 'STRONG', basis: rep.basis, at: rep.at, kind: rep.kind };
   if (rep.verdict !== 'NONE') Object.assign(f, { chanceRate: rep.chanceRate, replayRate: rep.replayRate ?? null, replayN: rep.replayN ?? null, windowDays: rep.windowDays, qualifyingDays: rep.qualifyingDays, spanDays: rep.spanDays, margin: rep.replayRate != null ? +(rep.replayRate - rep.chanceRate).toFixed(2) : null,
     replayHits: rep.replayHits ?? (rep.replayRate != null && rep.replayN ? Math.round(rep.replayRate * rep.replayN) : null) });
   if (f.replayHits != null && f.replayN) f.compound = +compoundChance(f.chanceRate, f.replayHits, f.replayN).toPrecision(2);
@@ -308,15 +368,9 @@ export function falsifierLine(t) {
   const series = f.replayHits != null ? `${f.replayHits}/${f.replayN}${f.replayHits === f.replayN ? ' consecutive' : ''}` : '?';
   return `${t.sym} ${Math.round(f.chanceRate * 100)}%/window · ${series}${f.compound != null ? ` · p≈${f.compound.toExponential(1).replace('e-', 'e-').replace('e+0', '')}` : ''}${f.verdict === 'WEAK' ? ' WEAK' : ''}`;
 }
+export const CONTRACT_ENFORCEMENT_RETRACTED = `enforcement:'contract' is claimable by nobody (retracted 2026-09-15): the one row that earned it, ORDER, carried a falsifier margin of 0.17 against the ${MIN_FALSIFIER_MARGIN} admission bar, and no point on its grid cleared it. Ingest the row as sourced; the claim-cluster method stays available as evidence, not as a tier.`;
 export function forwardFalsifierProblems(t) {
-  if (t.enforcement === 'contract') {
-    const p = [];
-    if (!/^0x[0-9a-fA-F]{40}$/.test(t.contract || '')) p.push("enforcement:'contract' requires a full contract address (resolved, never typed)");
-    for (const q of clusterSpecProblems(t.clusterSpec)) p.push(`enforcement:'contract' requires a cluster falsifier: ${q}`);
-    if (!Array.isArray(t.cliffDates) || t.cliffDates.filter((c) => c.cluster).length < 2) p.push("enforcement:'contract' requires >=2 backtested cliff dates with clusters");
-    if (typeof t.upgradeable !== 'boolean') p.push("enforcement:'contract' requires an explicit upgradeable flag (proxies are upgradeable — schedule a re-read)");
-    return p;
-  }
+  if (t.enforcement === 'contract') return [CONTRACT_ENFORCEMENT_RETRACTED];
   // Observable emissions demand the stronger falsifier: a row DISCOVERED by cadence
   // cannot substitute a reviewBy for the spec — that would be a downgrade in disguise.
   if (t.events?.some((e) => e.source === 'onchain-cadence')) {

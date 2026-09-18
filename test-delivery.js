@@ -925,7 +925,7 @@ console.log('50. CHANNEL SPLIT — public channel carries facts and calls only; 
 
 console.log('49. FALSIFIER STRENGTH is derived on EVERY verified row (chance rate → replay), not just the suspicious one');
 {
-  const { falsifierProblems, stampStrength, falsifierLine, WEAK_CHANCE, verifiedRowProblems } = await import('./src/core/unlock-promote.js');
+  const { falsifierProblems, stampStrength, falsifierLine, MIN_FALSIFIER_MARGIN, MIN_FALSIFIER_MARGIN_BASIS, verifiedRowProblems, sourceRow, clusterGridMargins } = await import('./src/core/unlock-promote.js');
   const { strengthFromSeries, strengthFromClusterSpec } = await import('./derive-falsifier-strength.js');
   const { claimCoverage, unlockCoverage } = await import('./src/sources/calendar/unlocks.js');
   const day = (i) => new Date(Date.now() - i * 86400e3).toISOString().slice(0, 10);
@@ -946,19 +946,54 @@ console.log('49. FALSIFIER STRENGTH is derived on EVERY verified row (chance rat
   const row = { sym: 'T', name: 'T', verified: true, events: [{ date: '2026-09-01', source: 'x' }], cadence: { wallet: '0xw', meanAmount: 1 }, foreign: 1 };
   const st = stampStrength(row, { verdict: 'STRONG', chanceRate: 0.24, replayRate: 1, replayN: 11, windowDays: 5, qualifyingDays: 17, spanDays: 354, basis: 'b', at: 'now', kind: 'cadence-family' });
   check('stampStrength whitelist-copies (foreign field dropped) and records margin', st.foreign === undefined && st.falsifier.margin === 0.76);
-  check('stamp refuses a verdict that disagrees with its own chance rate', (() => { try { stampStrength(row, { verdict: 'STRONG', chanceRate: 0.7, replayRate: 1, basis: 'b' }); return false; } catch { return true; } })());
+  // ADMISSION BAR (2026-09-15): the verdict is derived from the margin at the stamp,
+  // never copied from the report; below the bar the stamp is refused and names the
+  // sourced tier. ORDER's own numbers (0.58 / 0.75 → 0.17) are the below-bar case.
+  const orderRep = { verdict: 'STRONG', chanceRate: 0.58, replayRate: 0.75, replayN: 8, replayHits: 6, windowDays: 5, qualifyingDays: 13, spanDays: 113, basis: 'b', at: 'now', kind: 'contract-cliff' };
+  check('the bar is a declared constant with its basis naming the observed distribution', MIN_FALSIFIER_MARGIN === 0.40 && /EIGEN 0\.76/.test(MIN_FALSIFIER_MARGIN_BASIS) && /ORDER 0\.17/.test(MIN_FALSIFIER_MARGIN_BASIS) && /declared/.test(MIN_FALSIFIER_MARGIN_BASIS));
+  check('stamp REFUSES a margin below the bar and names the sourced tier', (() => { try { stampStrength(row, orderRep); return false; } catch (e) { return /below the verified-tier admission bar/.test(e.message) && /sourced tier/.test(e.message); } })());
+  check('MUTATION: the same report with replay lifted over the bar is stamped STRONG', stampStrength(row, { ...orderRep, replayRate: 1, replayHits: 8 }).falsifier.verdict === 'STRONG');
+  check('MUTATION: exactly AT the bar is admitted (>=, declared)', stampStrength(row, { ...orderRep, chanceRate: 0.35, replayRate: 0.75 }).falsifier.margin === 0.40);
+  check('a report verdict WEAK cannot be stamped — the label is retired', (() => { try { stampStrength(row, { ...orderRep, verdict: 'WEAK' }); return false; } catch { return true; } })());
+  check('a report verdict is never COPIED: a STRONG label with a below-bar margin is still refused', (() => { try { stampStrength(row, { ...orderRep, verdict: 'STRONG', replayRate: 0.9, chanceRate: 0.58 }); return false; } catch { return true; } })());
+  check('boot gate refuses a STORED WEAK verdict', falsifierProblems({ ...row, falsifier: { verdict: 'WEAK', chanceRate: 0.58, replayRate: 0.75, margin: 0.17, basis: 'b' } }).some((p) => /WEAK is no longer a verified-tier state/.test(p)));
+  check('boot gate refuses a stored STRONG whose margin is below the bar', falsifierProblems({ ...row, falsifier: { verdict: 'STRONG', chanceRate: 0.58, replayRate: 0.75, margin: 0.17, basis: 'b' } }).some((p) => /below the verified-tier admission bar/.test(p)));
+  check('boot gate refuses a stored margin that disagrees with its own replay−chance', falsifierProblems({ ...row, falsifier: { verdict: 'STRONG', chanceRate: 0.58, replayRate: 0.75, margin: 0.76, basis: 'b' } }).some((p) => /disagrees with replay/.test(p)));
+  check('MUTATION: a stored row above the bar with consistent margin passes', falsifierProblems({ ...row, falsifier: { verdict: 'STRONG', chanceRate: 0.24, replayRate: 1, margin: 0.76, basis: 'b' } }).length === 0);
+  // TIER CORRECTION: below the bar a verified row goes back to sourced, with a reason,
+  // and what it held is recorded — not deleted.
+  const src = { source: 'defillama', sourceFetchedAt: '2026-09-15T03:49', sourceEvents: [{ t: 1789948800, n: 5e5, type: 'cliff', cats: 'farming' }], chain: 'ethereum' };
+  const wasVer = { sym: 'V', name: 'V', verified: true, events: [{ date: '2026-09-01', source: 'contract-cliff' }], enforcement: 'contract', falsifier: { margin: 0.17 } };
+  check('a verified row is still refused by sourceRow WITHOUT a reason', (() => { try { sourceRow(wasVer, src); return false; } catch (e) { return /TIER CORRECTION/.test(e.message); } })());
+  check('a token reason (<20 chars) is refused', (() => { try { sourceRow(wasVer, { ...src, tierCorrection: { reason: 'bar' } }); return false; } catch { return true; } })());
+  const corrected = sourceRow(wasVer, { ...src, tierCorrection: { reason: 'falsifier margin 0.17 below the 0.40 admission bar' } });
+  check('with a reason the row is SOURCED and carries tierHistory with what was retracted', corrected.provenance === 'sourced' && corrected.events === undefined && corrected.tierHistory.from === 'verified' && corrected.tierHistory.retracted.enforcement === 'contract' && corrected.tierHistory.retracted.falsifier.margin === 0.17 && /0\.40/.test(corrected.tierHistory.reason));
+  // The EVIDENCE travels with the decision. A row that held a clusterSpec cannot be
+  // corrected on "the grid" without the grid: margins per point, computed from the
+  // tool's report, recorded beside the reason — so the question stays settled.
+  const rep = { spanDays: 113, grid: [{ windowDays: 3, minRatio: 2, hits: 7, n: 8, off: 16 }, { windowDays: 5, minRatio: 3, hits: 6, n: 8, off: 7 }, { windowDays: 7, minRatio: 5, hits: 4, n: 8, off: 6 }] };
+  const gm = clusterGridMargins(rep);
+  check('clusterGridMargins: a margin per point (w3/r2 0.26, w5/r3 0.17, w7/r5 −0.12) and the best named', gm.points.map((p) => p.margin).join() === '0.26,0.17,-0.12' && gm.best.w === 3 && gm.best.r === 2 && gm.best.margin === 0.26);
+  check('clusterGridMargins: no grid or no span -> null (unknown is not evidence)', clusterGridMargins(null) === null && clusterGridMargins({ grid: rep.grid }) === null);
+  const withSpec = { ...wasVer, clusterSpec: { windowDays: 5, hits: 6, offIndex: 7, spanDays: 113, n: 8, basis: 'b' } };
+  check('a row that held a clusterSpec is REFUSED a tier correction without the grid evidence', (() => { try { sourceRow(withSpec, { ...src, tierCorrection: { reason: 'falsifier margin 0.17 below the 0.40 admission bar' } }); return false; } catch (e) { return /grid margins as evidence/.test(e.message); } })());
+  const withEv = sourceRow(withSpec, { ...src, tierCorrection: { reason: 'falsifier margin 0.17 below the 0.40 admission bar', evidence: { grid: gm, stampedMargin: 0.17 } } });
+  check('with the grid, the row records it beside the reason, with the bar it was judged against, and keeps the spec + cliff history', withEv.tierHistory.evidence.bar === MIN_FALSIFIER_MARGIN && withEv.tierHistory.evidence.grid.best.margin === 0.26 && withEv.tierHistory.evidence.grid.points.length === 3 && withEv.tierHistory.retracted.clusterSpec.hits === 6);
+  check('MUTATION: a row WITHOUT a clusterSpec needs no grid (the requirement follows the evidence the row had)', sourceRow(wasVer, { ...src, tierCorrection: { reason: 'falsifier margin 0.17 below the 0.40 admission bar' } }).tierHistory.evidence === undefined);
+  check('MUTATION: a correction on a row that was never verified is refused (nothing to correct)', (() => { try { sourceRow({ sym: 'S', name: 'S' }, { ...src, tierCorrection: { reason: 'nothing to correct here at all' } }); return false; } catch { return true; } })());
   check('stamp refuses a missing report entry (never typed)', (() => { try { stampStrength(row, null); return false; } catch { return true; } })());
   check('a verified cadence row WITHOUT derived strength fails the boot gate', verifiedRowProblems([row]).some((p) => /no derived falsifier strength/.test(p)));
   check('a reviewBy row needs verdict NONE, not a number', falsifierProblems({ sym: 'R', verified: true, reviewBy: '2026-12-01', events: [{}], falsifier: { verdict: 'NONE', basis: 'b' } }).length === 0);
-  check('the WEAK cut is a declared constant, visible', WEAK_CHANCE === 0.5);
   check('falsifierLine says underived rather than skipping', /underived/.test(falsifierLine({ sym: 'U' })));
   // Live: all seven carry it; the line shows all seven.
   const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens.filter((t) => t.verified && !t.retired && (t.cadence || t.enforcement === 'contract' || t.reviewBy));
-  check('LIVE: every verified row carries derived strength', live.length === 7 && live.every((t) => t.falsifier?.verdict));
+  check('LIVE: every verified row carries derived strength', live.length === 6 && live.every((t) => t.falsifier?.verdict));
   check('LIVE: EIGEN/ENA/MOVE have NUMBERS, not an implicit "strong"', ['EIGEN', 'ENA', 'MOVE'].every((s) => { const f = live.find((t) => t.sym === s).falsifier; return f.chanceRate > 0 && f.replayRate === 1 && /days ≥50% of mean/.test(f.basis); }));
-  check('LIVE: ORDER is the only WEAK; dead-man rows are NONE', live.filter((t) => t.falsifier.verdict === 'WEAK').map((t) => t.sym).join() === 'ORDER' && ['ARB', 'STRK', 'ZRO'].every((s) => live.find((t) => t.sym === s).falsifier.verdict === 'NONE'));
+  check('LIVE: no verified row is WEAK (retired) and every numeric margin clears the bar; dead-man rows are NONE', live.every((t) => t.falsifier.verdict !== 'WEAK' && (t.falsifier.verdict === 'NONE' || t.falsifier.margin >= MIN_FALSIFIER_MARGIN)) && ['ARB', 'STRK', 'ZRO'].every((s) => live.find((t) => t.sym === s).falsifier.verdict === 'NONE'));
   const cov = unlockCoverage();
-  check('coverage line shows chance/window for all seven', /falsifier chance→replay: .*EIGEN \d+%\/window.*ORDER 58%\/window · 6\/8 .* WEAK/.test(cov.line) && ['EIGEN', 'STRK', 'ARB', 'MOVE', 'ENA', 'ZRO', 'ORDER'].every((s) => new RegExp('\\b' + s + ' ').test(cov.strength)) && !cov.underived);
+  check('coverage line carries the admission bar and the LOWEST live margin (arithmetic over rows)', cov.marginBar === MIN_FALSIFIER_MARGIN && /margin bar 0\.4 \(lowest (EIGEN|ENA|MOVE) 0\.\d+\)/.test(cov.line) && cov.lowestMargin.margin === Math.min(...live.filter((t) => Number.isFinite(t.falsifier?.margin)).map((t) => t.falsifier.margin)));
+  check('MUTATION: with no numeric margins the line says so rather than omitting the bar', /margin bar 0\.4 \(no margins live\)/.test(unlockCoverage([{ sym: 'R', verified: true, events: [{}], reviewBy: '2026-12-01', falsifier: { verdict: 'NONE', basis: 'b' } }]).line));
+  check('coverage line shows chance/window for all six', /falsifier chance→replay: .*EIGEN \d+%\/window/.test(cov.line) && !/WEAK/.test(cov.line) && ['EIGEN', 'STRK', 'ARB', 'MOVE', 'ENA', 'ZRO'].every((s) => new RegExp('\\b' + s + ' ').test(cov.strength)) && !cov.underived);
   check('every verified claimCoverage line states its strength (cadence, contract, dead-man)', live.every((t) => /Falsifier strength: /.test(claimCoverage(t, 3).line)));
   // COMPOUND: the row's weight is the replay series, not the per-window figure.
   const { compoundChance } = await import('./src/core/unlock-promote.js');
@@ -967,7 +1002,7 @@ console.log('49. FALSIFIER STRENGTH is derived on EVERY verified row (chance rat
   check('compound: 0/0 windows -> null (no series, no weight)', compoundChance(0.24, 0, 0) === null);
   check('compound: more consecutive stamps at the same chance rate always weigh more', compoundChance(0.3, 5, 5) > compoundChance(0.3, 8, 8));
   check('stamp carries compound + replayHits', st.falsifier.replayHits === 11 && Math.abs(st.falsifier.compound / 1.5e-7 - 1) < 0.1);
-  check('coverage line shows per-window AND series AND compound (EIGEN 24%/window · 11/11 consecutive · p≈1.5e-7)', /EIGEN 24%\/window · 11\/11 consecutive · p≈1\.5e-7/.test(cov.line) && /ORDER 58%\/window · 6\/8 · p≈2\.8e-1 WEAK/.test(cov.line));
+  check('coverage line shows per-window AND series AND compound (EIGEN 24%/window · 11/11 consecutive · p≈1.5e-7)', /EIGEN 24%\/window · 11\/11 consecutive · p≈1\.5e-7/.test(cov.line));
   check('claimCoverage says "that series by chance alone" with the compound', /record 11\/11 consecutive \(that series by chance alone: p≈1\.5e-7\)/.test(claimCoverage(live.find((t) => t.sym === 'EIGEN'), 3).line));
   check('claimCoverage can say UNDERIVED', /UNDERIVED/.test(claimCoverage({ verified: true, cadence: { monthsObserved: 3, wallet: 'x' }, events: [{}] }, 3).line));
 }
@@ -1461,7 +1496,7 @@ console.log('62. a CORRECTION is visible — removing a verdict from state must 
 
 console.log('48. MECHANISM — a sourced date can name no discrete event; weak falsifiers are stated');
 {
-  const { mechanismEvidence, mechanismProblems, sourceRow, sourcedRowProblems, pressureStage, chanceRate, falsifierWeak, promoteRow, UNVERIFIABLE_MECHANISMS } = await import('./src/core/unlock-promote.js');
+  const { mechanismEvidence, mechanismProblems, sourceRow, sourcedRowProblems, pressureStage, chanceRate, clusterMargin, promoteRow, UNVERIFIABLE_MECHANISMS } = await import('./src/core/unlock-promote.js');
   const { claimCoverage, unlockCoverage, leadsFor } = await import('./src/sources/calendar/unlocks.js');
   const { cadenceStatus } = await import('./src/sources/calendar/cadence-watch.js');
   const grid9 = (hits) => [3, 5, 7].flatMap((w) => [2, 3, 5].map((r) => ({ windowDays: w, minRatio: r, hits, n: 4, off: 2 })));
@@ -1487,11 +1522,11 @@ console.log('48. MECHANISM — a sourced date can name no discrete event; weak f
   check('sourceRow refuses an unverifiable mechanism at STANDARD (constructor = gate)', (() => { try { sourceRow({ sym: 'T', name: 'T' }, { ...base, mechanism: 'continuous-claim', mechanismBasis: 'x' }); return false; } catch { return true; } })());
   check('unverifiable mechanism -> LOGGED at runtime whatever the size', pressureStage({ ...base, mechanism: 'continuous-claim', stage: 'STANDARD', sourceEvents: [{ t: 1, n: 5e7, cats: 'insiders' }] }) === 'LOGGED' && leadsFor({ stage: 'LOGGED' }).length === 0);
   check('the unverifiable set is exactly the two Route 2 found', UNVERIFIABLE_MECHANISMS.length === 2);
-  // Weak falsifier: derived chance rate, not an impression.
+  // Falsifier margin: derived chance rate and replay, not an impression.
   const spec = { windowDays: 5, minRatio: 3, minRecipients: 5, baselineDaily: 1, n: 8, hits: 6, offIndex: 7, spanDays: 113, basis: 'b' };
-  check('chance rate = clusters x window / span (ORDER: 13x5/113 = 0.58)', chanceRate(spec) === 0.58 && falsifierWeak(spec));
-  check('a quiet contract (2 clusters in 113d) has a strong falsifier', !falsifierWeak({ ...spec, hits: 2, offIndex: 0 }));
-  check('no span recorded -> no chance rate -> not called weak (unknown is not strong either)', chanceRate({ ...spec, spanDays: undefined }) === null && !falsifierWeak({ ...spec, spanDays: undefined }));
+  check('chance rate = clusters x window / span (ORDER: 13x5/113 = 0.58) and margin = replay − chance (0.17)', chanceRate(spec) === 0.58 && clusterMargin(spec) === 0.17);
+  check('a quiet contract (2 clusters in 113d, 2/8 replay) has margin 0.16 — quiet is not strong either', clusterMargin({ ...spec, hits: 2, offIndex: 0 }) === 0.16);
+  check('no span recorded -> no chance rate -> no margin (unknown is not strong)', chanceRate({ ...spec, spanDays: undefined }) === null && clusterMargin({ ...spec, spanDays: undefined }) === null);
   // Re-promotion keeps provenance history.
   const rp = promoteRow({ sym: 'X', name: 'X', verified: true, events: [{ date: '2026-09-01', source: 'a' }], sourceHistory: { source: 'defillama', supersededAt: '2026-09-05' } }, { events: [{ date: '2026-09-05', source: 'announcement' }], reviewBy: '2026-12-01' });
   check('re-promoting a verified row keeps sourceHistory (dropped once)', rp.sourceHistory?.source === 'defillama');
@@ -1501,33 +1536,42 @@ console.log('48. MECHANISM — a sourced date can name no discrete event; weak f
   check('LIVE: L3 is continuous-claim, LOGGED, with basis', l3?.mechanism === 'continuous-claim' && l3.stage === 'LOGGED' && /2367/.test(l3.mechanismBasis));
   check('LIVE: REZ is index-contradicted, LOGGED, with the off-index dates in its basis', rez?.mechanism === 'index-contradicted' && rez.stage === 'LOGGED' && /2026-04-30/.test(rez.mechanismBasis));
   check('LIVE: every sourced row passes the gate with mechanisms in place', sourcedRowProblems(l3).length === 0 && sourcedRowProblems(rez).length === 0);
-  check('LIVE: ORDER is verified AND its coverage line says the falsifier is weak, with the chance rate', falsifierWeak(order?.clusterSpec) && /WEAK/.test(claimCoverage(order, 0).line) && /58% of the time/.test(claimCoverage(order, 0).line));
+  // 2026-09-15 TIER CORRECTION: ORDER's margin (0.17; grid best 0.26) is outside the
+  // verified population (0.64-0.76). It is sourced again, with the verification it
+  // held recorded — and its coverage line is the sourced one, with no WEAK clause.
+  check('LIVE: ORDER is SOURCED with tierHistory recording the retracted contract-cliff verification and the reason', order?.provenance === 'sourced' && order.tierHistory?.from === 'verified' && order.tierHistory.retracted?.enforcement === 'contract' && order.tierHistory.retracted?.falsifier?.margin === 0.17 && /0\.40/.test(order.tierHistory.reason) && !order.events && !order.enforcement && !order.clusterSpec);
+  check('LIVE: ORDER carries the settled evidence — 9 grid points with margins, best w3/r2 0.26 against bar 0.40, spec and 8 backtested cliffs retained', order?.tierHistory?.evidence?.grid?.points?.length === 9 && order.tierHistory.evidence.grid.best.margin === 0.26 && order.tierHistory.evidence.bar === 0.4 && order.tierHistory.evidence.stampedMargin === 0.17 && order.tierHistory.retracted.clusterSpec?.hits === 6 && order.tierHistory.retracted.cliffDates?.filter((c) => c.cluster !== null).length === 8);
+  check('LIVE: ORDER passes the sourced gate and its coverage line names the source, not a WEAK falsifier', sourcedRowProblems(order).length === 0 && /published figures/.test(claimCoverage(order, 0).line) && !/WEAK/.test(claimCoverage(order, 0).line));
   check('claimCoverage for a stream says there is no discrete event', claimCoverage(l3, 3).scope === 'mechanism' && /No discrete event/.test(claimCoverage(l3, 3).line));
   check('claimCoverage for a contradicted index says the chain contradicts it', /Index contradicted by chain/.test(claimCoverage(rez, 3).line));
   const cov = unlockCoverage();
   check('coverage line splits sourced into pending vs unverifiable-by-mechanism', /\d+ pending verification · 2 unverifiable by mechanism: 1 continuous-claim, 1 index-contradicted/.test(cov.line) && cov.sourcedPending + cov.sourcedUnverifiable === cov.sourced);
-  check('coverage line flags ORDER weak with its numbers', /ORDER 58%\/window · 6\/8 · p≈2\.8e-1 WEAK/.test(cov.line) && cov.weakFalsifier === 1);
-  // RENDERING RULE, not the live row. This asserted ORDER's live line and went red the
-  // moment ORDER was demoted (on a fetch that never ran — queue item 5). What matters
-  // is that a WEAK contract row shows its chance rate and a demoted one shows only the
-  // demotion. Both states are constructed; `now` is fixed; state is injected.
+  check('coverage line carries no WEAK label and no weakFalsifier count (state retired)', !/WEAK/.test(cov.line) && cov.weakFalsifier === undefined);
+  // RENDERING RULE, constructed state, fixed `now`. A cliff-watched row renders its
+  // stamped margin (one derivation, in unlock-promote.js — the inline chance-rate copy
+  // that used to live in cadenceStatus is gone); a demoted one renders only the
+  // demotion; a row corrected to SOURCED is no longer demoted by a verdict against the
+  // tier it left — otherwise unlocks.js would skip it as "alerts as nothing".
   const hbNow = new Date(Date.UTC(2026, 8, 13));
-  const weakRow = { sym: 'WK', clusterSpec: { windowDays: 5, hits: 6, offIndex: 7, n: 8, spanDays: 113, minRatio: 3, minRecipients: 5, baselineDaily: 1, basis: 'b' },
-    cliffDates: [{ date: '2026-10-05', cluster: null }], enforcement: 'contract', events: [{ date: '2026-09-01', source: 'contract-cliff' }] };
+  const cliffRow = { sym: 'WK', clusterSpec: { windowDays: 5, hits: 8, offIndex: 1, n: 8, spanDays: 113, minRatio: 3, minRecipients: 5, baselineDaily: 1, basis: 'b' }, falsifier: { verdict: 'STRONG', margin: 0.6 },
+    cliffDates: [{ date: '2026-10-05', cluster: null }], events: [{ date: '2026-09-01', source: 'contract-cliff' }] };
   const cleanState = { months: {}, demotions: {}, cliffs: {} };
-  const weakLine = cadenceStatus([weakRow], cleanState, hbNow).line;
-  check('a non-demoted WEAK contract row renders its chance rate', /WK cliff 0\/0 confirmed · next 2026-10-05 · falsifier WEAK \(chance 58%\)/.test(weakLine));
+  const cliffLine = cadenceStatus([cliffRow], cleanState, hbNow).line;
+  check('a non-demoted cliff-watched row renders its stamped margin, never a WEAK label', /WK cliff 0\/0 confirmed · next 2026-10-05 · margin 0\.6/.test(cliffLine) && !/WEAK/.test(cliffLine));
   const demotedState = { months: {}, demotions: { WK: { at: '2026-09-12T00:00', type: 'cliff-cluster-absent' } }, cliffs: {} };
-  const demotedLine = cadenceStatus([weakRow], demotedState, hbNow).line;
-  check('a DEMOTED row renders the demotion and NOT the chance rate', /WK 🚨 demoted/.test(demotedLine) && !/chance/.test(demotedLine));
-  check('MUTATION: a strong falsifier renders no WEAK clause', !/WEAK/.test(cadenceStatus([{ ...weakRow, clusterSpec: { ...weakRow.clusterSpec, offIndex: 0, hits: 2 } }], cleanState, hbNow).line));
+  const demotedLine = cadenceStatus([cliffRow], demotedState, hbNow).line;
+  check('a DEMOTED row renders the demotion and NOT the margin', /WK 🚨 demoted/.test(demotedLine) && !/margin/.test(demotedLine));
+  const { activeDemotions: aDem } = await import('./src/sources/calendar/cadence-watch.js');
+  check('a demotion against a row since corrected to SOURCED is moot (the demoted tier no longer exists)', aDem([{ sym: 'WK', provenance: 'sourced', tierHistory: { from: 'verified' } }], demotedState).WK === undefined);
+  check('MUTATION: the same demotion against the still-verified row is active', aDem([cliffRow], demotedState).WK !== undefined);
+  check('MUTATION: a row with no stamped margin renders no margin clause', !/margin/.test(cadenceStatus([{ ...cliffRow, falsifier: undefined }], cleanState, hbNow).line));
 }
 
 console.log('47. sourced PRESSURE FLOOR is derived from the index distribution, recorded, static');
 {
   const { SOURCED_PRESSURE_FLOOR: F, derivePressureFloor, pressureStage, NON_PRESSURE_CATS } = await import('./src/core/unlock-promote.js');
   const { unlockCoverage, leadsFor } = await import('./src/sources/calendar/unlocks.js');
-  check('floor is recorded with percentile, n and a basis sentence', F.pctOfMaxSupply > 0 && F.percentile === 15 && F.n === 29 && /percentile/.test(F.basis) && /2026-09-07/.test(F.basis));
+  check('floor is recorded with percentile, n and a basis sentence', F.pctOfMaxSupply > 0 && F.percentile === 15 && F.n === 30 && /percentile/.test(F.basis) && /2026-09-15/.test(F.basis));
   // The recorded static must be what the live index derives (re-derive on refresh, record again).
   const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
   const d = derivePressureFloor(live);
@@ -1562,7 +1606,7 @@ console.log('47. sourced PRESSURE FLOOR is derived from the index distribution, 
 console.log('46. CONTRACT-CLIFF tier (Route 2) — enforcement:contract is EARNED by replayed claim clusters');
 {
   const { clusterVerdicts, reportContracts, NOT_VESTING_RX } = await import('./detect-cliff-cluster.js');
-  const { clusterSpecProblems, forwardFalsifierProblems, verifiedRowProblems } = await import('./src/core/unlock-promote.js');
+  const { clusterSpecProblems, forwardFalsifierProblems, CONTRACT_ENFORCEMENT_RETRACTED, MIN_FALSIFIER_MARGIN } = await import('./src/core/unlock-promote.js');
   const { cliffClusterDecision, cadenceStatus } = await import('./src/sources/calendar/cadence-watch.js');
   const { claimCoverage, unlockCoverage } = await import('./src/sources/calendar/unlocks.js');
   // Synthetic series: 60 days of 1k/day drip to 2 recipients; cliffs on days 10/30/50
@@ -1612,18 +1656,19 @@ console.log('46. CONTRACT-CLIFF tier (Route 2) — enforcement:contract is EARNE
   check('STO LayerZero adapter classifies NOT-VESTING (excluded from cluster candidates)', cands.length === 1 && cands[0].name === 'TokenVesting');
   check('exclusion regex covers adapter/bridge/connector', ['XBridge', 'OFTAdapter', 'L2Connector'].every((n) => NOT_VESTING_RX.test(n)) && !NOT_VESTING_RX.test('LockedTokenVault'));
 
-  // Promotion gate: enforcement:'contract' must carry its evidence.
+  // Spec shape is still checked (a future spec is shape-checked before anyone argues
+  // about its margin) — but the TIER is closed: enforcement:'contract' is claimable by
+  // nobody again (2026-09-15). The one row that earned it never cleared the margin bar.
   const spec = { windowDays: 5, minRatio: 3, minRecipients: 5, baselineDaily: 19488, n: 8, hits: 6, basis: 'derived on 8 past cliffs' };
   check('clusterSpec: complete spec passes', clusterSpecProblems(spec).length === 0);
   check('clusterSpec: n<3 or missing basis refused', clusterSpecProblems({ ...spec, n: 2 }).length > 0 && clusterSpecProblems({ ...spec, basis: undefined }).length > 0);
   const ev = [{ date: '2026-09-19', source: 'contract-cliff' }];
-  const good = { events: ev, enforcement: 'contract', contract: '0x6d00268a47D48474f999c18210c6877491AE6FB3', clusterSpec: spec, upgradeable: false,
+  const earned = { events: ev, enforcement: 'contract', contract: '0x6d00268a47D48474f999c18210c6877491AE6FB3', clusterSpec: spec, upgradeable: false,
     cliffDates: [{ date: '2026-08-08', cluster: true }, { date: '2026-08-22', cluster: true }, { date: '2026-09-19', cluster: null }] };
-  check('earned contract row passes the forward-falsifier gate', forwardFalsifierProblems(good).length === 0);
-  check('refused without contract address', forwardFalsifierProblems({ ...good, contract: undefined }).length > 0);
-  check('refused without clusterSpec', forwardFalsifierProblems({ ...good, clusterSpec: undefined }).length > 0);
-  check('refused with <2 replayed cliffs', forwardFalsifierProblems({ ...good, cliffDates: [good.cliffDates[0], good.cliffDates[2]] }).length > 0);
-  check('refused without a boolean upgradeable flag', forwardFalsifierProblems({ ...good, upgradeable: 'no' }).length > 0);
+  const ffp = forwardFalsifierProblems(earned);
+  check('a FULLY-EVIDENCED contract row is refused by the forward-falsifier gate: the label is claimable by nobody', ffp.length === 1 && ffp[0] === CONTRACT_ENFORCEMENT_RETRACTED);
+  check('the refusal names the bar and the row that failed it, and points at the sourced tier', new RegExp(String(MIN_FALSIFIER_MARGIN)).test(ffp[0]) && /ORDER/.test(ffp[0]) && /0\.17/.test(ffp[0]) && /sourced/.test(ffp[0]));
+  check('MUTATION: the same evidence WITHOUT the label is judged on its other falsifiers (no cadence, no reviewBy -> refused for that reason, not this one)', (() => { const q = forwardFalsifierProblems({ ...earned, enforcement: undefined }); return q.length === 1 && /no forward falsifier/.test(q[0]) && q[0] !== CONTRACT_ENFORCEMENT_RETRACTED; })());
 
   // Forward falsifier: presence of the next cluster, not amount-in-band.
   const stamp = (d) => new Date(d + 'T00:00:00Z');
@@ -1636,15 +1681,11 @@ console.log('46. CONTRACT-CLIFF tier (Route 2) — enforcement:contract is EARNE
   const bigButFew = {}; for (let k = 0; k < 5; k++) bigButFew[day(203 + k)] = { amt: 500000, to: ['0xwhale'] };
   check('one whale claiming a lot is NOT a cluster (recipients gate holds forward too)', cliffClusterDecision(spec, day(203), stamp(day(210)), bigButFew).action === 'DEMOTE');
 
-  // Message + coverage.
+  // Coverage. No verified contract-cliff rows exist; the count is arithmetic, not asserted.
   const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
-  const order = live.find((t) => t.sym === 'ORDER');
-  check('LIVE: ORDER is the first contract-cliff row and passes the boot gate', order?.enforcement === 'contract' && verifiedRowProblems([order]).length === 0);
-  check('LIVE: ORDER carries 3 unobserved future cliffs for the watch', order?.cliffDates.filter((x) => x.cluster === null).length === 3);
-  const cov = claimCoverage(order, 0);
-  check('claimCoverage names the contract enforcement and the replay count', cov.scope === 'contract' && /contract-enforced/.test(cov.line) && /6\/8/.test(cov.line));
-  check('claimCoverage states the upgradeable answer explicitly', /upgradeable proxy (yes|no)/i.test(cov.line));
-  check('coverage line carries the contract-cliff count', /1 contract-cliff/.test(unlockCoverage().line));
+  check('LIVE: no verified row carries enforcement:contract', live.filter((t) => t.verified && !t.retired && t.enforcement === 'contract').length === 0);
+  check('coverage line reports 0 contract-cliff (counted, not omitted)', /0 contract-cliff/.test(unlockCoverage().line));
+  check('claimCoverage has no contract branch: a row that somehow carried the label gets the generic verified line, not "contract-enforced"', !/contract-enforced/.test(claimCoverage({ verified: true, events: [{ date: '2026-09-01', source: 'x' }], enforcement: 'contract', clusterSpec: spec }, 3).line));
   // RENDERING RULE, same reason as section 46's weak-flag check: this pinned ORDER's
   // live line and went red when ORDER was demoted. Assert that a contract row with
   // unobserved cliffs reports the EARLIEST one, from constructed state.
@@ -1714,8 +1755,9 @@ console.log('45. SOURCED tier — a named source pushes, labelled; its falsifier
   // Live file: all 30 pass the gate.
   const { verifiedRowProblems } = await import('./src/core/unlock-promote.js');
   const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
-  // 30 ingested; ORDER superseded to contract-cliff in v0.30.0 (sourceHistory kept), so
-  // sourced + supersessions-from-sourced must still account for all 30.
+  // 30 ingested; ORDER superseded to contract-cliff in v0.30.0 (sourceHistory kept) and
+  // corrected back to sourced 2026-09-15 (tierHistory kept), so sourced +
+  // supersessions-from-sourced must still account for all 30.
   const supersededFromSourced = live.filter((t) => t.provenance !== 'sourced' && !!t.sourceHistory?.source && !!t.sourceHistory?.supersededAt).length;
   check('LIVE: the 30 sourced ingests are all accounted for (sourced + superseded)', live.filter((t) => t.provenance === 'sourced').length + supersededFromSourced === 30);
   check('LIVE: every sourced row passes the boot gate', verifiedRowProblems(live).length === 0);
@@ -2045,6 +2087,37 @@ console.log('37. DESCRIPTIVE docs cite a fixture per claim (invariants, not pros
   // Self-tests.
   check('dangling citation would be caught', !sectionTitles.includes('99. a fixture that does not exist'));
   check('uncited claim would be caught', !/\[fixture:|\[UNENFORCED:/.test('- an unbacked claim'));
+}
+
+console.log('63. a COPY of the tree cannot send — by construction, not by a rule someone remembers');
+{
+  // Two boot checks on ad-hoc copies carried .env and pushed channel messages
+  // (2026-09-15, 2026-09-17) that the live bot then sent again. The memory-dependent
+  // fix was "blank the token"; the structural one is that the copy never holds the
+  // token and the loader refuses a marked copy that somehow does.
+  const { copySendGuard, COPY_MARKER, COPY_STUB_TOKEN } = await import('./src/config.js');
+  const { withDataCopy, NEVER_COPIED } = await import('./test-on-copy.js');
+  const { makeCopy } = await import('./boot-check.js');
+  const { mkdtempSync, existsSync: ex, writeFileSync: wf, mkdirSync: md, rmSync: rm } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const has = (names) => (p) => names.includes(p.split(/[\\/]/).pop());
+  check('marked copy + live token -> REFUSED, naming the marker and the two incidents', /copy must not send/.test(copySendGuard('/x', { TELEGRAM_BOT_TOKEN: 't' }, has([COPY_MARKER])) || '') && /2026-09-17/.test(copySendGuard('/x', { TELEGRAM_BOT_TOKEN: 't' }, has([COPY_MARKER]))));
+  check('marked copy + no token -> starts (console-only is the copy\'s only mode)', copySendGuard('/x', {}, has([COPY_MARKER])) === null && copySendGuard('/x', { TELEGRAM_BOT_TOKEN: '' }, has([COPY_MARKER])) === null);
+  check('marked copy + the declared STUB token -> starts (the suite needs a token present; this one cannot send)', copySendGuard('/x', { TELEGRAM_BOT_TOKEN: COPY_STUB_TOKEN }, has([COPY_MARKER])) === null && COPY_STUB_TOKEN.length > 10);
+  check('MUTATION: the LIVE tree (no marker) with a token is untouched by the guard', copySendGuard('/x', { TELEGRAM_BOT_TOKEN: 't' }, has([])) === null);
+  // Wherever this suite runs: the live tree has no marker; a copy has one AND no live
+  // token (the stub or nothing). Asserted against the token config actually loaded.
+  check('LIVE: no marker here, or marker + no live token — a copy running this suite with a real token is the incident', !ex(COPY_MARKER) || (config.telegramToken === COPY_STUB_TOKEN || !config.telegramToken));
+  check('withDataCopy refuses .env by name', NEVER_COPIED.includes('.env') && (() => { try { withDataCopy('.env'); return false; } catch (e) { return /never copied/.test(e.message); } })());
+  // makeCopy on a synthetic tree: .env left behind, marker written, everything else carried.
+  const src = mkdtempSync(join(tmpdir(), 'mr-src-')); const dst = join(tmpdir(), 'mr-dst-' + process.pid);
+  wf(join(src, '.env'), 'TELEGRAM_BOT_TOKEN=secret'); wf(join(src, 'a.js'), '1'); md(join(src, 'data')); wf(join(src, 'data', 'x.json'), '{}'); md(join(src, 'node_modules')); wf(join(src, 'node_modules', 'n.js'), '1');
+  try {
+    makeCopy(src, dst);
+    check('makeCopy: .env is NOT in the copy, the marker IS, sources and data are', !ex(join(dst, '.env')) && ex(join(dst, COPY_MARKER)) && ex(join(dst, 'a.js')) && ex(join(dst, 'data', 'x.json')) && !ex(join(dst, 'node_modules')));
+    check('the copy it makes is exactly the shape the guard refuses to run with a token', /must not send/.test(copySendGuard(dst, { TELEGRAM_BOT_TOKEN: 't' }) || '') && copySendGuard(dst, {}) === null);
+  } finally { rm(src, { recursive: true, force: true }); rm(dst, { recursive: true, force: true }); }
 }
 
 console.error = origErr;

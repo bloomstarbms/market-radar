@@ -4,7 +4,11 @@
 // withDataCopy and gets a throwaway copy under data/tmp-test/. Writing to real
 // data/ paths from a test is a review-rejectable offence.
 import { mkdirSync, copyFileSync, existsSync } from 'node:fs';
+// NEVER a credential: a copy that carries .env is a copy that can send (it did,
+// twice). Refused here by name, whatever the caller asked for.
+export const NEVER_COPIED = ['.env'];
 export function withDataCopy(file = 'data/outcomes.json') {
+  if (NEVER_COPIED.includes(file.split('/').pop())) throw new Error(`withDataCopy: ${file} is never copied — a copy with a live token is a sender`);
   mkdirSync('data/tmp-test', { recursive: true });
   const copy = 'data/tmp-test/' + file.split('/').pop();
   if (existsSync(file)) copyFileSync(file, copy);
