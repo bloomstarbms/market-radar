@@ -3774,3 +3774,34 @@ Not on the list: funding's `severity` still keys on `building || oiConfirm` (HIG
 i.e. the detector reading that no longer renders publicly still decides the badge.
 Behaviour, not rendering — out of this scope; recorded. And the digestPool
 UNRECOGNISED title (announcements.js:341) is operator-only telemetry already.
+
+## 2026-09-18 — v0.32.4: THE VERSION BUMP ASKS EACH PREMISE WHAT IT CLAIMS (item 5)
+
+`bump-version.js X.Y.Z [--dry]`: moves src/config.js and package.json together
+(aborts if they disagree, if the target equals the current, or if the target is not
+a semver triple), then walks every .md and reads its FIRST PREMISE block. A doc moves
+only if that block declares `Tracks: live`; everything else is a historical claim
+and is left as written, listed in the report. Only the block moves — a "Written
+against" quoted in a body (docs/briefs/README.md's index) stays.
+
+Declared `Tracks: live`: README.md, REMAINING-WORK.md, src/sources/cex/README.md,
+docs/briefs/README.md. Not declared, deliberately: CLAUDE.md (its PREMISE says
+version-independent), NEXT-SESSION.md, REMAINING-WORK-NOTES.md (append-only log), the
+two VPS docs, and every brief. Dry run before the real one showed 4 moved / 12 left,
+which is what the sed on 2026-09-13 could not tell apart.
+
+Used on itself for this release (0.32.3 → 0.32.4): the four living docs went from
+v0.31.8/v0.31.7 — they had fallen three releases behind because the sed-of-two-files
+bump never reached them — to v0.32.4; the twelve claims stayed. Fixture 67: the pure
+classifier (moved / historical-claim / no-premise / already-current); a synthetic
+tree where the dry run changes nothing and the real run moves config, package and
+only the tracking doc; the three aborts; and LIVE: config == package, the living docs
+declare it, and every tracking doc is AT the live version — which is only true if
+the tool is what bumps.
+
+Found by the fixture: the package.json replace assumed `"version": "` with a space;
+the synthetic file had none and the tool threw. Formatting assumption in an exact-
+string edit — the class CLAUDE.md's "scripted edits assert their own match" is
+about, caught by the assertion, fixed with a whitespace-tolerant pattern.
+
+Suite 821 green via boot-check.js. This is the last item before the VPS brief.

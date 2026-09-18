@@ -1,5 +1,6 @@
 <!-- PREMISE
-Written against: v0.31.7
+Written against: v0.32.4
+Tracks: live
 Reviewed: 2026-08-29
 Assumes:
 - This directory holds SESSION BRIEFS imported from the Cowork outputs folder —

@@ -1,5 +1,6 @@
 <!-- PREMISE
-Written against: v0.31.8
+Written against: v0.32.4
+Tracks: live
 Reviewed: 2026-08-29
 Assumes:
 - Unlock coverage is Ethereum/EVM only; L1 gap ACCEPTED (a) + announcement path (c).

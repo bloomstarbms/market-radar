@@ -2410,6 +2410,40 @@ console.log('66. MESSAGE DIET, CEX remainder — one rendering discipline across
   check('every CEX poller builds its message through its pure builder (no inline lines: [ left in the poll path)', inline.length === 0, inline.join(','));
 }
 
+console.log('67. the VERSION BUMP asks each PREMISE what it claims — a blanket sed is a hand-maintained list in disguise');
+{
+  const { bumpPremise, bumpTree, readVersions } = await import('./bump-version.js');
+  const { mkdtempSync, mkdirSync: md, writeFileSync: wf, readFileSync: rf, rmSync: rm } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const live = '<!-- PREMISE\nWritten against: v0.31.8\nTracks: live\nReviewed: x\nAssumes:\n- a\n-->\n# doc\nWritten against: v0.10.0 (quoted in the body — must not move)\n';
+  const hist = '<!-- PREMISE\nWritten against: v0.31.7\nReviewed: x\nAssumes:\n- a\n-->\n# brief\n';
+  check('a PREMISE that tracks live MOVES, and only in the block (the body quote stays)', (() => { const r = bumpPremise(live, '0.32.4'); return r.action === 'moved' && /Written against: v0\.32\.4\nTracks: live/.test(r.text) && /Written against: v0\.10\.0 \(quoted/.test(r.text); })());
+  check('a PREMISE without Tracks: live is a historical claim and is LEFT, whatever version it names', bumpPremise(hist, '0.32.4').action === 'historical-claim' && bumpPremise(hist, '0.32.4').text === hist);
+  check('no PREMISE -> reported, untouched', bumpPremise('# plain\n', '0.32.4').action === 'no-premise');
+  check('already at the target -> says so, not "moved"', bumpPremise(live.replace('v0.31.8', 'v0.32.4'), '0.32.4').action === 'already-current');
+  // A synthetic tree: config + package + three docs.
+  const root = mkdtempSync(join(tmpdir(), 'mr-bump-'));
+  try {
+    md(join(root, 'src')); md(join(root, 'docs'));
+    wf(join(root, 'src/config.js'), "export const VERSION = '0.32.3';\n"); wf(join(root, 'package.json'), JSON.stringify({ version: '0.32.3' }));
+    wf(join(root, 'README.md'), live); wf(join(root, 'docs/BRIEF.md'), hist); wf(join(root, 'docs/PLAIN.md'), '# nothing\n');
+    const dry = bumpTree(root, '0.32.4', { dry: true });
+    check('dry run reports the split and changes nothing', dry.moved.length === 1 && dry.left.length === 1 && dry.noPremise.length === 1 && readVersions(root).config === '0.32.3' && rf(join(root, 'README.md'), 'utf8') === live);
+    const r = bumpTree(root, '0.32.4');
+    check('real run moves config, package and ONLY the tracking doc', readVersions(root).config === '0.32.4' && readVersions(root).pkg === '0.32.4' && /v0\.32\.4/.test(rf(join(root, 'README.md'), 'utf8')) && rf(join(root, 'docs/BRIEF.md'), 'utf8') === hist && r.moved.length === 1);
+    check('bumping to the current version ABORTS', (() => { try { bumpTree(root, '0.32.4'); return false; } catch (e) { return /already at/.test(e.message); } })());
+    wf(join(root, 'package.json'), JSON.stringify({ version: '0.32.2' }));
+    check('config/package disagreement ABORTS before touching anything', (() => { try { bumpTree(root, '0.33.0'); return false; } catch (e) { return /disagree/.test(e.message) && readVersions(root).config === '0.32.4'; } })());
+    check('a non-semver target ABORTS', (() => { try { bumpTree(root, 'v1'); return false; } catch (e) { return /semver/.test(e.message); } })());
+  } finally { rm(root, { recursive: true, force: true }); }
+  // LIVE: the living docs declare it; the briefs do not; config and package agree.
+  const v = readVersions('.');
+  check('LIVE: src/config.js and package.json agree', v.config === v.pkg);
+  check('LIVE: README.md and REMAINING-WORK.md track live; briefs are historical claims', /Tracks: live/.test(rf('README.md', 'utf8').match(/<!--\s*PREMISE([\s\S]*?)-->/)[1]) && /Tracks: live/.test(rf('REMAINING-WORK.md', 'utf8').match(/<!--\s*PREMISE([\s\S]*?)-->/)[1]) && !/Tracks: live/.test(rf('docs/briefs/MESSAGE-DIET.md', 'utf8')));
+  check('LIVE: every doc that tracks live is AT the live version (the tool was used, not sed)', bumpTree('.', '99.99.99', { dry: true }).moved.every((m) => new RegExp(`\\(v${v.config.replace(/\./g, '\\.')} →`).test(m)));
+}
+
 console.error = origErr;
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
