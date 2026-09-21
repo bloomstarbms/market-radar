@@ -3805,3 +3805,58 @@ string edit — the class CLAUDE.md's "scripted edits assert their own match" is
 about, caught by the assertion, fixed with a whitespace-tolerant pattern.
 
 Suite 821 green via boot-check.js. This is the last item before the VPS brief.
+
+## 2026-09-20 — ITEM 10 CLARIFICATION: RE-PROMOTION AND MIGRATION ARE DIFFERENT PATHS
+
+Written now because Oct 6 will raise it. ENA's demoted spec watches 0x54B8. Two
+things can happen on Oct 6:
+
+  - 0x54B8 emits ≥ 6.03M on Oct 6 AND Nov 6 → the OLD spec re-promotes through the
+    item-10 gate (R1 with monthsObserved = 12 + 2, R2 satisfied: deep miss, two
+    post-window emissions). Same wallet, same schedule, resumed.
+  - 0xA7eE (the 4th wallet, 57M, funded ~09-11) emits on Oct 6 instead → that is NOT
+    evidence for the old spec. It is evidence for a NEW spec on a NEW wallet: a fresh
+    promotion with its own backtest (detect-cadence on 0xA7eE; monthsObserved starts
+    at 1, which cadenceSpecProblems and the falsifier margin will refuse until it has
+    a history). The item-10 gate does not apply to it — and the old spec's demotion
+    stays active; it is not lifted by another wallet doing the job.
+
+The gate keys on the SPEC'S wallet(s): promote-unlock.js reads the report series for
+`cadence.wallet` / `cadence.wallets[]` only. Passing 0xA7eE's emissions to lift the
+0x54B8 demotion is therefore refused by construction ("no emission series for the
+watched wallet" if the addresses differ) — but the point is worth stating in words,
+because the temptation on Oct 6 will be to read "ENA emitted" as "ENA is back".
+
+Also beside item 1: the refresh cadence is now a DERIVED number, not a rule — a
+30-day snapshot refreshed every N days keeps (30 − N) days of horizon; N = 21 keeps
+9, N = 14 keeps 16. If the VPS gets 200 from DefiLlama, fetch-unlock-index.js on a
+timer keeps the horizon full and both arms of the ladder go quiet for good; if 403,
+the chore stays manual and the coverage line is what calls it.
+
+## 2026-09-21 — VPS STEP 1 READ; THE BRIEF'S PREFLIGHT WOULD HAVE STARTED THE BOT
+
+Step 0 on the desktop: 821 green, 38 tags verified, HEAD == origin/main at v0.32.4.
+Brief amended: it was written at v0.32.0; the banner expectation now says "whatever
+the desktop's config.js says at cutover".
+
+Step 1 as found (operator's paste, read by the reviewer): Contabo Germany, Ubuntu
+22.04, Node 20.20.2, Europe/Berlin, root by password, IPv6-first, and a NEIGHBOUR —
+pm2-root.service with `node /root/pump` on localhost. Three plan changes recorded in
+the brief: Node 22 via nvm for the radar user only with ABSOLUTE paths in the unit
+and in preflight.sh (system 20 stays for pump); `Environment=TZ=UTC` in the unit,
+system clock untouched; PM2 left alone, radar under systemd as its own user. Key
+login confirmed in a second terminal before password auth goes. Smoke test twice
+(as written, then `curl -4`); disagreements are the finding.
+
+FOUND WHILE AMENDING: the brief's preflight layer 2 imported `src/index.js?preflight=1`
+— a query nothing reads. index.js runs main() on import, so ExecStartPre would have
+booted the bot, polled, and hung on setInterval; the unit would never have started.
+A `--once` in its place would have polled on the live tree and marked cooldowns the
+real instance then honours — a preflight that eats alerts. The brief warned about
+exactly this class two paragraphs later. Fix: a real `--preflight` flag in index.js
+(v0.32.5): load read-only, four gates, banner, exit 0, before startBot/pollAll/any
+write. Fixture 68 on a marked copy: exit 0 with four gates and no "starting"/[cex]/
+[telegram]; data/ + unlocks.json digest identical before and after; a real-looking
+token still refused by the copy guard (exit 3); MUTATION: corrupt unlocks.json →
+exit 1 at the tier-route gate; and the flag is read from argv, not an import query.
+Suite 827 green.

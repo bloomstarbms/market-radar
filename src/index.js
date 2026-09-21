@@ -26,6 +26,12 @@ import { startUniverseSweep } from './core/universe.js';
 import { classifySymbol } from './core/taxonomy.js';
 
 const ONCE = process.argv.includes('--once');
+// --preflight: load state READ-ONLY, run the four boot gates, print the banner, exit
+// 0 — no Telegram, no poll, no state write. systemd's ExecStartPre on the VPS runs
+// this; a preflight that polled would mark cooldowns the real instance then honours
+// (alerts eaten by the check), and one that merely imported this file would start
+// the bot. Neither is a check. The gates are the same code the real start runs.
+const PREFLIGHT = process.argv.includes('--preflight');
 const startedAt = Date.now();
 let alertCount = 0;
 
@@ -191,6 +197,7 @@ async function main() {
     process.exit(1);
   }
   console.log(`[boot] pagination-guard assertion: OK (${pg.readers.length} paginated readers, ${pg.readers.filter((r) => r.exempt).length} declared exempt)`);
+  if (PREFLIGHT) { console.log(`[preflight] v${VERSION}: four gates OK — not starting (no poll, no send, no write)`); process.exit(0); }
   purgeExcludedFromAdv();
   const whaleMode = (config.etherscanKey ? 'evm ' : '') + (config.heliusKey ? 'solana' : '') || 'OFF (no keys)';
   console.log(`Market Radar v${VERSION} starting · poll ${config.pollIntervalSec}s · minSev ${config.minSeverity} · telegram ${config.telegramToken ? 'ON' : 'OFF (console-only)'} · cex [${config.cexExchanges.join(', ')}] · whale ${whaleMode}`);

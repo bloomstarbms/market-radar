@@ -2444,6 +2444,39 @@ console.log('67. the VERSION BUMP asks each PREMISE what it claims — a blanket
   check('LIVE: every doc that tracks live is AT the live version (the tool was used, not sed)', bumpTree('.', '99.99.99', { dry: true }).moved.every((m) => new RegExp(`\\(v${v.config.replace(/\./g, '\\.')} →`).test(m)));
 }
 
+console.log('68. --preflight runs the four boot gates and NOTHING else — systemd ExecStartPre on the VPS');
+{
+  // The brief's first draft imported index.js with a `?preflight=1` query nothing
+  // read: that would have started the bot inside the preflight. A `--once` would have
+  // polled and marked cooldowns the real instance then honours. This flag is the
+  // honest layer: gates, banner, exit — read-only.
+  const { makeCopy } = await import('./boot-check.js');
+  const { COPY_STUB_TOKEN } = await import('./src/config.js');
+  const { spawnSync } = await import('node:child_process');
+  const { writeFileSync: wf, readFileSync: rf, readdirSync: rd, statSync: st, rmSync: rm } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const { createHash } = await import('node:crypto');
+  const dst = join(tmpdir(), 'mr-preflight-' + process.pid);
+  const digest = (root) => createHash('sha1').update(rd(join(root, 'data')).filter((f) => f.endsWith('.json')).sort().map((f) => f + ':' + st(join(root, 'data', f)).size + ':' + rf(join(root, 'data', f), 'utf8')).join('|') + rf(join(root, 'unlocks.json'), 'utf8')).digest('hex');
+  const run = (root, token) => spawnSync(process.execPath, ['src/index.js', '--preflight'], { cwd: root, encoding: 'utf8', env: { ...process.env, TELEGRAM_BOT_TOKEN: token }, timeout: 120_000 });
+  try {
+    makeCopy(process.cwd(), dst);
+    const before = digest(dst);
+    const ok = run(dst, '');
+    const out = (ok.stdout || '') + (ok.stderr || '');
+    check('preflight on a green copy exits 0 with four gates and the banner', ok.status === 0 && /\[boot\] admit\(\) self-test/.test(out) && /tier-route assertion: OK/.test(out) && /classifiers-wired assertion: OK/.test(out) && /pagination-guard assertion: OK/.test(out) && /\[preflight\] v\d+\.\d+\.\d+: four gates OK — not starting/.test(out));
+    check('preflight does NOT start: no "starting" banner, no poller scan, no telegram', !/Market Radar v.* starting/.test(out) && !/\[cex\]/.test(out) && !/\[telegram\]/.test(out));
+    check('preflight writes NOTHING under data/ or unlocks.json (digest identical)', digest(dst) === before);
+    check('preflight with a real-looking token in a marked copy is refused by config.js (exit 3) — the copy guard still holds', run(dst, 'not-a-stub').status === 3);
+    // MUTATION: a corrupt unlocks.json is what the tier-route gate exists for.
+    wf(join(dst, 'unlocks.json'), '{ not json');
+    const bad = run(dst, '');
+    check('MUTATION: a corrupt unlocks.json makes preflight exit 1 at the tier-route gate', bad.status === 1 && /tier/i.test((bad.stdout || '') + (bad.stderr || '')));
+  } finally { rm(dst, { recursive: true, force: true }); }
+  check('the flag is read from argv, not from an import query nothing reads', /process\.argv\.includes\('--preflight'\)/.test(rf('src/index.js', 'utf8')) && !/preflight=1/.test(rf('src/index.js', 'utf8')));
+}
+
 console.error = origErr;
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

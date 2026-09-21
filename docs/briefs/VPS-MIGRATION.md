@@ -2,7 +2,8 @@
 Written against: v0.32.0
 Reviewed: 2026-09-18
 Assumes:
-- Live tree is v0.32.0, pushed, tagged, 739 checks green. Diet shipped.
+- Written at v0.32.0 (739 checks). The tree that migrates is whatever config.js
+  says at cutover — v0.32.4, 821 checks, on 2026-09-20. Step 0 re-verifies.
 - boot-check.js is the only sanctioned way to make a tree copy; config.js refuses
   to load in a marked copy with a real token.
 - CLAUDE.md carries the Telegram restriction and the agent ownership split; it
@@ -61,8 +62,9 @@ The repo has been a disaster-recovery copy since Aug 25. Confirm it still is:
 
 - Ubuntu 24.04, smallest tier (1–2 GB), **Frankfurt or Amsterdam**. Not US — Binance
   geo-blocks datacenter ranges there.
-- `timedatectl set-timezone UTC` — macro stages, digest windows and the source-
-  staleness ladder all assume it.
+- UTC for the BOT — macro stages, digest windows and the source-staleness ladder
+  all assume it. On a dedicated box, `timedatectl set-timezone UTC`; on a shared
+  box, `Environment=TZ=UTC` in the unit only (see "Step 1 as found").
 - Node 22+: `node --version` must print 22 or higher. Built-in `fetch` is required.
 
 **Same day, before anything else lands on the box:**
@@ -75,6 +77,36 @@ sudo ufw enable
 ```
 
 The box will hold the Telegram token and three API keys. Password login off.
+
+### Step 1 as found — 2026-09-21 (the box already existed)
+
+Operator's paste, read before anything was written: Contabo, Germany (EU);
+Ubuntu 22.04; **Node 20.20.2**; **timezone Europe/Berlin**; root login by password;
+up since Sep 9; `ifconfig.me` returned an **IPv6** address. And a **neighbour**:
+`pm2-root.service` running, `node /root/pump` listening on localhost — another bot,
+under PM2, as root. Step 9's rule applies on this side too. Three steps change:
+
+- **Node — do not upgrade the system Node.** pump runs on 20 and may depend on it.
+  Install 22 for the `radar` user only (nvm), and the unit uses the ABSOLUTE path:
+  `ExecStart=/home/radar/.nvm/versions/node/v22.x.y/bin/node src/index.js`, and
+  `preflight.sh` calls the same absolute binary (a bare `node` in ExecStartPre
+  resolves to system 20). `Environment=PATH=/home/radar/.nvm/versions/node/v22.x.y/bin:/usr/bin:/bin`.
+- **Timezone — do not change the system clock.** pump's logs and schedules are on
+  Berlin time. The radar unit gets `Environment=TZ=UTC`; the bot sees UTC, the box
+  does not change. Verify from inside: `journalctl -u market-radar` shows the
+  18:00 UTC heartbeat at 18:00, not 20:00.
+- **PM2 — leave it alone.** radar runs under systemd, its own user, its own unit
+  name. Two process managers on one box are fine while neither touches the other's
+  processes. `ufw` rules must leave pump's listener as it is (it is localhost-only
+  per `ss`; confirm with `ufw status` before `default deny incoming`).
+
+**Hardening order on a shared box:** key login confirmed in a SECOND terminal before
+password auth is turned off. A lockout here costs two bots, not one.
+
+**Smoke test, twice.** An IPv6-first box can get different answers from APIs that
+geo-resolve or serve IPv4 only. Run the Step 2 loop as written, then again with
+`curl -4`. Any line where the two runs disagree is a finding, recorded with both
+codes. Before it: `ufw status`, `pm2 list`, `curl -4 -s ifconfig.me; curl -6 -s ifconfig.me`.
 
 ## Step 2 — Reachability smoke test — HARD GATE
 
@@ -139,8 +171,11 @@ Type=simple
 User=radar
 WorkingDirectory=/home/radar/market-radar
 Environment=NODE_ENV=production
+Environment=TZ=UTC
+# Absolute Node 22 (nvm, radar user) — system Node is 20 and belongs to the neighbour.
+Environment=PATH=/home/radar/.nvm/versions/node/v22.x.y/bin:/usr/bin:/bin
 ExecStartPre=/home/radar/market-radar/preflight.sh
-ExecStart=/usr/bin/node src/index.js
+ExecStart=/home/radar/.nvm/versions/node/v22.x.y/bin/node src/index.js
 Restart=on-failure
 RestartSec=15
 StandardOutput=append:/home/radar/market-radar/data/bot.log
@@ -156,19 +191,29 @@ WantedBy=multi-user.target
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
+NODE=/home/radar/.nvm/versions/node/v22.x.y/bin/node   # same binary as ExecStart; never bare `node`
+"$NODE" --version | grep -q '^v22' || { echo "[PREFLIGHT][OPERATOR] wrong node: $("$NODE" --version)" >> data/bot.log; exit 1; }
 # 1. syntax — every source file
-find src -name '*.js' -print0 | xargs -0 -n1 node --check
-# 2. module-scope — dry import, poll loop gated off
-TELEGRAM_BOT_TOKEN= node --input-type=module -e "await import('./src/index.js?preflight=1')" \
-  || { echo "[PREFLIGHT][OPERATOR] dry import failed" >> data/bot.log; exit 1; }
-# 3. gates — the boot self-tests run inside index.js; a parse error never reaches them,
-#    which is why 1 and 2 exist
+find src -name '*.js' -print0 | xargs -0 -n1 "$NODE" --check
+# 2+3. module-scope AND the four boot gates — `--preflight` (v0.32.5, fixture 68):
+#    loads state read-only, runs admit/tier-route/classifiers/pagination gates, prints
+#    the banner, exits 0. No Telegram, no poll, no write. Real token: the guard in
+#    config.js is what refuses a marked COPY, not the live tree, so this runs on the
+#    live tree with the live .env and still cannot send — it never reaches startBot().
+"$NODE" src/index.js --preflight \
+  || { echo "[PREFLIGHT][OPERATOR] boot gates refused — see above" >> data/bot.log; exit 1; }
 ```
 
-Three layers, stated. `--check` catches syntax; the dry import catches module-scope
-ReferenceErrors; function-body errors are the suite's job. A preflight that claims
-more than this is the fourth instance of a guard whose stated coverage exceeds its real
-one.
+Three layers, stated. `--check` catches syntax; `--preflight` catches module-scope
+ReferenceErrors (the import) and gate refusals (the four self-tests); function-body
+errors past the gates are the suite's job. **The first draft of this file imported
+`src/index.js?preflight=1` — a query nothing read. `index.js` calls `main()` on
+import, so that "dry import" would have started the bot inside ExecStartPre and hung
+the unit; a `--once` substitute would have polled and marked cooldowns the real
+instance then honours. Caught by reading the source before writing the unit; the
+flag was added and fixture 68 proves it reads nothing, writes nothing, sends
+nothing, and exits 1 on a corrupt unlocks.json.** A preflight that claims more than
+this is the guard-whose-stated-coverage-exceeds-its-real-one class.
 
 `StartLimitBurst=5` in 600s: the boot gates `exit(1)` by design, and bare
 `Restart=always` would reproduce `run-hidden.bat`'s unbounded loop — infinitely,
@@ -244,8 +289,11 @@ VPS      5. node restore-drill.js
             PASTE THE OUTPUT. Four gates OK or stop.
          7. sudo systemctl enable --now market-radar
          8. journalctl -u market-radar -n 40
-            PASTE. Expect the v0.32.0 banner, four gates OK, pollers scanning,
-            "telegram ON".
+            PASTE. Expect the banner of whatever src/config.js says on the
+            desktop at cutover (v0.32.4 as of 2026-09-20 — four releases landed
+            after this brief was written), four gates OK, pollers scanning,
+            "telegram ON". A banner that does not match the desktop's config.js
+            means the wrong tree was cloned.
 
 DESKTOP  9. Nothing. Never start it again. Step 9 below finishes the decommission.
 ```
