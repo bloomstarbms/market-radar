@@ -2477,6 +2477,87 @@ console.log('68. --preflight runs the four boot gates and NOTHING else — syste
   check('the flag is read from argv, not from an import query nothing reads', /process\.argv\.includes\('--preflight'\)/.test(rf('src/index.js', 'utf8')) && !/preflight=1/.test(rf('src/index.js', 'utf8')));
 }
 
+console.log('69. whale sources are TESTED routes, not a pricing-page belief — and a dark chain is a heartbeat line');
+{
+  const w = await import('./src/sources/chain/whale.js');
+  const cfg = { etherscanKey: 'k', moralisKey: '', heliusKey: 'h' };
+  check('ethereum/arbitrum/polygon route to Etherscan V2 (the free key answers them — tested 2026-09-25)', ['ethereum', 'arbitrum', 'polygon'].every((c) => w.whaleSource(c, cfg).source === 'etherscan' && w.whaleSource(c, cfg).ready));
+  check('base routes to Blockscout, keyless — ready with no key at all', w.whaleSource('base', {}).source === 'blockscout' && w.whaleSource('base', {}).ready);
+  check('bsc stays on Moralis and is NOT ready without a key (no silent fallthrough to a route that refuses it)', w.whaleSource('bsc', cfg).source === 'moralis' && !w.whaleSource('bsc', cfg).ready);
+  check('an unmapped chain is not ready and says so', !w.whaleSource('tron', cfg).ready && /no source/.test(w.whaleSource('tron', cfg).why));
+  const tx = { hash: '0xh', from: '0xF', to: '0xT', value: '1500000000000000000', tokenDecimal: '18' };
+  const m = w.mapExplorerTx('base', tx);
+  check('mapExplorerTx: amount honours tokenDecimal, id is hash:from:to, explorer link is the chain\'s own scanner', m.amount === 1.5 && m.id === '0xh:0xF:0xT' && /basescan\.org\/tx\/0xh/.test(m.explorer));
+  check('mapExplorerTx: arbitrum links arbiscan, ethereum links etherscan', /arbiscan/.test(w.mapExplorerTx('arbitrum', tx).explorer) && /etherscan\.io/.test(w.mapExplorerTx('ethereum', tx).explorer));
+  check('explorerUrl: the Blockscout query carries no key; the Etherscan query carries the key and the chain id', !/apikey/.test(w.explorerUrl('base', '0xabc', 'blockscout', cfg)) && /base\.blockscout\.com/.test(w.explorerUrl('base', '0xabc', 'blockscout', cfg)) && /chainid=42161/.test(w.explorerUrl('arbitrum', '0xabc', 'etherscan', cfg)) && /apikey=k/.test(w.explorerUrl('arbitrum', '0xabc', 'etherscan', cfg)));
+  check('an empty answer from either explorer is an empty list, not an error; a plan refusal is an error', w.isEmptyExplorerAnswer({ status: '0', message: 'No transactions found', result: [] }) && w.isEmptyExplorerAnswer({ status: '0', message: 'No token transfers found', result: [] }) && !w.isEmptyExplorerAnswer({ status: '0', message: 'NOTOK', result: 'Free API access is not supported for this chain' }));
+  const dark = new Map([['bsc', 'moralis key rejected: free tier paused']]);
+  const cov = w.whaleCoverage({ cfg: { etherscanKey: 'k', moralisKey: 'm', heliusKey: 'h' }, dark, paused: new Map(), now: 0 });
+  check('whaleCoverage: a dark chain is named with its reason on the heartbeat line', /bsc DARK \(moralis key rejected: free tier paused\)/.test(cov.line) && cov.off.length === 1);
+  check('whaleCoverage: live chains list their source', /ethereum etherscan/.test(cov.line) && /base blockscout/.test(cov.line) && /solana helius/.test(cov.line));
+  check('whaleCoverage: a chain with no credential is "off", distinct from DARK', /optimism off \(moralis key missing\)/.test(w.whaleCoverage({ cfg, dark: new Map(), paused: new Map(), now: 0 }).line));
+  const { buildHeartbeat: bh } = await import('./src/core/telemetry.js');
+  check('the heartbeat carries the whale coverage line', bh(Date.now(), { rows: [], whale: cov }).lines.some((l) => l === cov.line));
+}
+
+console.log('70. the calendar verifier compares against PARSED official schedules and names the official date — five wrong dates hid behind "not found"');
+{
+  const m = await import('./src/sources/calendar/macro.js');
+  const bls = '<table><tr><td>September 2026</td><td>Oct. 14, 2026</td><td>08:30 AM</td></tr><tr><td>October 2026</td><td>Nov. 10, 2026</td></tr><tr><td>December 2025</td><td>Jan. 09, 2026</td></tr><tr><td>April 2026</td><td>May 12, 2026</td></tr></table>';
+  const cpi = m.parseBlsSchedule(bls);
+  check('parseBlsSchedule reads "Oct. 14, 2026", zero-padded "Jan. 09, 2026" and period-less "May 12, 2026" as ISO dates', cpi.includes('2026-10-14') && cpi.includes('2026-11-10') && cpi.includes('2026-01-09') && cpi.includes('2026-05-12') && cpi.length === 4);
+  const fed = '<div class="panel panel-default"><div class="panel-heading"><h4>2026 FOMC Meetings</h4></div>'
+    + '<div class="fomc-meeting__month col"><strong>October</strong></div><div class="fomc-meeting__date col">27-28</div>'
+    + '<div class="fomc-meeting__month col"><strong>December</strong></div><div class="fomc-meeting__date col">8-9*</div></div>'
+    + '<div class="panel panel-default"><div class="panel-heading"><h4>2025 FOMC Meetings</h4></div>'
+    + '<div class="fomc-meeting__month col"><strong>August</strong></div><div class="fomc-meeting__date col">22 (notation vote)</div>'
+    + '<div class="fomc-meeting__month col"><strong>September</strong></div><div class="fomc-meeting__date col">16-17*</div>'
+    + '<a href="/monetarypolicy/files/monetary20250917a1.pdf">PDF</a></div>';
+  const fomc = m.parseFomcCalendar(fed);
+  check('parseFomcCalendar: statement day is the LAST day of the meeting, year from the panel, notation votes skipped', fomc.includes('2026-10-28') && fomc.includes('2026-12-09') && fomc.includes('2025-09-17') && !fomc.some((d) => d.endsWith('-08-22')) && fomc.length === 3);
+  const fedNoHeading = fed.replace(/<h4>20\d{2} FOMC Meetings<\/h4>/g, '');
+  check('parseFomcCalendar: no heading -> a statement link inside the panel supplies the year; a panel with neither is skipped, not guessed', m.parseFomcCalendar(fedNoHeading).includes('2025-09-17') && !m.parseFomcCalendar(fedNoHeading).includes('2026-10-28'));
+  const bea = '<th>Year 2026</th><table><tr class="x"><td><div class="release-date">October 29</div></td><td>GDP (Advance Estimate), 3rd Quarter 2026</td></tr>'
+    + '<tr class="x"><td><div class="release-date">October 29</div></td><td>Personal Income and Outlays, September 2026 </td></tr>'
+    + '<tr class="x"><td><div class="release-date">September 30</div></td><td>Personal Income and Outlays, August 2026</td></tr></table>';
+  const pce = m.parseBeaSchedule(bea);
+  check('parseBeaSchedule: row-scoped — the PCE row gets ITS date; the GDP row on the same day is not a PCE entry', pce['Personal Income and Outlays, September 2026'] === '2026-10-29' && pce['Personal Income and Outlays, August 2026'] === '2026-09-30' && Object.keys(pce).length === 2);
+  const now = Date.parse('2026-09-25T08:00:00Z');
+  const events = [
+    { id: 'cpi-2026-10', kind: 'CPI', date: '2026-10-13' },                       // the real wrong date
+    { id: 'cpi-2026-11', kind: 'CPI', date: '2026-11-10', verifiedOn: '2026-09-25' },
+    { id: 'pce-2026-09', kind: 'PCE', date: '2026-09-25' },                       // "today", per the file — BEA said the 30th
+    { id: 'pce-2026-10', kind: 'PCE', date: '2026-10-29' },
+    { id: 'fomc-2026-10', kind: 'FOMC', date: '2026-10-28' },
+    { id: 'nfp-2026-10', kind: 'NFP', date: '2026-10-02' },                       // BLS unreachable, 7d out, never verified
+    { id: 'ppi-2026-10', kind: 'PPI', date: '2026-10-15', verifiedOn: '2026-09-25' }, // unreachable but freshly stamped
+    { id: 'cpi-2026-08', kind: 'CPI', date: '2026-08-12' },                       // past: ignored
+  ];
+  const f = m.compareCalendar(events, { CPI: cpi, PCE: pce, FOMC: fomc, NFP: null, PPI: null }, now);
+  const by = Object.fromEntries(f.map((x) => [x.id, x]));
+  check('a wrong CPI date is a MISMATCH carrying the official date from the same month', by['cpi-2026-10'].status === 'mismatch' && by['cpi-2026-10'].official === '2026-10-14');
+  check('a right CPI date is ok', by['cpi-2026-11'].status === 'ok');
+  check('PCE is matched by reference month (release month minus one): the wrong "today" is a mismatch with the 30th', by['pce-2026-09'].status === 'mismatch' && by['pce-2026-09'].official === '2026-09-30' && by['pce-2026-10'].status === 'ok');
+  check('the FOMC statement date matches the Fed panel', by['fomc-2026-10'].status === 'ok');
+  check('an unreachable source yields UNCHECKED — never ok, never mismatch', by['nfp-2026-10'].status === 'unchecked' && by['ppi-2026-10'].status === 'unchecked');
+  check('past events are not reported', !by['cpi-2026-08'] && f.length === 7);
+  const lines = m.verifyReport(f, { NFP: '403', PPI: '403' }, now);
+  check('every mismatch is an [OPERATOR] line naming both dates and the file to fix', lines.some((l) => /\[OPERATOR\] CPI cpi-2026-10: calendar says 2026-10-13, official schedule says 2026-10-14/.test(l)) && lines.some((l) => /\[OPERATOR\] PCE pce-2026-09: calendar says 2026-09-25, official schedule says 2026-09-30/.test(l)) && lines.filter((l) => /official schedule says/.test(l)).length === 2);
+  check('unchecked + within 14d + never verified is loud, with the page to open; unchecked + freshly stamped is quiet', lines.some((l) => /\[OPERATOR\] NFP nfp-2026-10 on 2026-10-02 .*never verified.*empsit\.htm/.test(l)) && !lines.some((l) => /ppi-2026-10/.test(l)));
+  check('exactly one summary line, last, with counts and the unreachable sources', lines.filter((l) => /^\[macro\] calendar verified:/.test(l)).length === 1 && /3 ok · 2 mismatch · 2 unchecked of 7 upcoming/.test(lines.at(-1)) && /unreachable: NFP 403, PPI 403/.test(lines.at(-1)));
+  const fetchImpl = async (url) => {
+    if (/bls\.gov/.test(url)) return { ok: false, status: 403, text: async () => '' };
+    if (/federalreserve/.test(url)) return { ok: true, text: async () => fed };
+    if (/bea\.gov/.test(url)) return { ok: true, text: async () => bea };
+    throw new Error('unexpected url ' + url);
+  };
+  const beforeCal = readFileSync('data/macro-calendar.json', 'utf8');
+  const r = await m.verifyCalendar({ fetchImpl, force: true, now });
+  check('verifyCalendar: BLS 403 is reported as unreachable for CPI/PPI/NFP; Fed and BEA are fetched and parsed', r && /unreachable: /.test(r.lines.at(-1)) && r.unreachable.CPI === '403' && r.unreachable.NFP === '403' && !('FOMC' in r.unreachable) && !('PCE' in r.unreachable));
+  check('verifyCalendar never writes the calendar (the file is truth; the verifier only compares)', readFileSync('data/macro-calendar.json', 'utf8') === beforeCal);
+  check('verifyCalendar is weekly: a second un-forced call is a no-op', (await m.verifyCalendar({ fetchImpl, now })) === null);
+}
+
 console.error = origErr;
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

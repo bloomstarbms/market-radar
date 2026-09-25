@@ -3925,8 +3925,8 @@ TWO NEW LINES IN THE VPS LOG, neither in the desktop's:
 - Moralis 401 "Free usage is paused" — account-side, not the VPS. The arbitrum whale
   path is dark until the plan is resolved or the source replaced. Operator item.
 - bls.gov 403 on v4 and v6 — datacenter block, DefiLlama's class. Calendar unaffected;
-  re-verification is now a browser-pane chore. QUEUED: macro.js should back off after
-  N consecutive 403s and say so once, not every verification cycle.
+  re-verification is now a browser-pane chore. (The "every cycle" worry was wrong —
+  the verifier is weekly. Resolved the same day in v0.32.6, below.)
 
 CLOSED BY THE MOVE: the analyze-uptime.js re-measure (there is no sleeping machine to
 measure); PENDING-launcher-preflight.pending (EXECUTED-ELSEWHERE as preflight.sh).
@@ -3937,3 +3937,58 @@ desktop tree is the push origin and the offsite target and nothing else. Data co
 back by scp before a push; code goes out by git pull after one. A desktop that
 "just runs it once" is two bots and a 409 — the ownership split now has a third
 party, and it is a machine.
+
+## 2026-09-25 — v0.32.6: FIVE WRONG CALENDAR DATES; WHALE SOURCES RE-ROUTED; THE VERIFIER PARSES
+
+Started as "what do the two VPS log lines affect" and ended with the calendar.
+
+THE CALENDAR. Loading the five official pages in the browser pane and comparing by
+hand against data/macro-calendar.json:
+
+    cpi-2026-10   file 10-13   BLS 10-14      FULL tier — stages would have fired a day early
+    cpi-2026-11   file 11-12   BLS 11-10      FULL tier — two days LATE, the real print unwarned
+    pce-2026-09   file 09-25   BEA 09-30      "today" — T-24h had already fired on the 24th for
+                                              nothing; T+5m would have posted a reaction at
+                                              12:35Z to a release five days away
+    pce-2026-10   file 10-30   BEA 10-29
+    (pce-11, pce-12, ppi ×3, nfp ×3, fomc ×2: correct)
+
+The old verifier had been saying "CPI 2026-10-13 not found on BLS schedule page —
+hand-entered date may be wrong or page reformatted" for weeks. It was right, and it
+was read as "page reformatted". A warning that offers the benign reading in its own
+text will get it. The replacement names the official date next to the wrong one.
+
+Fixed in the file (truth) on the VPS and the desktop copy, every checked event stamped
+`verifiedOn: 2026-09-25` + `verifiedAgainst: <page>`. cpi.js's own hardcoded SCHEDULE
+already had the right CPI dates — two calendars, one wrong, which is its own finding.
+At deploy, with the bot stopped, state.macro['pce-2026-09'] was cleared so the T-24h
+for the 30th can fire (it was marked fired for the 25th; a live-bot edit of state.json
+is the lost-update class, so stopped first).
+
+THE VERIFIER (macro.js). Three pure parsers — parseBlsSchedule ("Oct. 14, 2026"),
+parseFomcCalendar (panel per year, statement = last day of "27-28", notation votes
+skipped, year from heading or a statement link, else the panel is skipped), and
+parseBeaSchedule ("Year 2026" + row-scoped "October 29 / Personal Income and Outlays,
+September 2026") — then compareCalendar (PCE matched on release-month-minus-one) and
+verifyReport. bls.gov 403s from the VPS on v4 and v6 (the schedule page AND the .ics;
+api.bls.gov, which the CPI-number fetch uses, answers 200), so CPI/PPI/NFP come back
+UNCHECKED; the Fed and BEA pages answer. Unchecked is loud only within 14d of an
+event that has no verifiedOn stamp or one older than 45d, and then it says which
+page to open. One summary line a week. Fixture 70 feeds saved HTML to all of it and
+runs verifyCalendar with a per-URL fetch stub, asserting the calendar file is not
+written.
+
+WHALE SOURCES (whale.js). Tested from the VPS with real watchlist tokens: Etherscan
+V2's free key answers arbitrum and polygon (the comment "free plan is ETH-only" was
+wrong), refuses bsc/optimism/avalanche; base.blockscout.com answers keyless with the
+same record shape; Moralis has paused its whole free tier — 401 "Your Moralis Free
+usage is paused" — which is why bsc/base/arbitrum were dark, on the desktop before
+the migration too (the same three "key rejected" lines are in its log). Routing is
+SOURCE_BY_CHAIN, tested not believed. bsc stays on Moralis so a paid plan revives it
+with no code change; until then it is DARK, and the heartbeat now carries a
+"Whale coverage:" line naming dark chains with the reason, daily. Coverage after:
+ethereum 59 + arbitrum 2 (etherscan), base 22 (blockscout), solana 43 (helius) =
+126 of 163 watched; bsc 37 dark. Fixture 69.
+
+OPERATOR: bsc whale coverage needs a paid Etherscan or Moralis plan, or acceptance.
+The heartbeat line will keep saying so.

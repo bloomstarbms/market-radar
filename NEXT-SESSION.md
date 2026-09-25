@@ -202,6 +202,31 @@ normally. So the index arrives by hand, carried as gzip+base64, CRC-checked.
 future event`, and no `🚨 MUTE`.
 
 
+## RECURRING CHORE 2 — verify the macro calendar (monthly, and whenever the weekly
+## verifier line says "unchecked" for an event inside 14d)
+
+The bot cannot read bls.gov from the VPS (403, datacenter block); the Fed and BEA
+pages it can. So CPI/PPI/NFP dates are verified by a person, in the browser pane:
+
+1. Open, in the pane: bls.gov/schedule/news_release/cpi.htm, …/ppi.htm, …/empsit.htm
+   (NFP). Optionally federalreserve.gov/monetarypolicy/fomccalendars.htm and
+   bea.gov/news/schedule — the verifier checks those itself, but eyes are cheap.
+2. Compare with `data/macro-calendar.json` ON THE VPS (that file is truth since
+   2026-09-25; the desktop copy is a copy). Release date, not reference month.
+   PCE releases the previous month's "Personal Income and Outlays"; the FOMC
+   statement is the LAST day of the meeting.
+3. Fix any date in the file with a script that asserts the old value first (the
+   2026-09-25 fix-calendar.mjs pattern), and stamp `verifiedOn` (today) and
+   `verifiedAgainst` (the page) on every event you checked. No restart: the
+   calendar is re-read every poll.
+4. If a date moved and a stage had already fired against the old date, that event's
+   record in `state.json` (`macro[<id>]`) must be cleared — WITH THE BOT STOPPED
+   (`systemctl stop`, edit, `start`). A live-bot edit is the lost-update class.
+5. Copy the file back to the desktop tree so the two copies agree.
+
+Five dates were wrong on 2026-09-25 (two CPI, two PCE, one of them "today"). The old
+verifier had flagged them for weeks as "not found … or page reformatted".
+
 ## 0. FIRST: restore drill on tonight's backup (before push, before EIGEN)
 Load `data/backups/outcomes-2026-08-09.json` as if the live file were gone:
 parse it, assert row count vs live `data/outcomes.json`, then run

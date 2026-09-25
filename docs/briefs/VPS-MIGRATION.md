@@ -378,8 +378,11 @@ Gap between desktop stop and VPS start: about 12 minutes.
 - `[macro][OPERATOR] calendar verification fetch failed (bls 403)` — IS a VPS
   property: bls.gov 403 on v4 and v6, datacenter block, same class as DefiLlama.
   Calendar unaffected (hand-entered); its re-verification joins the browser-pane
-  chores. The line will recur every verification cycle; a repeated-403 back-off is
-  queued in the notes so it does not become noise.
+  chores. (Correction, same day: the verifier is weekly, so that was one line a
+  week, not noise. v0.32.6 replaced it — parsed Fed/BEA checks from the VPS, BLS
+  kinds "unchecked" and loud only when near and unstamped. And the old verifier had
+  been RIGHT for weeks: five calendar dates were wrong. See the 2026-09-25 v0.32.6
+  entry in REMAINING-WORK-NOTES.md.)
 - Delivery: **operator to confirm** the first VPS heartbeat (18:00 UTC) arrived.
 
 **Step 8:** `MarketRadar-OffsiteBackupPull` (Task Scheduler, daily 03:30, scp as

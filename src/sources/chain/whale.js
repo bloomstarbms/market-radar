@@ -1,5 +1,7 @@
 // On-chain whale-transfer monitor for watchlist tokens.
-// EVM chains via Etherscan V2 multichain API (free key), Solana via Helius (free key).
+// EVM chains via Etherscan V2 (free key: ethereum/arbitrum/polygon) or Blockscout (keyless:
+// base); bsc/optimism/avalanche only via Moralis, whose free tier is paused — see SOURCE_BY_CHAIN.
+// Solana via Helius (free key).
 // Threshold: min(WHALE_USD, WHALE_LIQ_PCT% of pair liquidity) — so dormant
 // low-liquidity tokens still trigger. Direction is best-effort via a small
 // list of known exchange hot wallets (extend EXCHANGE_WALLETS below).
@@ -102,12 +104,49 @@ function lookupWallet(addr) {
 }
 
 const CHAIN_IDS = { ethereum: 1, bsc: 56, base: 8453, arbitrum: 42161, polygon: 137, optimism: 10, avalanche: 43114 };
-// Chains served by Moralis (free tier) instead of Etherscan (whose free plan is ETH-only)
-const MORALIS_CHAINS = { bsc: 'bsc', base: 'base', arbitrum: 'arbitrum', polygon: 'polygon', optimism: 'optimism', avalanche: 'avalanche' };
+// WHICH FREE SOURCE SERVES WHICH CHAIN — tested from the VPS on 2026-09-25 with real
+// watchlist tokens, not read off a pricing page (the old comment said Etherscan's free
+// plan was "ETH-only"; it answers arbitrum and polygon too):
+//   etherscan   Etherscan V2 multichain, free key: ethereum, arbitrum, polygon return
+//               rows; bsc/optimism/avalanche return "Free API access is not supported
+//               for this chain".
+//   blockscout  keyless, Etherscan-compatible query and record shape
+//               (hash/from/to/value/tokenDecimal): base.blockscout.com.
+//   moralis     paused its whole free tier ("Your Moralis Free usage is paused",
+//               401 on every call — on the desktop before the migration too). Kept as
+//               the ONLY route for bsc/optimism/avalanche so a paid plan revives them
+//               with no code change; without one those chains are DARK and the
+//               heartbeat says so daily (whaleCoverage) instead of one "disabled this
+//               run" line at boot that nobody re-reads.
+export const SOURCE_BY_CHAIN = { ethereum: 'etherscan', arbitrum: 'etherscan', polygon: 'etherscan', base: 'blockscout', bsc: 'moralis', optimism: 'moralis', avalanche: 'moralis', solana: 'helius' };
+const BLOCKSCOUT_HOSTS = { base: 'base.blockscout.com' };
+const MORALIS_CHAINS = { bsc: 'bsc', optimism: 'optimism', avalanche: 'avalanche' };
+// Pure: the source a chain resolves to, and whether its credential is present.
+export function whaleSource(chainId, cfg = config) {
+  const source = SOURCE_BY_CHAIN[chainId] || null;
+  if (!source) return { source: null, ready: false, why: 'no source mapped' };
+  const need = { etherscan: cfg.etherscanKey, blockscout: true, moralis: cfg.moralisKey, helius: cfg.heliusKey }[source];
+  return { source, ready: Boolean(need), why: need ? null : `${source} key missing` };
+}
 const lastSeen = new Map(); // tokenKey -> newest tx id already processed
 const lastCheck = new Map(); // tokenKey -> ts of last on-chain check
 const disabledChains = new Set(); // chains rejected by the API plan (logged once)
+const darkReason = new Map();     // chain -> the sentence behind disabledChains, for the heartbeat
 const pausedUntil = new Map();    // chain -> ts; temporary backoff after rate limits
+
+// Heartbeat line: which chains are watched through which source, which are dark and
+// why. A dark chain is a coverage fact, so it is reported daily, not logged once.
+export function whaleCoverage(deps = {}) {
+  const cfg = deps.cfg ?? config, dark = deps.dark ?? darkReason, paused = deps.paused ?? pausedUntil, now = deps.now ?? Date.now();
+  const active = [], off = [];
+  for (const chain of Object.keys(SOURCE_BY_CHAIN)) {
+    const r = whaleSource(chain, cfg);
+    if (dark.has(chain)) off.push(`${chain} DARK (${dark.get(chain)})`);
+    else if (!r.ready) off.push(`${chain} off (${r.why})`);
+    else active.push(`${chain} ${r.source}${(paused.get(chain) || 0) > now ? ' (backing off)' : ''}`);
+  }
+  return { active, off, line: `Whale coverage: ${active.join(' · ') || 'none'}${off.length ? ` · ⚠️ ${off.join(' · ')}` : ''}` };
+}
 
 export function classifyDirection(from, to) {
   const f = lookupWallet(from);
@@ -123,23 +162,36 @@ export function effectiveThreshold(liqUsd) {
   return Math.max(RULES.minUsd, Math.min(RULES.whaleUsd, liqUsd * (RULES.liqPct / 100)));
 }
 
-let lastEvmCall = 0;
-async function evmTransfers(chainId, tokenAddress) {
-  // Etherscan free tier: 3 calls/sec — space calls out
-  const wait = lastEvmCall + 550 - Date.now();
-  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-  lastEvmCall = Date.now();
-  const url = `https://api.etherscan.io/v2/api?chainid=${CHAIN_IDS[chainId]}&module=account&action=tokentx&contractaddress=${tokenAddress}&page=1&offset=${RULES.maxTxPerPoll}&sort=desc&apikey=${config.etherscanKey}`;
-  const res = await fetch(url);
-  const json = await res.json();
-  if (json.status !== '1' && json.message !== 'No transactions found') throw new Error(json.result || json.message);
-  return (Array.isArray(json.result) ? json.result : []).map((tx) => ({
+// Etherscan V2 and Blockscout answer the same query with the same record shape; one
+// mapper is the contract for both (fixture 69).
+const SCANNER = { ethereum: 'etherscan.io', bsc: 'bscscan.com', base: 'basescan.org', arbitrum: 'arbiscan.io', polygon: 'polygonscan.com', optimism: 'optimistic.etherscan.io', avalanche: 'snowtrace.io' };
+export function mapExplorerTx(chainId, tx) {
+  return {
     id: `${tx.hash}:${tx.from}:${tx.to}`,
     from: tx.from, to: tx.to,
     amount: Number(tx.value) / 10 ** Number(tx.tokenDecimal || 18),
     hash: tx.hash,
-    explorer: `https://${chainId === 'bsc' ? 'bscscan.com' : chainId === 'base' ? 'basescan.org' : 'etherscan.io'}/tx/${tx.hash}`,
-  }));
+    explorer: `https://${SCANNER[chainId] || 'etherscan.io'}/tx/${tx.hash}`,
+  };
+}
+export function explorerUrl(chainId, tokenAddress, source, cfg = config) {
+  const q = `module=account&action=tokentx&contractaddress=${tokenAddress}&page=1&offset=${RULES.maxTxPerPoll}&sort=desc`;
+  if (source === 'blockscout') return `https://${BLOCKSCOUT_HOSTS[chainId]}/api?${q}`;
+  return `https://api.etherscan.io/v2/api?chainid=${CHAIN_IDS[chainId]}&${q}&apikey=${cfg.etherscanKey}`;
+}
+// Both APIs answer status "0" for an empty result ("No transactions found" on
+// Etherscan, "No token transfers found" on Blockscout): an empty list, not an error.
+export function isEmptyExplorerAnswer(json) { return json.status !== '1' && /^No (token )?trans(actions|fers) found$/i.test(json.message || '') && !json.result?.length; }
+const lastCall = { etherscan: 0, blockscout: 0 };
+const SPACING_MS = { etherscan: 550, blockscout: 350 }; // Etherscan free: 3 calls/sec; Blockscout is keyless — be polite
+async function explorerTransfers(chainId, tokenAddress, source) {
+  const wait = lastCall[source] + SPACING_MS[source] - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastCall[source] = Date.now();
+  const res = await fetch(explorerUrl(chainId, tokenAddress, source));
+  const json = await res.json();
+  if (json.status !== '1' && !isEmptyExplorerAnswer(json)) throw new Error(json.result || json.message);
+  return (Array.isArray(json.result) ? json.result : []).map((tx) => mapExplorerTx(chainId, tx));
 }
 
 async function moralisTransfers(chainId, tokenAddress) {
@@ -151,6 +203,9 @@ async function moralisTransfers(chainId, tokenAddress) {
     // fine — it just has to wait for the UTC-midnight reset, so don't disable the chain.
     const body = await res.text().catch(() => '');
     if (/usage has been consumed|upgrade your plan/i.test(body)) throw new Error('moralis quota spent');
+    // 2026-09: "Your Moralis Free usage is paused. Upgrade to a paid plan" — not a daily
+    // quota, the plan itself. Same handling as a bad key (disabled), clearer reason.
+    if (/usage is paused/i.test(body)) throw new Error('moralis key rejected: free tier paused');
     throw new Error('moralis key rejected');
   }
   if (res.status === 429) throw new Error('moralis 429');
@@ -213,12 +268,11 @@ async function solanaTransfers(mint) {
 export async function checkWhales(pair) {
   const chainId = pair.chainId;
   const token = pair.baseToken.address;
-  const isSolana = chainId === 'solana';
-  const viaMoralis = !isSolana && chainId !== 'ethereum' && MORALIS_CHAINS[chainId];
+  const { source, ready } = whaleSource(chainId);
+  const isSolana = source === 'helius';
+  const viaMoralis = source === 'moralis';
   if (disabledChains.has(chainId)) return;
-  if (isSolana && !config.heliusKey) return;
-  if (viaMoralis && !config.moralisKey) return;
-  if (!isSolana && !viaMoralis && (!config.etherscanKey || chainId !== 'ethereum')) return;
+  if (!ready) return; // no source or no credential for it — whaleCoverage() reports which
 
   if (Date.now() < (pausedUntil.get(chainId) || 0)) return;
   const key = `${chainId}:${token}`;
@@ -242,11 +296,12 @@ export async function checkWhales(pair) {
       if (config.debug) console.log(`  [debug] solana full parse: ${pair.baseToken.symbol} (${active ? 'activity' : 'safety-net'})`);
       txs = await solanaTransfers(token);
     } else {
-      txs = viaMoralis ? await moralisTransfers(chainId, token) : await evmTransfers(chainId, token);
+      txs = viaMoralis ? await moralisTransfers(chainId, token) : await explorerTransfers(chainId, token, source);
     }
   } catch (e) {
     if (/not supported|upgrade/i.test(e.message)) {
       disabledChains.add(chainId);
+      darkReason.set(chainId, `${source}: not covered by the free plan`);
       console.error(`[whale] ${chainId}: not covered by free API plan — whale checks disabled for this chain`);
     } else if (/quota spent/.test(e.message)) {
       const reset = new Date();
@@ -255,6 +310,7 @@ export async function checkWhales(pair) {
       console.error(`[whale] ${chainId}: Moralis daily quota spent — resuming ${reset.toISOString().slice(11, 16)} UTC`);
     } else if (/key rejected/.test(e.message)) {
       disabledChains.add(chainId);
+      darkReason.set(chainId, e.message);
       console.error(`[whale] ${chainId}: ${e.message} — disabled this run`);
     } else if (/429/.test(e.message)) {
       pausedUntil.set(chainId, Date.now() + 5 * 60e3);

@@ -108,7 +108,7 @@ export async function pollMacro() {
         title = `${ev.kind} in ~24h — ${ev.date} ${ev.et} ET (${utc} UTC)`;
         lines = [
           ev.note || 'Scheduled macro print — crypto trades as a high-beta liquidity asset on these.',
-          ev.verified ? 'Date verified against the official schedule.' : '⚠️ Date from hand-entered schedule, not yet re-verified — check bls.gov/schedule.',
+          ev.verified ? `Date verified against the official schedule${ev.verifiedOn ? ' on ' + ev.verifiedOn : ''}.` : '⚠️ Date from hand-entered schedule, not yet re-verified — check the official release calendar.',
         ];
       } else if (stage === 't60m') {
         title = `${ev.kind} in 60 minutes (${utc} UTC)`;
@@ -151,26 +151,117 @@ export async function pollMacro() {
   notePulse('macro');
 }
 
-// Weekly verifier: fetch the BLS schedule page, look for our hand-entered dates near
-// our hand-entered kinds. On mismatch or fetch failure -> OPERATOR log line, loudly.
-// Never mutates the calendar.
-let lastVerify = 0;
-export async function verifyCalendar() {
-  if (Date.now() - lastVerify < 7 * 24 * 3600e3) return;
-  lastVerify = Date.now();
-  try {
-    const res = await fetch('https://www.bls.gov/schedule/news_release/cpi.htm', { headers: { 'User-Agent': 'Mozilla/5.0' } });
-    if (!res.ok) throw new Error(`bls ${res.status}`);
-    const html = await res.text();
-    for (const ev of loadCalendar()) {
-      if (ev.kind !== 'CPI' || Date.parse(ev.date) < Date.now()) continue;
-      const [y, m, d] = ev.date.split('-').map(Number);
-      const monthName = new Date(Date.UTC(y, m - 1, d)).toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
-      // Look for "Aug. 12" / "Aug 12" style near-matches in the schedule table.
-      const rx = new RegExp(`${monthName}\\.?\\s+0?${d}\\b`);
-      if (!rx.test(html)) console.error(`[macro][OPERATOR] CPI ${ev.date} not found on BLS schedule page — hand-entered date may be wrong or page reformatted. Verify manually.`);
+// ---- WEEKLY VERIFIER — compares, never mutates -----------------------------------
+// Three official sources, three parsers, all pure so fixture 70 feeds them saved HTML.
+// BLS pages 403 from datacenter ranges (the VPS, 2026-09-23/25); the Fed and BEA
+// pages answer from the VPS. An unreachable source makes its events UNCHECKED — not
+// ok, not mismatch — and an unchecked event rests on the file's own `verifiedOn`
+// stamp: it goes loud only when the stamp is old or missing and the event is near.
+// 2026-09-25: the file held FIVE wrong dates (two CPI, two PCE — one of them "today")
+// that the old regex verifier had flagged for weeks as "not found on BLS schedule
+// page", one line per kind, easy to read as page noise. A mismatch now carries the
+// official date next to the wrong one.
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const mon = (name) => { const i = MONTHS.findIndex((m) => m.slice(0, 3).toLowerCase() === String(name).slice(0, 3).toLowerCase()); return i < 0 ? null : i + 1; };
+const iso = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+export const VERIFY_SOURCES = {
+  CPI: 'https://www.bls.gov/schedule/news_release/cpi.htm',
+  PPI: 'https://www.bls.gov/schedule/news_release/ppi.htm',
+  NFP: 'https://www.bls.gov/schedule/news_release/empsit.htm',
+  FOMC: 'https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm',
+  PCE: 'https://www.bea.gov/news/schedule',
+};
+// BLS schedule tables: "Oct. 14, 2026" / "Jan. 09, 2026" / "May 12, 2026" -> ISO.
+export function parseBlsSchedule(html) {
+  const out = new Set();
+  for (const m of String(html).matchAll(/\b([A-Z][a-z]{2})\.?\s+(\d{1,2}),\s+(20\d{2})\b/g)) { const mm = mon(m[1]); if (mm) out.add(iso(m[3], mm, m[2])); }
+  return [...out];
+}
+// Fed FOMC calendar: one panel per year; each meeting is a month plus "27-28" (two
+// days) or "22 (notation vote)". The STATEMENT lands on the LAST day of the range.
+// The year comes from the panel — its heading, or any statement link inside it; a
+// panel with neither is skipped, never guessed.
+export function parseFomcCalendar(html) {
+  const out = new Set();
+  for (const panel of String(html).split(/<div class="panel panel-default">/).slice(1)) {
+    const yr = (panel.match(/(20\d{2}) FOMC Meetings/) || panel.match(/monetary(20\d{2})\d{4}/) || panel.match(/panel-heading[\s\S]{0,300}?>(20\d{2})</) || [])[1];
+    if (!yr) continue;
+    for (const m of panel.matchAll(/fomc-meeting__month[^>]*><strong>([A-Za-z]+)<\/strong>[\s\S]*?fomc-meeting__date[^>]*>([^<]*)</g)) {
+      if (/notation|unscheduled/i.test(m[2])) continue;
+      const days = m[2].match(/\d{1,2}/g); const mm = mon(m[1]);
+      if (days && mm) out.add(iso(yr, mm, days[days.length - 1]));
     }
-  } catch (e) {
-    console.error(`[macro][OPERATOR] calendar verification fetch failed (${e.message}) — calendar unaffected, verify manually this week.`);
   }
+  return [...out];
+}
+// BEA release schedule: a "Year 2026" table header, then rows of "October 29" + title.
+// Row-scoped, because GDP and PCE share release days. Returns
+// { 'Personal Income and Outlays, September 2026': '2026-10-29', ... }.
+export function parseBeaSchedule(html) {
+  const out = {};
+  const blocks = String(html).split(/Year\s+(20\d{2})<\/th>/);
+  for (let i = 1; i < blocks.length; i += 2) {
+    const yr = blocks[i];
+    for (const row of (blocks[i + 1] || '').split(/<tr\b/).slice(1)) {
+      const t = row.match(/(Personal Income and Outlays, [A-Za-z]+ 20\d{2})/); if (!t) continue;
+      const d = row.match(/release-date">\s*([A-Za-z]+)\s+(\d{1,2})/); const mm = d && mon(d[1]);
+      if (mm) out[t[1].trim()] = iso(yr, mm, d[2]);
+    }
+  }
+  return out;
+}
+// Pure. sources: { CPI: [iso]|null, PPI, NFP, FOMC: [iso]|null, PCE: {title: iso}|null }
+// where null means the source did not answer this run. One finding per upcoming event.
+export function compareCalendar(events, sources, now = Date.now()) {
+  const out = [];
+  for (const ev of events) {
+    if (Date.parse(ev.date) < now - 86400e3) continue;
+    const src = sources[ev.kind];
+    const f = { id: ev.id, kind: ev.kind, date: ev.date, verifiedOn: ev.verifiedOn || null };
+    if (src === null || src === undefined) { out.push({ ...f, status: 'unchecked' }); continue; }
+    if (ev.kind === 'PCE') {
+      // PCE releases the PREVIOUS month's Personal Income and Outlays.
+      const [y, m] = ev.date.split('-').map(Number);
+      const title = `Personal Income and Outlays, ${MONTHS[(m + 10) % 12]} ${m === 1 ? y - 1 : y}`;
+      const official = src[title];
+      out.push(official === undefined ? { ...f, status: 'unlisted', title } : official === ev.date ? { ...f, status: 'ok' } : { ...f, status: 'mismatch', official });
+      continue;
+    }
+    if (!Array.isArray(src) || !src.length) { out.push({ ...f, status: 'unchecked' }); continue; }
+    if (src.includes(ev.date)) { out.push({ ...f, status: 'ok' }); continue; }
+    const near = src.filter((d) => d.slice(0, 7) === ev.date.slice(0, 7)); // same month says what it should have been
+    out.push(near.length ? { ...f, status: 'mismatch', official: near[0] } : { ...f, status: 'unlisted' });
+  }
+  return out;
+}
+// Pure formatter: mismatches are [OPERATOR] lines carrying both dates; unchecked events
+// are loud only when near AND not freshly stamped; exactly one summary line.
+export function verifyReport(findings, unreachable = {}, now = Date.now()) {
+  const lines = [];
+  for (const f of findings.filter((x) => x.status === 'mismatch')) lines.push(`[macro][OPERATOR] ${f.kind} ${f.id}: calendar says ${f.date}, official schedule says ${f.official} — fix data/macro-calendar.json (the file is truth; nothing here edits it)`);
+  const soon = (f) => Date.parse(f.date) - now < 14 * 86400e3;
+  const stale = (f) => !f.verifiedOn || now - Date.parse(f.verifiedOn) > 45 * 86400e3;
+  for (const f of findings.filter((x) => (x.status === 'unchecked' || x.status === 'unlisted') && soon(x) && stale(x))) lines.push(`[macro][OPERATOR] ${f.kind} ${f.id} on ${f.date} is within 14d, ${f.status} this week and ${f.verifiedOn ? 'last verified ' + f.verifiedOn : 'never verified'} — check ${VERIFY_SOURCES[f.kind]} by hand (browser pane)`);
+  const n = (s) => findings.filter((x) => x.status === s).length;
+  const un = Object.entries(unreachable).map(([k, why]) => `${k} ${why}`).join(', ');
+  lines.push(`[macro] calendar verified: ${n('ok')} ok · ${n('mismatch')} mismatch · ${n('unchecked') + n('unlisted')} unchecked of ${findings.length} upcoming${un ? ` · unreachable: ${un}` : ''}`);
+  return lines;
+}
+let lastVerify = 0;
+export async function verifyCalendar({ fetchImpl = fetch, force = false, now = Date.now() } = {}) {
+  if (!force && now - lastVerify < 7 * 24 * 3600e3) return null;
+  lastVerify = now;
+  const sources = {}, unreachable = {};
+  const get = async (kind, parse) => {
+    try {
+      const res = await fetchImpl(VERIFY_SOURCES[kind], { headers: { 'User-Agent': 'Mozilla/5.0' } });
+      if (!res.ok) throw new Error(String(res.status));
+      sources[kind] = parse(await res.text());
+    } catch (e) { sources[kind] = null; unreachable[kind] = e.message; }
+  };
+  await Promise.all([get('CPI', parseBlsSchedule), get('PPI', parseBlsSchedule), get('NFP', parseBlsSchedule), get('FOMC', parseFomcCalendar), get('PCE', parseBeaSchedule)]);
+  const findings = compareCalendar(loadCalendar(), sources, now);
+  const lines = verifyReport(findings, unreachable, now);
+  for (const l of lines) (l.includes('[OPERATOR]') ? console.error : console.log)(l);
+  return { findings, unreachable, lines };
 }
