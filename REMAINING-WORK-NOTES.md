@@ -3928,6 +3928,13 @@ TWO NEW LINES IN THE VPS LOG, neither in the desktop's:
   re-verification is now a browser-pane chore. (The "every cycle" worry was wrong —
   the verifier is weekly. Resolved the same day in v0.32.6, below.)
 
+THE SECOND NEAR-MISS, same day, worse: the v0.32.6 deploy was "pull, boot-check, stop,
+clear a state marker, start" as one ssh command, and the marker-clearing step was an
+inline `node -e` whose quotes broke in transit. `set -e` did what it was told: the
+sequence died after "stop" with the bot down until the script was written to a file
+and run. Rule promoted to CLAUDE.md: write the file, run the file — and a
+stop-edit-start sequence asserts the stop and the edit before the start.
+
 CLOSED BY THE MOVE: the analyze-uptime.js re-measure (there is no sleeping machine to
 measure); PENDING-launcher-preflight.pending (EXECUTED-ELSEWHERE as preflight.sh).
 NOT DONE, operator's call: sshd password auth and root login are still on.
@@ -3957,6 +3964,17 @@ The old verifier had been saying "CPI 2026-10-13 not found on BLS schedule page 
 hand-entered date may be wrong or page reformatted" for weeks. It was right, and it
 was read as "page reformatted". A warning that offers the benign reading in its own
 text will get it. The replacement names the official date next to the wrong one.
+
+THE CLASS, named: AMBIGUOUS FAILURE — one message covering two causes of very different
+weight ("date wrong" vs "page changed"), where the reader picks the boring one because
+nothing in the message ranks them. It will recur wherever a check can fail for a
+boring reason: a fetch that 403s, a parser that misses, a source that moves. The rule:
+when a check can fail two ways, the message says WHICH — or, if it cannot tell, it says
+"cannot tell which" and names both, so the benign reading is a choice the reader makes
+in the open, not one the message made for them. The replacement verifier does this:
+"mismatch" (with the official date), "unchecked" (with the reason the source was
+unreachable), and "unlisted" (the source answered and has no such entry) are three
+different words for three different situations.
 
 Fixed in the file (truth) on the VPS and the desktop copy, every checked event stamped
 `verifiedOn: 2026-09-25` + `verifiedAgainst: <page>`. cpi.js's own hardcoded SCHEDULE

@@ -93,8 +93,13 @@ under PM2, as root. Step 9's rule applies on this side too. Three steps change:
   resolves to system 20). `Environment=PATH=/home/radar/node-v22.12.0-linux-x64/bin:/usr/bin:/bin`.
 - **Timezone — do not change the system clock.** pump's logs and schedules are on
   Berlin time. The radar unit gets `Environment=TZ=UTC`; the bot sees UTC, the box
-  does not change. Verify from inside: `journalctl -u market-radar` shows the
-  18:00 UTC heartbeat at 18:00, not 20:00.
+  does not change. Verify from inside with the DIGEST, not the heartbeat: the digest
+  is clock-based (`DIGEST_HOUR_UTC`, default 18) and lands in `data/bot.log` after
+  18:00 UTC — after 20:00 Berlin means the unit's TZ did not take. The heartbeat is
+  INTERVAL-based (24h after the last one, timestamp in state.json) and proves nothing
+  about the clock; it fires at the same moment whatever timezone the box keeps.
+  (Corrected 2026-09-25: this line used to say "the 18:00 UTC heartbeat", and there
+  is no such scheduler.)
 - **PM2 — leave it alone.** radar runs under systemd, its own user, its own unit
   name. Two process managers on one box are fine while neither touches the other's
   processes. `ufw` rules must leave pump's listener as it is (it is localhost-only
@@ -383,7 +388,11 @@ Gap between desktop stop and VPS start: about 12 minutes.
   kinds "unchecked" and loud only when near and unstamped. And the old verifier had
   been RIGHT for weeks: five calendar dates were wrong. See the 2026-09-25 v0.32.6
   entry in REMAINING-WORK-NOTES.md.)
-- Delivery: **operator to confirm** the first VPS heartbeat (18:00 UTC) arrived.
+- Delivery: **operator to confirm** the first VPS heartbeat arrived. It is interval-
+  based, not clocked: the migrated state.json carries the desktop's last heartbeat at
+  09:42 UTC on the 24th, so the first VPS one is due ~09:42 UTC on the 25th and each
+  later one drifts a poll cycle later. TZ is confirmed separately by the digest
+  landing after 18:00 UTC (see Step 1).
 
 **Step 8:** `MarketRadar-OffsiteBackupPull` (Task Scheduler, daily 03:30, scp as
 root with the contabo_claude key, into `OneDrive\radar-offsite`). First run exit 0,
@@ -411,7 +420,9 @@ operator's to confirm; the brief's answer is "operator to confirm", never an inf
 First 24h checks, all disk-side:
 
 - `bot.log` shows a poll cycle every interval with no `fetch failed` clusters
-- The 18:00 UTC heartbeat is written to the log (operator confirms it arrived)
+- The digest is written to the log after 18:00 UTC — this is the TZ check
+- A heartbeat is written ~24h after the previous one's state.json timestamp (operator
+  confirms it arrived); it carries no clock information
 - `sourced firing` line shows the same counts as the desktop's last heartbeat
 - No `[OPERATOR]` lines other than the ones you expect
 
@@ -465,5 +476,6 @@ deleted the other project's. Scope every deletion to `market-radar` by name.
 - Root `VPS-MIGRATION.md` marked SUPERSEDED; this file's status flipped to EXECUTED
 
 All five met 2026-09-25 except the heartbeat comparison, which waits for the first
-VPS heartbeat (18:00 UTC) — operator to confirm; the coverage line is then read
-from the VPS `data/bot.log`.
+VPS heartbeat (due ~09:42 UTC on the 25th, 24h after the migrated timestamp) —
+operator to confirm; the coverage line is then read from the VPS `data/bot.log`.
+The TZ check is the digest after 18:00 UTC, a different message.

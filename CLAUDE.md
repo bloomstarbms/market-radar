@@ -130,6 +130,16 @@ when the count is not exactly 1. In `sed`, verify with a follow-up `grep`. A
 `replace` that matches nothing is indistinguishable from one that worked, and that is
 the whole problem.
 
+**Write the file, run the file.** The rule above was written for batch ("stop writing
+clever batch") and it applies to every inline script: a `node -e` inside an `ssh`
+inside a bash `eval`, a PowerShell `-Command` block, a heredoc with a stray quote.
+On 2026-09-25 the VPS bot was stopped by a deploy sequence whose next step was an
+inline `node -e` whose quoting broke on the wire — the sequence died with the bot
+down, and the fix was to write the same script to a file and run it, which is what
+should have happened first. Three quoting casualties this month (two in
+PUSH-TO-GITHUB.bat, one on the VPS). Anything longer than one flag goes in a file;
+a stop-then-edit-then-start sequence asserts the stop and the edit before the start.
+
 **And a syntax check is not an execution.** `node --check` passes on an undeclared
 reference inside a function body. After any non-trivial edit, run the thing: the
 suite, or at minimum `node -e "import('./path.js').then(m => m.theFunction(...))"`.
