@@ -183,12 +183,30 @@ export function explorerUrl(chainId, tokenAddress, source, cfg = config) {
 // Etherscan, "No token transfers found" on Blockscout): an empty list, not an error.
 export function isEmptyExplorerAnswer(json) { return json.status !== '1' && /^No (token )?trans(actions|fers) found$/i.test(json.message || '') && !json.result?.length; }
 const lastCall = { etherscan: 0, blockscout: 0 };
-const SPACING_MS = { etherscan: 550, blockscout: 350 }; // Etherscan free: 3 calls/sec; Blockscout is keyless — be polite
+const SPACING_MS = { etherscan: 550, blockscout: 1000 }; // Etherscan free: 3 calls/sec; Blockscout is keyless — be polite
+// Blockscout keyless: 10 requests per 5-minute window per IP (x-ratelimit-limit: 10,
+// x-ratelimit-reset ≈ 300s — MEASURED from the VPS 2026-09-25; the first deploy fired
+// 22 base tokens in one poll and every one came back 429). A sleep long enough to
+// respect that would block the DEX poll for minutes, so this is a BUDGET: over the
+// window, the token is skipped this poll WITHOUT being marked checked, and the next
+// poll picks it up. 22 tokens at 9 per window cycle in ~12 minutes — fine for whales.
+const BUDGET = { blockscout: { limit: 9, windowMs: 300e3, times: [] } };
+export function budgetAllows(source, now = Date.now(), budget = BUDGET) {
+  const b = budget[source]; if (!b) return true;
+  b.times = b.times.filter((t) => now - t < b.windowMs);
+  if (b.times.length >= b.limit) return false;
+  b.times.push(now); return true;
+}
+// Blockscout says "Too many requests" in the body; Etherscan/Helius/Moralis say 429.
+export function isRateLimited(msg) { return /429|too many requests/i.test(String(msg)); }
 async function explorerTransfers(chainId, tokenAddress, source) {
   const wait = lastCall[source] + SPACING_MS[source] - Date.now();
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   lastCall[source] = Date.now();
   const res = await fetch(explorerUrl(chainId, tokenAddress, source));
+  if (res.status === 429) { // honour the window the server states, not a guessed 5 min
+    const e = new Error('429 too many requests'); e.resetMs = Number(res.headers?.get?.('x-ratelimit-reset')) || 0; throw e;
+  }
   const json = await res.json();
   if (json.status !== '1' && !isEmptyExplorerAnswer(json)) throw new Error(json.result || json.message);
   return (Array.isArray(json.result) ? json.result : []).map((tx) => mapExplorerTx(chainId, tx));
@@ -283,6 +301,7 @@ export async function checkWhales(pair) {
     : viaMoralis ? Number(process.env.WHALE_INTERVAL_EVM_ALT || 7200)
     : RULES.intervalSec;
   if (Date.now() - (lastCheck.get(key) || 0) < interval * 1000) return;
+  if (!budgetAllows(source)) return; // this source's window budget is spent — not marked checked, so the next poll retries
   lastCheck.set(key, Date.now());
   if (config.debug) console.log(`  [debug] whale check: ${pair.baseToken.symbol} (${chainId})`);
   let txs;
@@ -312,9 +331,10 @@ export async function checkWhales(pair) {
       disabledChains.add(chainId);
       darkReason.set(chainId, e.message);
       console.error(`[whale] ${chainId}: ${e.message} — disabled this run`);
-    } else if (/429/.test(e.message)) {
-      pausedUntil.set(chainId, Date.now() + 5 * 60e3);
-      console.error(`[whale] ${chainId}: rate limited — backing off 5 min`);
+    } else if (isRateLimited(e.message)) {
+      const ms = e.resetMs || 5 * 60e3;
+      pausedUntil.set(chainId, Date.now() + ms);
+      console.error(`[whale] ${chainId}: rate limited — backing off ${Math.max(1, Math.round(ms / 60e3))} min`);
     } else {
       console.error(`[whale] ${key} fetch failed:`, e.message);
     }

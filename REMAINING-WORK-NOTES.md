@@ -3992,3 +3992,20 @@ ethereum 59 + arbitrum 2 (etherscan), base 22 (blockscout), solana 43 (helius) =
 
 OPERATOR: bsc whale coverage needs a paid Etherscan or Moralis plan, or acceptance.
 The heartbeat line will keep saying so.
+
+v0.32.7, forty minutes later — THE FIRST DEPLOY FIRED 22 BASE TOKENS IN ONE POLL AND
+EVERY ONE CAME BACK 429. Measured from the VPS: Blockscout keyless is x-ratelimit-limit
+10 per ~300s window per IP, and its refusal says "Too many requests" in the body, which
+the /429/ test in the catch did not match — so the chain never backed off and every
+token retried on its own interval. Two fixes, both with fixtures: (1) a per-source
+WINDOW BUDGET (9 per 300s for blockscout) that skips a token this poll WITHOUT marking
+it checked, so the next poll picks it up — a sleep long enough to respect 10/5min would
+have blocked the DEX poll for minutes; 22 tokens now cycle in ~12 min. (2) a 429
+response honours the server's x-ratelimit-reset instead of a guessed 5 min, and
+"too many requests" counts as a 429. A free Blockscout API key (dev.blockscout.com)
+would lift the limit; that is an account the operator would have to create.
+
+The class: a route tested with ONE call is a route tested for reachability, not for
+rate. The Step 2 smoke test and the 2026-09-25 source test both proved "answers",
+neither proved "answers 22 times in a minute". Rate is a property of the loop, not
+the endpoint; test it with the loop's shape.
