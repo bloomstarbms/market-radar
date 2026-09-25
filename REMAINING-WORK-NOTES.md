@@ -4049,3 +4049,22 @@ on and unlocked, which is a scheduling constraint B did not have on paper. Recor
 in the brief under item B; B itself is not started.
 
 Suite 865. v0.32.8 deployed to the VPS (the guard is inert there; the tree matches).
+
+## 2026-09-25 — v0.32.9: THE TZ CLAIM, CORRECTED A SECOND TIME; A DEAD FIELD REMOVED
+
+While fixing "the heartbeat is at 18:00 UTC" I wrote "the digest is the TZ check". It
+is not: the digest window is Date.UTC + getUTCHours, and nothing under src/ calls a
+local-time Date method (the toLocaleString hits are number formatting). TZ=UTC in the
+unit guards code that does not exist yet; no message the bot sends can confirm or
+refute it. Fixture 72 asserts the property that makes TZ irrelevant, which is the
+only honest form of "verified". The lesson is one line: a correction is a claim too,
+and I checked the second one less carefully than the first because it was a
+correction. Results for the record: first VPS heartbeat stamped 09:42:39Z (31 s
+after the 24h mark — interval-based, as now documented); the digest for the 25th
+began evaluating at 18:00Z. Delivery of both: operator to confirm.
+
+Also: `[outcomes][OPERATOR] field '__movePct' … DISCARDED` fired once per boot on the
+VPS — twice today across the two restarts, never in the desktop's recent log because
+that process had not restarted in weeks. pump.js supplied it since v0.8.0 and nothing
+ever read it. Removed at the supplier rather than silenced in NOT_PERSISTED: a field
+nothing reads is not transient, it is dead.

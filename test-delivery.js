@@ -2591,6 +2591,23 @@ console.log('71. the desktop cannot run the bot — MIGRATED-TO-VPS is a fact, n
   } finally { rm(dst, { recursive: true, force: true }); }
 }
 
+console.log('72. the bot never reads local time — TZ on the box is irrelevant by construction, not by an env line');
+{
+  // 2026-09-25: a brief said "the 18:00 UTC heartbeat proves TZ=UTC took", then "the digest
+  // proves it". Neither depends on the box's zone; this is the check that stays true.
+  const { readdirSync: rd, statSync: st, readFileSync: rf } = await import('node:fs');
+  const { join } = await import('node:path');
+  const walk = (d, out = []) => { for (const f of rd(d)) { const p = join(d, f); if (st(p).isDirectory()) walk(p, out); else if (f.endsWith('.js')) out.push(p); } return out; };
+  const local = /\.(getHours|getMinutes|getDay|getDate|getMonth|getFullYear|setHours|setDate)\(|toLocale(Date|Time)String\(/;
+  const hits = walk('src').flatMap((p) => rf(p, 'utf8').split(/\r?\n/).map((l, i) => local.test(l) ? `${p}:${i + 1}` : null).filter(Boolean));
+  check('no file under src/ calls a local-time Date method (getHours/getDay/getDate/…/toLocaleDateString)', hits.length === 0);
+  if (hits.length) hits.forEach((h) => console.log('    local-time call: ' + h));
+  const tel = rf('src/core/telemetry.js', 'utf8');
+  check('the digest window is computed in UTC (Date.UTC + getUTCHours against DIGEST_HOUR)', /Date\.UTC\(d\.getUTCFullYear\(\), d\.getUTCMonth\(\), d\.getUTCDate\(\), DIGEST_HOUR\)/.test(tel) && /getUTCHours\(\) < DIGEST_HOUR/.test(tel));
+  check('the heartbeat is interval-based: gated on lastHeartbeatTs + heartbeatHours, no clock hour anywhere in it', /Date\.now\(\) - st\.lastHeartbeatTs < config\.heartbeatHours \* 3600e3/.test(tel) && !/HEARTBEAT_HOUR_UTC|heartbeatHour\b/.test(tel));
+  check('pump.js no longer supplies a field nothing reads (__movePct warned once per boot since v0.8.0)', !/__movePct/.test(rf('src/sources/cex/pump.js', 'utf8')));
+}
+
 console.error = origErr;
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

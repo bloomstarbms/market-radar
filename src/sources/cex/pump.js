@@ -81,7 +81,7 @@ export function checkPump(exchange, t) {
     if (up) signals.push(`⚠️ Fade measured on this corpus: 22 of 30 PUMP-HIGH reverted within 24h, median alpha −13.5% (n=30, sub-gate population — provisional)`);
     const severity = (absMove >= RULES.bigMovePct && volSurging) ? 'HIGH'
       : (absMove >= RULES.bigMovePct || volSurging) ? 'MEDIUM' : 'LOW';
-    return { source: 'CEX', type: up ? 'PUMP' : 'DUMP', severity, key, dedupeKey: `MOVE:${t.symbol}`, __movePct: movePct,
+    return { source: 'CEX', type: up ? 'PUMP' : 'DUMP', severity, key, dedupeKey: `MOVE:${t.symbol}`,
       title: `${t.symbol} ${up ? 'pumping' : 'selling off'} on ${exchange.toUpperCase()}`,
       lines: [...signals, ctx], url: CHART_URLS[exchange]?.(t.symbol), track };
   }
