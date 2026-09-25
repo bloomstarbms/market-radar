@@ -1,3 +1,10 @@
+STATUS 2026-09-25: EXECUTED-ELSEWHERE. The desktop launcher no longer exists — the bot
+moved to the VPS (docs/briefs/VPS-MIGRATION.md, Step 6 result). The three layers below
+live in /home/radar/market-radar/preflight.sh as systemd ExecStartPre (node --check
+per file, then `src/index.js --preflight` for module scope + the four gates), and the
+bounded restart is Restart=on-failure + StartLimitBurst=5/600s. Kept for the layer
+analysis; do not apply to run-hidden.bat.
+
 PENDING PATCH — launcher preflight + bounded restart (run-hidden.bat)
 Written 2026-09-12. NOT APPLIED. NOT TESTED — cmd.exe cannot be run from the agent
 sandbox, and the sandbox was down entirely for this session.

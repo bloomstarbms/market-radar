@@ -609,6 +609,11 @@ threshold.
 
 # STEP 12 — VPS migration (decision, then work)
 
+> HOSTING HALF EXECUTED 2026-09-25 — the bot runs on the VPS under systemd
+> (docs/briefs/VPS-MIGRATION.md, Step 6 result). The STREAMING half below
+> (RADAR_TRANSPORT) is untouched and still queued; the machine that can hold nine
+> WebSockets now exists.
+
 ```
 This is an UPTIME problem, not a cost problem. WebSockets are free; nine
 persistent connections need a machine that does not sleep. ~$5/month.
@@ -707,7 +712,7 @@ collectedUnder.
 | 8 | Cross-cutting A — trade payload | Now has horizons from step 8 |
 | 9 | Step 11 — momentum + DEX, rebuilt | Query the calibration set first |
 | 10 | Cross-cutting C — weekly report | ~n=100 should be reachable |
-| later | Step 12 — VPS · Cross-cutting B — positions | |
+| later | Step 12 — VPS (hosting DONE 2026-09-25; streaming remains) · Cross-cutting B — positions | |
 
 **Step 8 is out of build-order on purpose.** It is the difference between a
 feed of single-factor alerts and one that only speaks when several

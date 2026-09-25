@@ -3860,3 +3860,80 @@ write. Fixture 68 on a marked copy: exit 0 with four gates and no "starting"/[ce
 token still refused by the copy guard (exit 3); MUTATION: corrupt unlocks.json →
 exit 1 at the tier-route gate; and the flag is read from argv, not an import query.
 Suite 827 green.
+
+## 2026-09-23 — VPS STEP 2 PASSED; THE PREDICTION LANDED ON 403; CRYPTORANK'S ROUTE IS DEAD
+
+Box 84.247.179.76 (Contabo, Germany, dual-stack). Smoke test run twice (default, then
+`curl -4`): nineteen identical lines. Every exchange and chain endpoint 200 — Binance
+spot + futures from a German datacenter IP; geo-block concern closed. Telegram root 302
+is the docs redirect. Hard gate passed.
+
+`defillama.com/unlocks` 403 on both stacks. The prediction recorded before the box
+existed (2026-09-18) said this line decided half the migration's value; it landed on
+the side where the VPS buys independence and streaming, not the automated refresh.
+The browser-pane chore stays; the coverage arm keeps calling it.
+
+CRYPTORANK, found by testing the endpoint the CODE uses rather than the page a human
+reads: the brief listed `cryptorank.io/token-unlock` (HTML, 403 — a page challenge,
+proves nothing). `fetch-unlock-index-cryptorank.js` reads
+`api.cryptorank.io/v0/app/consolidated-vesting` with a browser UA + referer. Re-run
+with those headers: 403 on v4 AND v6 from the VPS — and 403 from the sandbox the
+same hour, which fetched it successfully on 2026-09-07 (81 protocols, 78 withheld).
+So the keyless endpoint has closed or now blocks datacenter ranges generally; it is
+not a VPS property. Not migration-blocking: the bot never fetches CryptoRank at
+runtime (`loadSecondIndex` reads data/unlock-index-cryptorank.json; the file travels
+by scp). But the second index is FROZEN at the 7 Sep snapshot with no known refresh
+route, and `sourceAgreement`'s lines ("DefiLlama + CryptoRank agree") are comparing
+against a 16-day-old claim without saying so.
+
+QUEUED after migration: (1) the agreement line carries the second index's fetch date
+— "CryptoRank (7 Sep snapshot)" — and the heartbeat's "2nd source" figure carries its
+age with the same ladder the first index has; (2) a `both-agree` older than the
+staleness window degrades to `not-checked`, not to a silent stale agreement;
+(3) the refresh route: try the endpoint from the desktop's residential IP once (a
+browser-pane fetch of the API URL) before concluding it is closed rather than
+datacenter-blocked. Whichever it is, the line says which.
+
+The brief's Step 2 list is amended to test the API endpoint, not the page. Testing
+the URL a human would open instead of the one the code opens is the same class as
+the preflight that imported a query nothing read.
+
+## 2026-09-25 — VPS CUTOVER EXECUTED; THE COPY PROVED ITSELF BY FAILING THE SAME WAY
+
+The bot runs on 84.247.179.76 as user `radar` under systemd (`market-radar.service`,
+Node 22.12.0 at a fixed path, TZ=UTC in the unit only). Desktop stopped, autostart and
+the 54 wake timers removed, offsite pull scheduled. Full record in
+docs/briefs/VPS-MIGRATION.md "Step 6 result"; its status is EXECUTED.
+
+THE SECOND READER'S CHECK, restated: restore-drill on the VPS printed one FAIL —
+expectancy drift 0.0604 on REVIVAL against the 24 Sep snapshot. The desktop's run,
+minutes earlier on the same files, printed the same FAIL with the same four decimals
+(precision 0.0113, expectancy 0.0604, oldest-snapshot drift 0.0634 / 0.1219, 7593
+rows). A migration that corrupts data does not reproduce a failure this exactly. The
+FAIL itself is 20h of rows past the snapshot plus the REVIVAL ladder flip of 24 Sep —
+pre-existing, and it clears on the next snapshot, which the VPS wrote in its first cycle.
+
+THE NEAR-MISS, recorded because it is the class the brief warned about: the first
+desktop-stop command died on a PowerShell regex (an unrecognised escape in the .NET
+pattern) and the script went on to copy the data with the bot still writing. The
+process listing that followed showed both PIDs alive; stop redone by PID, copy
+redone, checksums compared on both sides. Lesson for the next scripted stop: assert
+the process count is zero BEFORE the copy, in the same script, not after. The
+stop-then-copy sequence must refuse to copy if the stop did not happen.
+
+TWO NEW LINES IN THE VPS LOG, neither in the desktop's:
+- Moralis 401 "Free usage is paused" — account-side, not the VPS. The arbitrum whale
+  path is dark until the plan is resolved or the source replaced. Operator item.
+- bls.gov 403 on v4 and v6 — datacenter block, DefiLlama's class. Calendar unaffected;
+  re-verification is now a browser-pane chore. QUEUED: macro.js should back off after
+  N consecutive 403s and say so once, not every verification cycle.
+
+CLOSED BY THE MOVE: the analyze-uptime.js re-measure (there is no sleeping machine to
+measure); PENDING-launcher-preflight.pending (EXECUTED-ELSEWHERE as preflight.sh).
+NOT DONE, operator's call: sshd password auth and root login are still on.
+
+TRUTH MOVED: unlocks.json, watchlist.json and data/ are now authored on the VPS. The
+desktop tree is the push origin and the offsite target and nothing else. Data comes
+back by scp before a push; code goes out by git pull after one. A desktop that
+"just runs it once" is two bots and a 409 — the ownership split now has a third
+party, and it is a machine.

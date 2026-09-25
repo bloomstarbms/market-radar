@@ -19,7 +19,7 @@ Assumes:
   on AC and DC; stage/event redundancy means a missed stage is not a missed event.
   The case is INDEPENDENCE (the desktop also runs the infoxchange bot) and future
   STREAMING. Recorded as a decision, not a necessity.
-Status: ACTIVE PLAN
+Status: EXECUTED 2026-09-25 — cutover complete, see "Step 6 result" below. Historical only.
 Supersedes: /VPS-MIGRATION.md at root (v0.24.5) — mark that file SUPERSEDED, do not
 delete; its timing reasoning is history worth keeping.
 -->
@@ -87,10 +87,10 @@ up since Sep 9; `ifconfig.me` returned an **IPv6** address. And a **neighbour**:
 under PM2, as root. Step 9's rule applies on this side too. Three steps change:
 
 - **Node — do not upgrade the system Node.** pump runs on 20 and may depend on it.
-  Install 22 for the `radar` user only (nvm), and the unit uses the ABSOLUTE path:
-  `ExecStart=/home/radar/.nvm/versions/node/v22.x.y/bin/node src/index.js`, and
+  Install 22 for the `radar` user only (official nodejs.org tarball, checksum-verified, unpacked under /home/radar — one fixed path, no version manager), and the unit uses the ABSOLUTE path:
+  `ExecStart=/home/radar/node-v22.12.0-linux-x64/bin/node src/index.js`, and
   `preflight.sh` calls the same absolute binary (a bare `node` in ExecStartPre
-  resolves to system 20). `Environment=PATH=/home/radar/.nvm/versions/node/v22.x.y/bin:/usr/bin:/bin`.
+  resolves to system 20). `Environment=PATH=/home/radar/node-v22.12.0-linux-x64/bin:/usr/bin:/bin`.
 - **Timezone — do not change the system clock.** pump's logs and schedules are on
   Berlin time. The radar unit gets `Environment=TZ=UTC`; the bot sees UTC, the box
   does not change. Verify from inside: `journalctl -u market-radar` shows the
@@ -143,6 +143,33 @@ dependency closes. If the VPS also gets 403, the browser-pane refresh remains th
 route and the VPS changes nothing about it — record which, either way. This is the
 single most consequential line in the test.
 
+### Step 2 result — 2026-09-23, box 84.247.179.76 / 2a02:c207:2323:4644::1
+
+Run twice (default stack, then `curl -4`); the nineteen lines were IDENTICAL between
+runs — no v4/v6 disagreement. `ufw` was inactive; `pm2` runs `pumpgrad-bot` (root,
+11 days, 0 restarts).
+
+- **Every exchange and chain endpoint: 200** (Binance spot + futures, Bybit, OKX,
+  Upbit, Bithumb, KuCoin, Gate, MEXC, Bitget, DexScreener, GeckoTerminal, GoPlus,
+  Blockscout, Etherscan, api.llama.fi). The geo-block concern is CLOSED. Telegram
+  root 302 is the docs redirect; the bot uses `/bot<token>/…`, not the root.
+- **`defillama.com/unlocks`: 403 — the headline lands on the 403 side.** Same as the
+  desktop and the sandbox; `fetch-unlock-index.js` loads that exact page. The index
+  refresh stays manual via the browser pane; the VPS changes nothing about it. The
+  coverage arm and the RECURRING CHORE stay as written.
+- **CryptoRank: the test line was wrong, then the right one was also 403.** The list
+  above probes the HTML page; the code reads `api.cryptorank.io/v0/app/
+  consolidated-vesting` with a browser UA + referer. Appended and re-run: 403 on v4
+  AND v6 — and 403 from the sandbox the same hour, which fetched it successfully on
+  2026-09-07 (81 protocols). So this is not the VPS: the keyless endpoint has closed
+  (or now blocks datacenter ranges generally). NOT migration-blocking — the bot never
+  fetches CryptoRank at runtime (`loadSecondIndex` reads the file; the file travels by
+  scp) — but the second index is 16 days old with no working refresh route. Recorded
+  as an open item after migration: the `sourceAgreement` overlay is comparing against
+  a 7 Sep snapshot until a route exists, and its line should say the snapshot's age.
+
+Hard gate: PASSED. Proceed.
+
 ## Step 3 — Clone
 
 ```
@@ -173,9 +200,9 @@ WorkingDirectory=/home/radar/market-radar
 Environment=NODE_ENV=production
 Environment=TZ=UTC
 # Absolute Node 22 (nvm, radar user) — system Node is 20 and belongs to the neighbour.
-Environment=PATH=/home/radar/.nvm/versions/node/v22.x.y/bin:/usr/bin:/bin
+Environment=PATH=/home/radar/node-v22.12.0-linux-x64/bin:/usr/bin:/bin
 ExecStartPre=/home/radar/market-radar/preflight.sh
-ExecStart=/home/radar/.nvm/versions/node/v22.x.y/bin/node src/index.js
+ExecStart=/home/radar/node-v22.12.0-linux-x64/bin/node src/index.js
 Restart=on-failure
 RestartSec=15
 StandardOutput=append:/home/radar/market-radar/data/bot.log
@@ -191,7 +218,7 @@ WantedBy=multi-user.target
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
-NODE=/home/radar/.nvm/versions/node/v22.x.y/bin/node   # same binary as ExecStart; never bare `node`
+NODE=/home/radar/node-v22.12.0-linux-x64/bin/node   # same binary as ExecStart; never bare `node`
 "$NODE" --version | grep -q '^v22' || { echo "[PREFLIGHT][OPERATOR] wrong node: $("$NODE" --version)" >> data/bot.log; exit 1; }
 # 1. syntax — every source file
 find src -name '*.js' -print0 | xargs -0 -n1 "$NODE" --check
@@ -245,6 +272,7 @@ data/macro-calendar.json  data/gate-universe.json
 data/unlock-index.json  data/unlock-index-cryptorank.json
 data/curated-index.json  data/top250-index.json  data/scan-queue.json
 data/falsifier-strength.json  data/bulk-scan-state.json
+data/vesting-discovery.json           # added 2026-09-25: read by promote-unlock.js / detect-cliff-cluster.js (tool input, not bot input)
 data/backups/
 ```
 
@@ -300,6 +328,76 @@ DESKTOP  9. Nothing. Never start it again. Step 9 below finishes the decommissio
 
 Between 1 and 7 there is no bot. That gap is the cost of not having two. Keep it
 short; do not do anything else in it.
+
+### Step 6 result — 2026-09-25, cutover EXECUTED (Claude Code, one session, 05:30–05:55 UTC)
+
+**Step 0 (desktop):** verify-tags — all 39 tags match their config.js; boot-check —
+suite 827 PASS / 0 FAIL, banner v0.32.5 telegram OFF, four gates OK; origin/main ==
+HEAD (cfa2343, v0.32.5).
+
+**Steps 3–4:** the 23 Sep clone was already v0.32.5; reset to origin/main to be sure.
+`preflight.sh` and the unit installed exactly as written above; `systemd-analyze
+verify` clean; unit left disabled until the data landed.
+
+**Desktop stop:** the run-hidden loop (cmd 15532) then node 32032, by PID; no
+node.exe left; `Startup\market-radar.vbs` removed; `start-bot-on-boot.vbs` and
+`start-infoxchange-bot.bat` untouched. The FIRST stop attempt failed on a PowerShell
+regex and the copy ran with the bot still live — caught by the process listing, bot
+stopped, copy re-run. The checksums below are from the second copy.
+
+**Data:** tar-over-ssh of the Step 5 "moves" list plus `data/vesting-discovery.json`.
+sha256 identical desktop/VPS: state.json e1ffcaa1…, outcomes.json 563061f9…,
+unlocks.json 00c1416e…. Nothing from the "stays" list arrived (no .tmp, no conflict
+copies, no lock). Extracted as root, `chown -R radar:radar`, `.env` mode 600.
+
+**6.5 restore-drill on the VPS:** 7593 rows, 70.5d, precision drift 0.0113,
+expectancy drift 0.0604 — one FAIL (expectancy > 0.02, REVIVAL). The desktop's own
+run minutes earlier produced the SAME FAIL WITH THE SAME FIGURES: 20h of live rows
+past the 24 Sep snapshot plus the REVIVAL ladder flip that night. Identical figures
+on both machines is the proof the copy is intact; the FAIL is pre-existing and
+clears with the next snapshot (already written on the VPS at 05:49Z).
+
+**6.6 boot-check on the VPS (Node 22.12.0, radar user):** suite 827 / 0 ALL GREEN,
+banner v0.32.5 telegram OFF, four gates OK. `preflight.sh` dry run: exit 0,
+"[preflight] v0.32.5: four gates OK — not starting".
+
+**6.7–6.8:** `systemctl enable --now market-radar` at 05:48Z. ExecStartPre exit 0;
+main PID runs as radar under the Node 22 path; `data/bot.log`: "Market Radar
+v0.32.5 starting · poll 60s · minSev LOW · telegram ON · cex [binance, mexc, bybit,
+gate, kucoin, bitget] · whale evm solana", "[telegram] bot polling started", pollers
+scanning, "[backup] daily snapshot written" for 2026-09-25 in the first cycle,
+state.json being rewritten each cycle. pumpgrad-bot untouched (online, 0 restarts).
+Gap between desktop stop and VPS start: about 12 minutes.
+
+**Findings, first hour (both absent from the desktop's recent log):**
+
+- `[whale] arbitrum: moralis key rejected — disabled this run` — NOT a VPS property.
+  The endpoint answers 401 on v4 and v6 with "Your Moralis Free usage is paused.
+  Upgrade to a paid plan". Account-side. The EVM-alt whale path is dark until the
+  Moralis plan is resolved or the source is replaced. **Operator item.**
+- `[macro][OPERATOR] calendar verification fetch failed (bls 403)` — IS a VPS
+  property: bls.gov 403 on v4 and v6, datacenter block, same class as DefiLlama.
+  Calendar unaffected (hand-entered); its re-verification joins the browser-pane
+  chores. The line will recur every verification cycle; a repeated-403 back-off is
+  queued in the notes so it does not become noise.
+- Delivery: **operator to confirm** the first VPS heartbeat (18:00 UTC) arrived.
+
+**Step 8:** `MarketRadar-OffsiteBackupPull` (Task Scheduler, daily 03:30, scp as
+root with the contabo_claude key, into `OneDrive\radar-offsite`). First run exit 0,
+26 files. Named OUTSIDE `\MarketRadar\` so wake-timers.ps1's path purge can never
+remove it.
+
+**Step 9:** the 54 wake timers under `\MarketRadar\` deleted; nothing else touched;
+Startup holds only the infoxchange entries; no node.exe on the desktop.
+
+**Log rotation (not in the plan, added):** the unit appends to `data/bot.log` with
+no rotation and DEBUG is on in .env; the desktop's log had reached 1.3 GB.
+`/etc/logrotate.d/market-radar`: daily, 14 kept, compressed, copytruncate.
+
+**NOT done — operator's call:** sshd still allows password auth and root login. The
+brief asked for key-only. Changing it unattended, from a session holding one key,
+on a box that also hosts pump and a WordPress site, is a lockout risk. Confirm your
+own key in a second terminal first, then `PasswordAuthentication no`.
 
 ## Step 7 — Verify from disk, not from the channel
 
@@ -362,3 +460,7 @@ deleted the other project's. Scope every deletion to `market-radar` by name.
 - First VPS heartbeat matches the desktop's last on `sourced firing` and coverage
 - Desktop confirmed stopped, autostart removed, wake timers deleted, other bot intact
 - Root `VPS-MIGRATION.md` marked SUPERSEDED; this file's status flipped to EXECUTED
+
+All five met 2026-09-25 except the heartbeat comparison, which waits for the first
+VPS heartbeat (18:00 UTC) — operator to confirm; the coverage line is then read
+from the VPS `data/bot.log`.

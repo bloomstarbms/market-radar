@@ -150,6 +150,17 @@ the queue) — operator to confirm the DM arrived.
 
 ## RECURRING CHORE — refresh the unlock index (monthly, or when the heartbeat warns)
 
+**Where it runs now (2026-09-25):** the bot lives on the VPS — `ssh root@84.247.179.76`,
+`su - radar`, tree at `/home/radar/market-radar`, and put
+`/home/radar/node-v22.12.0-linux-x64/bin` first on PATH (system `node` is 20 and
+belongs to the neighbour). Steps 1–4 still happen on the desktop (browser pane); scp
+the `.b64` file over, run steps 5–8 on the VPS. The VPS also gets 403 from DefiLlama
+(2026-09-23), so nothing about the chore changed except where the commands run.
+Direction of travel: CODE goes desktop → GitHub → VPS (`git pull` after the push);
+DATA the chore writes on the VPS (unlocks.json, data/*) goes VPS → desktop by scp
+BEFORE the push, so the pull on the VPS is clean. Restart is
+`sudo systemctl restart market-radar`; the desktop must never run the bot again.
+
 **Trigger:** the heartbeat's "Sourced firing:" line shows `⚠️ index 14d old` (or
 `🚨` at 18d) — OR `🚨 coverage horizon <14d`. The snapshot carries ~30 days of listed
 events, so the horizon runs out on its own schedule regardless of age (item 8,
@@ -184,7 +195,8 @@ normally. So the index arrives by hand, carried as gzip+base64, CRC-checked.
    `node -e "import('./src/core/unlock-promote.js').then(m=>console.log(JSON.stringify(m.derivePressureFloor(JSON.parse(require('fs').readFileSync('unlocks.json')).tokens))))"`
    — update `SOURCED_PRESSURE_FLOOR` (value, n, basis) in `src/core/unlock-promote.js`.
    Fixture 47 fails until you do; that is the point of it.
-8. `node test-delivery.js` (ALL GREEN), then restart and push.
+8. `node test-delivery.js` (ALL GREEN), then `sudo systemctl restart market-radar`; scp
+   unlocks.json and the changed data/ files back to the desktop tree and push from there.
 
 **Verify:** heartbeat shows `index age 0d`, `Sourced firing: N rows · N with a
 future event`, and no `🚨 MUTE`.
