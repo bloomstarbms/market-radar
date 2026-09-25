@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { config, VERSION } from './config.js';
+import { config, VERSION, ROOT, migratedGuard } from './config.js';
 import { load, getState, save } from './core/store.js';
 import { startBot } from './core/telegram.js';
 import { dispatch, recordSuppressedRug, checkPendingListings } from './core/dispatcher.js';
@@ -174,6 +174,7 @@ function admitSelfTest() {
 }
 
 async function main() {
+  { const g = migratedGuard(ROOT); if (g) { console.error(`[boot] REFUSED: ${g}`); process.exit(4); } }
   load();
   loadOutcomes();
   await admitSelfTest();

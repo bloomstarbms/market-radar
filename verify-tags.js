@@ -34,6 +34,15 @@ try { current = (readFileSync('src/config.js', 'utf8').match(/VERSION = '([^']+)
 const currentTagged = current ? tags.includes(`v${current}`) : false;
 if (current && !currentTagged) { bad++; console.error(`  MISSING  src/config.js says ${current} but there is no v${current} tag — a bump was pushed without being tagged`); }
 
+// THE MIGRATION MARKER MUST NEVER BE PUBLISHED. MIGRATED-TO-VPS makes a tree refuse to
+// run; on the VPS clone it would stop the bot at the next restart. It is gitignored,
+// and this is the check that the ignore held (an `git add -f` or a rewritten
+// .gitignore would get past the ignore silently).
+try {
+  const published = git('ls-tree', '-r', '--name-only', 'origin/main').split('\n');
+  if (published.includes('MIGRATED-TO-VPS')) { bad++; console.error('  PUBLISHED MIGRATED-TO-VPS is in origin/main — the VPS clone will refuse to start at its next restart. Remove it from the tree and push.'); }
+} catch { console.error('  (origin/main not fetched — marker check skipped, which is not a pass)'); bad++; }
+
 console.log(bad
   ? `[OPERATOR] verify-tags: ${bad} problem(s) across ${checked} tags — see above`
   : `verify-tags: all ${checked} version tags point at a tree whose config.js matches, and v${current} is tagged.`);

@@ -11,9 +11,11 @@ import { join, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { NEVER_COPIED } from './test-on-copy.js';
-import { COPY_MARKER, COPY_STUB_TOKEN } from './src/config.js';
+import { COPY_MARKER, COPY_STUB_TOKEN, MIGRATED_MARKER } from './src/config.js';
 
-const SKIP = new Set([...NEVER_COPIED, '.git', 'node_modules', COPY_MARKER]);
+// MIGRATED_MARKER is skipped so the desktop can still run the suite and a --once boot on a
+// COPY: the copy is console-only by construction (no .env), which is the point.
+const SKIP = new Set([...NEVER_COPIED, '.git', 'node_modules', COPY_MARKER, MIGRATED_MARKER]);
 export function makeCopy(src, dest) {
   rmSync(dest, { recursive: true, force: true });
   mkdirSync(dest, { recursive: true });

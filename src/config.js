@@ -13,7 +13,7 @@ if (existsSync(envPath)) {
   }
 }
 
-export const VERSION = '0.32.7';
+export const VERSION = '0.32.8';
 
 // A COPY OF THE TREE MUST NOT SEND. Twice (2026-09-15, 2026-09-17) a boot check on a
 // tree copy carried .env and pushed "cliff today" reminders that the live bot then
@@ -34,6 +34,19 @@ export function copySendGuard(root, env = process.env, exists = existsSync) {
 {
   const g = copySendGuard(ROOT);
   if (g) { console.error(`[boot] REFUSED: ${g}`); process.exit(3); }
+}
+
+// THE DESKTOP TREE IS NOT THE RUNTIME. Since 2026-09-25 the bot runs on the VPS; the
+// desktop keeps the repo (push origin, offsite backup target, fetch relay). A second
+// instance double-posts and fights the VPS over getUpdates (409). The rule lived in a
+// chat message; this file makes it a fact: MIGRATED-TO-VPS at the root (gitignored,
+// so it never reaches the VPS clone — verify-tags.js asserts origin/main is clean)
+// makes every launcher AND src/index.js refuse. Checked at start, not at import, so
+// tools (boot-check, verify-tags, promote-unlock) still run on the desktop.
+export const MIGRATED_MARKER = 'MIGRATED-TO-VPS';
+export function migratedGuard(root, exists = existsSync) {
+  if (!exists(join(root, MIGRATED_MARKER))) return null;
+  return `${MIGRATED_MARKER} present in ${root} — this tree is not the runtime; the bot runs where that file says. Two instances double-post and fight over getUpdates. Refusing to start.`;
 }
 
 export const config = {

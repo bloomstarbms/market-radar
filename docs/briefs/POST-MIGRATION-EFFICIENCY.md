@@ -61,6 +61,47 @@ A5. Record the desktop's roles in REMAINING-WORK-NOTES.md: backup target,
 Acceptance: five launchers refuse; `.env` gone; origin/main has no marker; a
 note states the roles.
 
+### A — EXECUTED 2026-09-25 (v0.32.8)
+
+Done as written, plus one layer the brief did not ask for: `src/index.js` refuses
+on the marker too (exit 4, before any gate), so a bypassed launcher — a bare
+`node src/index.js` — is refused as well. Launchers are convenience; the guard in
+code is the fact. `boot-check.js` never copies the marker, so the desktop keeps its
+suite and its `--once` on copies, which are console-only by construction.
+
+- A1 marker written (VPS, roles, the 409 reason); gitignored; `verify-tags.js` now
+  asserts `origin/main` does not carry it on every push (an `add -f` would beat the
+  ignore silently).
+- A2 five launchers refuse after `cd`, no parens in the echo; `UNINSTALL-AUTOSTART`
+  deliberately does not (removing a launcher must always work).
+- A3 desktop `.env` deleted; `.env.example` kept. The VPS holds the only token.
+- A4 proven by execution: each launcher exits 1 with the REFUSED line and no node
+  process appears; the live tree refuses `--preflight` with exit 4; with the marker
+  renamed and no `.env`, `--once` boots "telegram OFF (console-only)" and exits;
+  marker restored, refusal confirmed again. Fixture 71 repeats the code-level half
+  on a marked copy every suite run.
+- A5 roles recorded in the notes and in the marker file itself.
+
+### B — SPIKE RESULT 2026-09-25 (the pre-registered falsification)
+
+Playwright driving the INSTALLED Chrome (`channel: 'chrome'`, no browser download),
+from the desktop, separate tree `radar-relay/`:
+
+| source | headless | headed |
+|---|---|---|
+| defillama.com/unlocks | 403, Cloudflare "Just a moment" | **200, `__NEXT_DATA__` present, 370 protocols** |
+| bls.gov cpi / ppi / empsit | 403 ×3 | **200 ×3, 13 release dates each** |
+| cryptorank.io/token-unlock → API | 403 | 403, in-page fetch fails |
+
+So the relay is NOT dead on arrival: two of three sources pass, in HEADED mode
+only. That changes B3: a headed browser needs an interactive session, so the
+scheduled task runs "only when the user is logged on", not "whether logged on or
+not", and the 03:00 slot needs the machine awake and unlocked — or the task runs
+at a time the desktop is normally in use. CryptoRank is dead from every route
+tried this month (sandbox, VPS, desktop headless, desktop headed); B drops it and
+the second index stays a frozen snapshot until a route exists. Expected protocol
+count for B6 pre-registered at 370.
+
 ---
 
 ## B — Desktop as a scheduled fetch relay

@@ -2563,6 +2563,34 @@ console.log('70. the calendar verifier compares against PARSED official schedule
   check('verifyCalendar is weekly: a second un-forced call is a no-op', (await m.verifyCalendar({ fetchImpl, now })) === null);
 }
 
+console.log('71. the desktop cannot run the bot — MIGRATED-TO-VPS is a fact, not a sentence');
+{
+  const { migratedGuard, MIGRATED_MARKER } = await import('./src/config.js');
+  check('migratedGuard: absent marker -> null; present marker -> a refusal naming the file and the reason', migratedGuard('/x', () => false) === null && /MIGRATED-TO-VPS present in \/x.*getUpdates.*Refusing/.test(migratedGuard('/x', () => true)));
+  check('.gitignore lists the marker (it must never reach the VPS clone)', readFileSync('.gitignore', 'utf8').split(/\r?\n/).includes(MIGRATED_MARKER));
+  const launchers = ['START-BOT.bat', 'RESTART-BOT.bat', 'FORCE-RESTART.bat', 'run-hidden.bat', 'INSTALL-AUTOSTART.bat'];
+  check('all five launchers refuse on the marker before doing anything else, with no parens inside the echo', launchers.every((f) => { const s = readFileSync(f, 'utf8'); const i = s.indexOf('if exist "%~dp0MIGRATED-TO-VPS"'); const block = s.slice(i, s.indexOf(')', i)); return i > 0 && i < s.indexOf('node') && /exit \/b 1/.test(block) && !/echo[^\n]*[()]/.test(block); }));
+  check('UNINSTALL-AUTOSTART.bat does NOT refuse — removing the launcher must always work', !/MIGRATED-TO-VPS/.test(readFileSync('UNINSTALL-AUTOSTART.bat', 'utf8')));
+  check('verify-tags.js asserts origin/main does not carry the marker', /ls-tree[^\n]*origin\/main/.test(readFileSync('verify-tags.js', 'utf8')) && /includes\('MIGRATED-TO-VPS'\)/.test(readFileSync('verify-tags.js', 'utf8')));
+  // Execution, not inspection: a marked copy refuses --preflight with exit 4; makeCopy never copies the marker.
+  const { makeCopy } = await import('./boot-check.js');
+  const { spawnSync } = await import('node:child_process');
+  const { writeFileSync: wf, rmSync: rm, existsSync: ex, mkdirSync: mk } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const dst = join(tmpdir(), 'mr-migrated-' + process.pid);
+  try {
+    makeCopy(process.cwd(), dst);
+    wf(join(dst, MIGRATED_MARKER), 'fixture');
+    const r = spawnSync(process.execPath, ['src/index.js', '--preflight'], { cwd: dst, encoding: 'utf8', env: { ...process.env, TELEGRAM_BOT_TOKEN: '' }, timeout: 120_000 });
+    check('a tree carrying the marker refuses --preflight with exit 4 and the REFUSED line, before any gate runs', r.status === 4 && /\[boot\] REFUSED: MIGRATED-TO-VPS present/.test(r.stderr || '') && !/admit\(\) self-test/.test((r.stdout || '') + (r.stderr || '')));
+    const dst2 = dst + '-copy';
+    makeCopy(dst, dst2);
+    check('makeCopy never carries the marker into a copy (the desktop keeps its suite and --once on copies)', !ex(join(dst2, MIGRATED_MARKER)));
+    rm(dst2, { recursive: true, force: true });
+  } finally { rm(dst, { recursive: true, force: true }); }
+}
+
 console.error = origErr;
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

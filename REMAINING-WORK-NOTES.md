@@ -4027,3 +4027,25 @@ The class: a route tested with ONE call is a route tested for reachability, not 
 rate. The Step 2 smoke test and the 2026-09-25 source test both proved "answers",
 neither proved "answers 22 times in a minute". Rate is a property of the loop, not
 the endpoint; test it with the loop's shape.
+
+## 2026-09-25 — v0.32.8: THE DESKTOP CANNOT RUN THE BOT (brief item A); RELAY SPIKE (item B)
+
+THE DESKTOP'S ROLES, stated so anything else it does is an accident: (1) git push
+origin — code goes desktop → GitHub → VPS; (2) offsite backup target — the daily
+pull of data/backups into OneDrive; (3) fetch relay, once item B ships — a separate
+tree, radar-relay/, that fetches what the VPS cannot and ships files. It holds no
+bot credential (.env deleted today), and it cannot run the bot: MIGRATED-TO-VPS at
+the root makes all five launchers and src/index.js refuse (exit 4), gitignored so it
+never reaches the VPS, with verify-tags asserting origin/main is clean on every push.
+Fixture 71. The rule was a sentence in a chat; it is now a file, a guard, and a test.
+
+THE SPIKE, pre-registered as "if Playwright also gets 403 the relay is dead": it is
+not, but only headed. Headless Chrome is 403 everywhere (Cloudflare challenge on
+DefiLlama, outright refusal on BLS); the installed Chrome with a window gets
+DefiLlama (370 protocols, the same __NEXT_DATA__ the hand-carry reads) and all three
+BLS pages. CryptoRank is 403 from every route tried this month and leaves B. Headed
+means an interactive session: the nightly task must run when the desktop is logged
+on and unlocked, which is a scheduling constraint B did not have on paper. Recorded
+in the brief under item B; B itself is not started.
+
+Suite 865. v0.32.8 deployed to the VPS (the guard is inert there; the tree matches).

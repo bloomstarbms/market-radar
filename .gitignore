@@ -4,6 +4,10 @@
 # Written into every tree copy by boot-check.js; must never exist in the live tree
 .copy-marker
 
+# Desktop-only since 2026-09-25: the tree that holds this file is not the runtime.
+# Must NEVER reach the VPS clone — verify-tags.js asserts origin/main does not carry it.
+MIGRATED-TO-VPS
+
 # Runtime state (subscribers, baselines, cooldowns)
 data/
 
