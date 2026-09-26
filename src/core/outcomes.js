@@ -87,7 +87,8 @@ const ROW_FIELDS = new Set(['ts', 'source', 'type', 'severity', 'title', 'btc', 
 // Transient by design: routing/formatting inputs that were never meant to persist.
 const NOT_PERSISTED = new Set(['lines', 'url', 'key', 'dedupeKey', 'cooldownMin', 'track',
   'snapshotTs', 'gate', 'assetClass', 'deferredEval', 'venue', 'delist', 'scoreBonus',
-  'novel', 'would', 'provisional', 'updates', 'tier', 'allow', 'mode', 'charge', 'bypass', 'reason']);
+  'novel', 'would', 'provisional', 'updates', 'tier', 'allow', 'mode', 'charge', 'bypass', 'reason',
+  'operatorLines']); // rendering only (dispatcher, operator audience) — warned once per boot since the diet
 // Pure, so it can be tested WITHOUT calling recordAlert against the live module —
 // which would push rows into memory and can flush them to the real outcomes file.
 export function droppedFields(a) {

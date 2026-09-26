@@ -2495,6 +2495,12 @@ console.log('69. whale sources are TESTED routes, not a pricing-page belief — 
   const allowed = []; for (let i = 0; i < 11; i++) allowed.push(w.budgetAllows('blockscout', 1000 + i, budget));
   check('budgetAllows: Blockscout gets 9 calls per window, the 10th and 11th are refused (measured limit 10/5min, one in hand)', allowed.filter(Boolean).length === 9 && !allowed[9] && !allowed[10]);
   check('budgetAllows: the window slides — after 300s the same source is allowed again; Etherscan has no window budget', w.budgetAllows('blockscout', 1000 + 300e3 + 1, budget) && w.budgetAllows('etherscan', 0, budget));
+  check('the live Blockscout budget is 9 per HOUR (x-ratelimit-reset is time left, not window length — misread 2026-09-25)', w.BUDGET.blockscout.limit === 9 && w.BUDGET.blockscout.windowMs === 3600e3);
+  const hdr = (m) => (h) => m[h];
+  check('pauseFromHeaders: remaining 0 + reset -> pause until now+reset; remaining > 0 or missing headers -> no pause', w.pauseFromHeaders(hdr({ 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': '2118690' }), 1000) === 1000 + 2118690 && w.pauseFromHeaders(hdr({ 'x-ratelimit-remaining': '4', 'x-ratelimit-reset': '2118690' }), 1000) === null && w.pauseFromHeaders(hdr({}), 1000) === null);
+  check('budgetAllows refuses while the server-stated pause is in force, even with budget to spare', !w.budgetAllows('blockscout', 5000, { blockscout: { limit: 9, windowMs: 3600e3, times: [] } }, { blockscout: 9000 }) && w.budgetAllows('blockscout', 9001, { blockscout: { limit: 9, windowMs: 3600e3, times: [] } }, { blockscout: 9000 }));
+  const { droppedFields } = await import('./src/core/outcomes.js');
+  check('operatorLines is a declared-transient field: recordAlert no longer warns about it once per boot', droppedFields({ operatorLines: ['x'], lines: [] }).length === 0);
   check('isRateLimited: Blockscout\'s "Too many requests" body counts as a 429, so it backs the chain off instead of retrying every token', w.isRateLimited('Too many requests. Increase limits now at https://dev.blockscout.com') && w.isRateLimited('moralis 429') && !w.isRateLimited('moralis key rejected'));
   const dark = new Map([['bsc', 'moralis key rejected: free tier paused']]);
   const cov = w.whaleCoverage({ cfg: { etherscanKey: 'k', moralisKey: 'm', heliusKey: 'h' }, dark, paused: new Map(), now: 0 });

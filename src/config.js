@@ -13,7 +13,7 @@ if (existsSync(envPath)) {
   }
 }
 
-export const VERSION = '0.32.9';
+export const VERSION = '0.32.10';
 
 // A COPY OF THE TREE MUST NOT SEND. Twice (2026-09-15, 2026-09-17) a boot check on a
 // tree copy carried .env and pushed "cliff today" reminders that the live bot then

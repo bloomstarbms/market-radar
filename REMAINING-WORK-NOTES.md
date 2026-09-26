@@ -4068,3 +4068,25 @@ VPS — twice today across the two restarts, never in the desktop's recent log b
 that process had not restarted in weeks. pump.js supplied it since v0.8.0 and nothing
 ever read it. Removed at the supplier rather than silenced in NOT_PERSISTED: a field
 nothing reads is not transient, it is dead.
+
+## 2026-09-26 — v0.32.10: THE BLOCKSCOUT WINDOW IS AN HOUR; I READ "TIME LEFT" AS "LENGTH"
+
+Overnight, base whale checks ran exactly ten, hit a 429, backed off 53 minutes, ran
+ten, hit a 429 — fifteen times. The v0.32.7 budget (9 per 5 min) was built on one
+reading of x-ratelimit-reset ≈ 300 000 ms, taken as the window length. It is the
+time LEFT in the window; a later reading said 2 118 690. The window is an hour, the
+limit is ten. Budget is now 9 per 3600 s, and every Blockscout response's headers are
+read: remaining 0 pauses the source until the server's reset without waiting for a
+429 to teach it. 22 base tokens cycle in ~2.5 h on the free tier. A Blockscout API
+key would change that; that is an account, the operator's.
+
+The class: a header read once is a sample, not a spec. The v0.32.7 note already said
+"a route tested with one call is tested for reachability, not rate"; this is the
+same mistake one level down — the rate was measured, but from one sample of a
+countdown. Read a rate limit twice, minutes apart, before writing a number into code.
+
+Also: `operatorLines` (the diet's operator-audience rendering field) warned once per
+boot as "not in the row whitelist"; declared transient. And a note on the digest:
+`lastDigestDay` stays on the last day a digest was SENT, so an empty day logs
+"nothing to report" once per poll from 18:00 UTC to midnight — pre-existing on the
+desktop, by design ("heartbeat still carries liveness"), left alone.

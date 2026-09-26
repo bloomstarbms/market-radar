@@ -184,14 +184,26 @@ export function explorerUrl(chainId, tokenAddress, source, cfg = config) {
 export function isEmptyExplorerAnswer(json) { return json.status !== '1' && /^No (token )?trans(actions|fers) found$/i.test(json.message || '') && !json.result?.length; }
 const lastCall = { etherscan: 0, blockscout: 0 };
 const SPACING_MS = { etherscan: 550, blockscout: 1000 }; // Etherscan free: 3 calls/sec; Blockscout is keyless — be polite
-// Blockscout keyless: 10 requests per 5-minute window per IP (x-ratelimit-limit: 10,
-// x-ratelimit-reset ≈ 300s — MEASURED from the VPS 2026-09-25; the first deploy fired
-// 22 base tokens in one poll and every one came back 429). A sleep long enough to
-// respect that would block the DEX poll for minutes, so this is a BUDGET: over the
-// window, the token is skipped this poll WITHOUT being marked checked, and the next
-// poll picks it up. 22 tokens at 9 per window cycle in ~12 minutes — fine for whales.
-const BUDGET = { blockscout: { limit: 9, windowMs: 300e3, times: [] } };
-export function budgetAllows(source, now = Date.now(), budget = BUDGET) {
+// Blockscout keyless: 10 requests per HOUR per IP. x-ratelimit-limit is 10 and
+// x-ratelimit-reset is the time LEFT in the window, not its length — the first read
+// (2026-09-25, "≈300s") caught a window with five minutes to go and the budget was
+// set to 9 per 5 min; overnight the log showed exactly ten checks, a 429, a 53-min
+// back-off, ten checks, a 429… The server's own reset says ~1h. So: 9 per 3600s, and
+// the response headers are read on every call so a window the server closes early
+// pauses the source until the stated reset (no 429 needed to learn it). A sleep long
+// enough to respect this would block the DEX poll, so it is a BUDGET: over it, the
+// token is skipped this poll WITHOUT being marked checked. 22 base tokens cycle in
+// ~2.5h — the Moralis path was 2h; a free Blockscout API key would lift it.
+export const BUDGET = { blockscout: { limit: 9, windowMs: 3600e3, times: [] } };
+const sourcePausedUntil = { blockscout: 0 };
+// Pure: from a response's rate-limit headers, when (if ever) the source must pause.
+export function pauseFromHeaders(get, now = Date.now()) {
+  const remaining = Number(get('x-ratelimit-remaining')), reset = Number(get('x-ratelimit-reset'));
+  if (!Number.isFinite(remaining) || !Number.isFinite(reset) || remaining > 0 || reset <= 0) return null;
+  return now + reset;
+}
+export function budgetAllows(source, now = Date.now(), budget = BUDGET, paused = sourcePausedUntil) {
+  if ((paused[source] || 0) > now) return false; // the server closed the window; wait for its reset
   const b = budget[source]; if (!b) return true;
   b.times = b.times.filter((t) => now - t < b.windowMs);
   if (b.times.length >= b.limit) return false;
@@ -204,6 +216,7 @@ async function explorerTransfers(chainId, tokenAddress, source) {
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   lastCall[source] = Date.now();
   const res = await fetch(explorerUrl(chainId, tokenAddress, source));
+  if (source === 'blockscout') { const p = pauseFromHeaders((h) => res.headers?.get?.(h)); if (p) sourcePausedUntil.blockscout = p; }
   if (res.status === 429) { // honour the window the server states, not a guessed 5 min
     const e = new Error('429 too many requests'); e.resetMs = Number(res.headers?.get?.('x-ratelimit-reset')) || 0; throw e;
   }
