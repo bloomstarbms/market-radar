@@ -32,7 +32,7 @@ const MAX_SCORE = 100;
 // fix — never a cap on facts, which would reintroduce the queue by another name.
 export const FACT_TYPES = new Set([
   'LISTING', 'ANNOUNCE', 'PERP', 'UPBIT', 'DELIST_SCHEDULED', 'SUSPENSION',
-  'UNLOCK', 'TGE', 'CPI', 'MACRO', 'DEPEG', 'RUG', 'FUNDING', 'CASCADE',
+  'UNLOCK', 'TGE', 'CPI', 'MACRO', 'DEPEG', 'RUG', 'FUNDING', 'CASCADE', 'OI',
 ]);
 export function isFact(alert) {
   if (alert.kind === 'CALL') return false;      // explicit call wins
@@ -54,7 +54,7 @@ const MODULE_SCORE = {
   UPBIT: 92, CASCADE: 84, UNLOCK: 80, CPI: 78, MACRO: 78, PERP: 72, LISTING: 70, ANNOUNCE: 68,
   TGE: 66, RUG: 88, DEPEG: 86,
   CONFLUENCE: 76, MULTIEX: 64,
-  FUNDING: 58, DUMP: 56, PUMP: 56, REVIVAL: 54, VOLUME: 50, WHALE: 52,
+  FUNDING: 58, OI: 58, DUMP: 56, PUMP: 56, REVIVAL: 54, VOLUME: 50, WHALE: 52,
   EVENT: 40, HEARTBEAT: 100,
 };
 const SEV_ADJ = { HIGH: 8, MEDIUM: 0, LOW: -8 };

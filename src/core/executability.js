@@ -71,13 +71,21 @@ const DEPTH = {
     (j) => ({ bids: j?.data?.bids || [], asks: j?.data?.asks || [] })],
   bitget: (s) => [`https://api.bitget.com/api/v2/spot/market/orderbook?symbol=${s}&limit=100`,
     (j) => ({ bids: j?.data?.bids || [], asks: j?.data?.asks || [] })],
+  // POST, and levels are objects: [[{px,sz,n}…bids], [{px,sz,n}…asks]]. Perp book, so the
+  // spot taker fee in GATE overstates Hyperliquid's (4.5bps) — conservative, not wrong.
+  hyperliquid: (s) => ['https://api.hyperliquid.xyz/info', hyperliquidBook,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'l2Book', coin: s }) }],
 };
+export function hyperliquidBook(j) {
+  const side = (i) => (j?.levels?.[i] || []).map((l) => [l.px, l.sz]);
+  return { bids: side(0), asks: side(1) };
+}
 
 async function fetchBook(exchange, symbol) {
   const entry = DEPTH[exchange];
   if (!entry) return null;
-  const [url, shape] = entry(symbol);
-  const res = await fetch(url);
+  const [url, shape, init] = entry(symbol);
+  const res = await fetch(url, init);
   if (!res.ok) throw new Error(`${exchange} depth ${res.status}`);
   return shape(await res.json());
 }

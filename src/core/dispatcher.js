@@ -58,6 +58,10 @@ const TAG = {
   'SIG:CONFLUENCE': '🎯 CONFLUENCE',
   'SIG:MULTIEX': '🔀 MULTI-EXCHANGE MOVE',
   'CEX:CASCADE': '💥 LIQUIDATION CASCADE',
+  // Perp DEXs (v0.33.0, Hyperliquid first). Own source: these are not exchanges' spot books.
+  'PERPDEX:PERP': '⚔️ PERP LISTING',
+  'PERPDEX:FUNDING': '⚡ FUNDING EXTREME',
+  'PERPDEX:OI': '📊 OPEN INTEREST MOVE',
   'SYS:HEARTBEAT': '💓 HEARTBEAT',
   'SYS:DIGEST': '📋 DAILY DIGEST',
 };

@@ -2614,6 +2614,78 @@ console.log('72. the bot never reads local time — TZ on the box is irrelevant 
   check('pump.js no longer supplies a field nothing reads (__movePct warned once per boot since v0.8.0)', !/__movePct/.test(rf('src/sources/cex/pump.js', 'utf8')));
 }
 
+console.log('73. HYPERLIQUID — listings on a persisted baseline, funding in its own unit, OI on an earned percentile');
+{
+  const h = await import('./src/sources/perp/hyperliquid.js');
+  const meta = { universe: [{ name: 'BTC', maxLeverage: 40 }, { name: 'kPEPE', maxLeverage: 10 }, { name: 'OLD', maxLeverage: 3, isDelisted: true }] };
+  const ctxs = [{ funding: '0.0000081374', openInterest: '100', markPx: '80000', dayNtlVlm: '2e9' }, { funding: '0.000324', openInterest: '1000000', markPx: '0.01', dayNtlVlm: '5e6' }, {}];
+  const rows = h.marketRows(meta, ctxs);
+  check('marketRows: funding stays PER HOUR in percent (0.000324 -> 0.0324%/h), OI in coins and in USD', Math.abs(rows[1].fundingPctH - 0.0324) < 1e-9 && rows[0].oiCoins === 100 && rows[0].oiUsd === 8e6 && rows[2].delisted);
+  check('baseName: kPEPE is PEPE (1000-lot), KAITO is untouched', h.baseName('kPEPE') === 'PEPE' && h.baseName('KAITO') === 'KAITO');
+  const first = h.listingDiff(undefined, rows);
+  check('listingDiff: no persisted baseline -> this poll IS the baseline, nothing fires', first.baseline && first.fresh.length === 0 && first.live.join() === 'BTC,kPEPE');
+  const next = h.listingDiff(['BTC', 'GONE'], rows);
+  check('listingDiff: against a persisted baseline, a new live market is fresh, a delisted one is not, a vanished one is reported gone', !next.baseline && next.fresh.join() === 'kPEPE' && next.gone.join() === 'GONE' && !next.fresh.includes('OLD'));
+  const src = readFileSync('src/sources/perp/hyperliquid.js', 'utf8');
+  check('the baseline is written to state every poll (a restart must not re-baseline and swallow a listing)', /st\.hlMarkets = \{ names: d\.live/.test(src) && /listingDiff\(st\.hlMarkets\?\.names/.test(src));
+  check('p99 uses length-1 indexing (100 values 1..100 -> 99, never the max)', h.p99(Array.from({ length: 100 }, (_, i) => i + 1)) === 99 && h.p99([]) === null);
+  const t0 = 1_000_000_000_000;
+  const ring = [{ ts: t0, oiCoins: 100, px: 1 }, { ts: t0 + 30 * 60e3, oiCoins: 110, px: 1.5 }, { ts: t0 + 3600e3, oiCoins: 125, px: 2 }];
+  const ch = h.changeOver(ring, 3600e3, t0 + 3600e3);
+  check('changeOver: OI change is in CONTRACTS (+25%) while price doubles — price does not masquerade as positioning', Math.abs(ch.oiPct - 25) < 1e-9 && Math.abs(ch.pxPct - 100) < 1e-9 && ch.fromOiUsd === 100 && ch.toOiUsd === 250);
+  check('changeOver: a ring that does not reach back an hour gives null, not a partial-window number', h.changeOver(ring.slice(1), 3600e3, t0 + 3600e3) === null);
+  const young = h.oiThreshold(Array(100).fill(40)), old = h.oiThreshold(Array(200).fill(40)), quiet = h.oiThreshold(Array(200).fill(2));
+  check('oiThreshold: under 7 days of own samples it is NOT mature (digest only) and uses the floor', !young.mature && young.thresh === h.RULES.oiFloorPct && young.n === 100);
+  check('oiThreshold: mature uses max(floor, own p99) — a noisy market earns a higher bar, a quiet one keeps the floor', old.mature && old.thresh === 40 && quiet.thresh === h.RULES.oiFloorPct);
+  check('the OI push is gated on maturity in the poll path (immature -> digestPool, never dispatch)', /if \(!t\.mature\) \{[\s\S]{0,400}digestPool[\s\S]{0,300}continue;/.test(src));
+  check('the funding floor is Binance\'s converted, not re-chosen: 0.5%/8h = 0.0625%/h', h.RULES.fundingFloorPctH === 0.0625);
+  // Funding history paging, with a counting stub.
+  let calls = 0;
+  const page = (n, startT) => Array.from({ length: n }, (_, i) => ({ fundingRate: String((i % 100) / 1e6), time: startT + i * 3600e3 }));
+  const fetchImpl = async (u, init) => { calls++; const b = JSON.parse(init.body); const n = calls < 4 ? 500 : 160; return { ok: true, json: async () => page(n, b.startTime + 1) }; };
+  const st = { hlFundingPct: {} };
+  const v = await h.fundingP99('APEX', st, { fetchImpl, now: t0 });
+  check('fundingP99 pages forward 500 at a time and stops on a short page (4 calls, 1660 records)', calls === 4 && st.hlFundingPct.APEX.n === 1660 && v !== null);
+  await h.fundingP99('APEX', st, { fetchImpl, now: t0 + 86400e3 });
+  check('fundingP99 is cached for 7 days (no further calls)', calls === 4);
+  const st2 = { hlFundingPct: {} };
+  const tiny = await h.fundingP99('NEW', st2, { fetchImpl: async () => ({ ok: true, json: async () => page(20, 0) }), now: t0 });
+  check('fewer than 72 hourly records is an unknown distribution -> null, which falls back to the floor', tiny === null && st2.hlFundingPct.NEW.n === 20);
+  // Messages — the same diet discipline as fixture 66.
+  const { renderMessage, gateLine } = await import('./src/core/dispatcher.js');
+  const { PUBLIC_MAX_LINES, PUBLIC_MAX_CHARS } = await import('./src/sources/calendar/unlocks.js');
+  const BANNED = /\b(detector|squeeze|precursor|expect wider swings|real money|lead time|violent|reversals?|catalysts?|surge rule|velocity|falsifier|by construction)\b/i;
+  const DIRECTION = /(close now|exit here|buy now|sell now|take profit|dump hard|capitulation|blow-off|front-run|bearish|bullish|longs are trapped|shorts are trapped|about to)/i;
+  const withGate = (m) => ({ ...m, lines: [...m.lines, gateLine({ executableUsd: 41000, spreadBps: 3.1, pass: true })] });
+  const msgs = {
+    listing: withGate(h.hlListingMessage({ name: 'NEWCOIN', px: 0.42, maxLeverage: 5, onlyIsolated: true, oiUsd: 0, dayVolUsd: 0 }, { state: 'UNRECOGNISED', reason: 'product line not classified' })),
+    batch: h.hlListingBatchMessage(Array.from({ length: 14 }, (_, i) => 'M' + i)),
+    funding: withGate(h.hlFundingMessage({ name: 'APEX', fundingPctH: 0.0324, oiUsd: 4e6, px: 0.93, thresh: 0.0625, reason: 'entered' }, { oi: { oiPct: 12.3 } })),
+    oi: withGate(h.hlOiMessage({ name: 'AERO', oiPct: 22.4, pxPct: -3.1, fromOiUsd: 27e6, toOiUsd: 33e6, fundingPctH: 0.0065, thresh: 18.2, n: 200, reason: 'entered' })),
+  };
+  const pub = Object.fromEntries(Object.entries(msgs).map(([k, m]) => [k, renderMessage(m, 'public')]));
+  const op = Object.fromEntries(Object.entries(msgs).map(([k, m]) => [k, renderMessage(m, 'operator')]));
+  for (const [k, r] of Object.entries(pub)) check(`Hyperliquid ${k}: public is lint-clean and ≤${PUBLIC_MAX_LINES} lines / ≤${PUBLIC_MAX_CHARS} chars, executable line included (${r.lines.length}/${r.text.length})`, r.lines.concat(r.title).every((l) => !BANNED.test(l) && !DIRECTION.test(l)) && r.lines.length <= PUBLIC_MAX_LINES && r.text.length <= PUBLIC_MAX_CHARS);
+  check('Hyperliquid: operator ⊇ public on every shape', Object.keys(msgs).every((k) => pub[k].lines.every((l) => op[k].lines.includes(l))));
+  check('funding message: hourly rate in the title, annualised from HOURLY (0.0324 x 24 x 365 = 284%), 8h equivalent, who pays, OI and its 1h change', /\+0\.0324%\/h$/.test(pub.funding.title) && /284% annualised · longs paying shorts · \+0\.259%\/8h equivalent/.test(pub.funding.text) && /Open interest \$4\.0M · \+12\.3% over 1h/.test(pub.funding.text) && /99th pctile of its own 90d · just entered/.test(pub.funding.text));
+  check('OI message: both notional ends, the contract change, price over the same hour, funding, and the earned-percentile basis', /\$27\.0M → \$33\.0M · \+22\.4% in contracts/.test(pub.oi.text) && /Price -3\.1% over the same hour · funding \+0\.0065%\/h/.test(pub.oi.text) && /own 1h changes \(8d\)/.test(pub.oi.text) && /own p99 of 200 hourly samples/.test(op.oi.text));
+  check('listing message: mark, leverage, isolated flag, OI and volume, and the unrecognised flag in PUBLIC', /^NEWCOIN-PERP on HYPERLIQUID$/.test(pub.listing.title) && /Mark \$0\.42 · max leverage 5x · isolated margin only/.test(pub.listing.text) && /⚠️ product line not classified/.test(pub.listing.text));
+  check('batch: one message for 14 markets, names capped at 12', /^14 new perp markets on HYPERLIQUID$/.test(pub.batch.title) && /M0, M1.*… \+2 more/.test(pub.batch.text));
+  // Wiring — every gate that would have caught a half-wired module.
+  const { checkTierRoutes, checkClassifiersWired } = await import('./src/core/routes.js');
+  const { FACT_TYPES } = await import('./src/core/budget.js');
+  check('OI is a FACT type with a declared delivery route (tier-route gate passes)', FACT_TYPES.has('OI') && checkTierRoutes({ calendarEvents: [], tokens: [] }).ok);
+  check('the classifier-wiring gate covers hyperliquid.js, and would fail if classifySymbol were removed', checkClassifiersWired().ok && !checkClassifiersWired({ readFile: (f) => f === 'sources/perp/hyperliquid.js' ? 'no classifier here' : readFileSync('src/' + f, 'utf8') }).ok);
+  const disp = readFileSync('src/core/dispatcher.js', 'utf8');
+  check('labels exist for PERPDEX:PERP / FUNDING / OI (no raw "PERPDEX OI" header)', ["'PERPDEX:PERP'", "'PERPDEX:FUNDING'", "'PERPDEX:OI'"].every((k) => disp.includes(k)));
+  const { hyperliquidBook } = await import('./src/core/executability.js');
+  const book = hyperliquidBook({ levels: [[{ px: '0.99', sz: '100', n: 2 }], [{ px: '1.01', sz: '50', n: 1 }]] });
+  check('executability reads Hyperliquid\'s object levels as [px, sz] pairs, bids then asks', book.bids[0][0] === '0.99' && book.bids[0][1] === '100' && book.asks[0][0] === '1.01');
+  check('outcomes can price a hyperliquid track (allMids) — without it every Hyperliquid row is unscoreable', /r\.exchange === 'hyperliquid'[\s\S]{0,300}allMids/.test(readFileSync('src/core/outcomes.js', 'utf8')));
+  check('the poll loop calls pollHyperliquid', /pollHyperliquid\(\)\]\);/.test(readFileSync('src/index.js', 'utf8')));
+  check('the pulse is named dex:… so it never counts as a live TEXT feed for the "we were looking" companions', /notePulse\('dex:hyperliquid'\)/.test(src));
+}
+
 console.error = origErr;
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

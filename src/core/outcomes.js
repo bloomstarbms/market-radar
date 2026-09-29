@@ -153,6 +153,10 @@ export function recordAlert(a) {
 
 async function currentPrice(r) {
   try {
+    if (r.kind === 'cex' && r.exchange === 'hyperliquid') {
+      const res = await fetch('https://api.hyperliquid.xyz/info', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'allMids' }) });
+      return Number((await res.json())?.[r.symbol]) || null;
+    }
     if (r.kind === 'cex') {
       const urls = {
         binance: `https://api.binance.com/api/v3/ticker/price?symbol=${r.symbol}`,

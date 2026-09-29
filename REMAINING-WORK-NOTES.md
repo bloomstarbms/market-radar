@@ -4090,3 +4090,43 @@ boot as "not in the row whitelist"; declared transient. And a note on the digest
 `lastDigestDay` stays on the last day a digest was SENT, so an empty day logs
 "nothing to report" once per poll from 18:00 UTC to midnight — pre-existing on the
 desktop, by design ("heartbeat still carries liveness"), left alone.
+
+## 2026-09-29 — v0.33.0: HYPERLIQUID — LISTINGS, FUNDING, OPEN INTEREST
+
+Operator asked for perp-DEX coverage, Hyperliquid only for now. New module
+src/sources/perp/hyperliquid.js, one POST per minute (metaAndAssetCtxs), source
+PERPDEX so it is not mislabelled as an exchange spot book. Fixture 73.
+
+WHAT THE BOT COVERED BEFORE, established by reading, not remembering: perp LISTING
+announcements from Binance/OKX/Bybit/Bitget/KuCoin (38 delivered in 30 days — found in
+state.lastAlert, NOT in outcomes, because announcement facts carry no track and never
+become rows; "zero PERP rows" nearly got reported as "zero perp alerts"); funding
+extremes and OI confirmation on Binance USDT perps only; the OI-drop cascade on five
+Binance majors. Nothing reads perp PRICES — pump/dump/volume are spot tickers.
+
+DESIGN, each choice borrowed from a lesson already paid for:
+- LISTINGS diff the live market list against a baseline PERSISTED in state
+  (st.hlMarkets). listings.js keeps its baseline in memory and re-baselines on every
+  restart, so a listing that lands while the bot is down is lost — six chances on
+  2026-09-25. The CEX path still has that gap; this one does not. Queued: move
+  listings.js and the announcement `seen` map to persisted baselines too.
+- FUNDING is hourly on Hyperliquid. The floor is Binance's CONVERTED (0.5%/8h =
+  0.0625%/h), not a new number; the market's own 90d p99 on top (2160 hourly records,
+  5 pages, cached 7d); fundingDecision reused so a parked extreme fires once; a $1M
+  notional OI floor. Live at deploy: 0 candidates (top |f| 0.034%/h; APEX's own p99
+  0.040%/h, so the floor governs). Quiet by design — volume is bounded by the floor.
+- OI has no borrowable threshold and Hyperliquid serves no OI history, so the
+  percentile is EARNED: hourly 1h-change samples in CONTRACTS (price cannot masquerade
+  as positioning), per market ≥$2M notional (99 at deploy). A market pushes only with
+  168 samples (7 days) of its own; before that, crossings go to the digest pool as
+  "would have fired". First OI pushes possible from ~2026-10-06. New FACT type OI with
+  a declared route.
+- Executability reads Hyperliquid's l2Book (POST, object levels); outcomes can price a
+  hyperliquid track via allMids, so listing/funding/OI rows are scoreable. Hyperliquid
+  FUNDING rows share the FUNDING type with Binance in module stats; the track's
+  exchange separates them when that matters.
+
+NOT covered, by decision: HIP-3 builder-deployed exchanges (10 today, mostly equities
+and commodities, which the classifier would drop anyway), other perp DEXs (Aster,
+Lighter, edgeX, dYdX, Paradex, GMX — all reachable from the VPS, 2026-09-26 probe),
+perp price moves on any venue.
