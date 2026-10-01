@@ -28,15 +28,32 @@ export function safeHtml(text) {
   return out;
 }
 
+// THE PATH THAT REPORTS A FAILURE MUST BE SIMPLER THAN THE PATH THAT FAILED. The
+// escape above closes one character; it does not close the shape — the heartbeat is
+// the instrument for detecting silence and it went silent for ten hours because of
+// a '<', and nothing could say so because the reporter was the thing failing. After
+// FALLBACK_AFTER consecutive total broadcast failures, the DM gets one bare line:
+// plain text, NO parse_mode, nothing dynamic beyond a count, a time and the first 80
+// characters of Telegram's own error. It cannot fail on formatting because it has
+// none. Repeats at most hourly while the streak continues; the streak resets on the
+// first successful broadcast. Same class as the preflight notify.
+export const FALLBACK_AFTER = 3, FALLBACK_EVERY_MS = 3600e3;
+let failStreak = 0, failSince = 0, lastFallbackAt = 0, lastSendError = '';
+export function fallbackDecision(streak, lastAt, now = Date.now()) { return streak >= FALLBACK_AFTER && now - lastAt >= FALLBACK_EVERY_MS; }
+export function fallbackText(n, sinceTs, err) { return `[radar] ${n} sends failed since ${new Date(sinceTs).toISOString().slice(0, 16)}Z, last error: ${String(err || 'unknown').replace(/\s+/g, ' ').slice(0, 80)}`; }
+export function deliveryStreak() { return { failStreak, failSince, lastFallbackAt, lastSendError }; }
+export function resetDeliveryStreak() { failStreak = 0; failSince = 0; lastFallbackAt = 0; lastSendError = ''; }
+async function sendPlain(chatId, text) { return tg('sendMessage', { chat_id: chatId, text, disable_web_page_preview: true }); } // no parse_mode: nothing to parse
+
 async function tg(method, payload) {
-  if (typeof payload?.text === 'string') payload = { ...payload, text: safeHtml(payload.text) };
+  if (typeof payload?.text === 'string' && payload.parse_mode === 'HTML') payload = { ...payload, text: safeHtml(payload.text) };
   const res = await fetch(`${API()}/${method}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),
   });
   const json = await res.json();
-  if (!json.ok) console.error(`[telegram] ${method} failed:`, json.description);
+  if (!json.ok) { lastSendError = String(json.description || `HTTP ${res.status}`); console.error(`[telegram] ${method} failed:`, json.description); }
   return json;
 }
 
@@ -71,8 +88,21 @@ export async function broadcast(text, { toChannel = true, operatorText } = {}) {
   // rejected sends landed in allSettled and were never looked at — the alerts were
   // marked delivered and lost. A total delivery failure must be LOUD, and callers
   // must be able to see it (empty ids with recipients configured = failed).
-  if (targets.length && !ids.length)
+  if (targets.length && !ids.length) {
     console.error(`[telegram][OPERATOR] broadcast: 0/${targets.length} sends succeeded — delivery FAILED (network or Telegram down)`);
+    failStreak++; failSince ||= Date.now();
+    const rejected = results.find((r) => r.status === 'rejected');
+    if (rejected) lastSendError = String(rejected.reason?.message || rejected.reason || 'request rejected');
+    if (fallbackDecision(failStreak, lastFallbackAt)) {
+      lastFallbackAt = Date.now();
+      const plain = fallbackText(failStreak, failSince, lastSendError);
+      const sent = await Promise.allSettled([...subs].map((id) => sendPlain(id, plain)));
+      console.error(`[telegram][OPERATOR] plaintext fallback ${sent.some((r) => r.status === 'fulfilled' && r.value?.ok) ? 'DELIVERED' : 'also failed'} to the DM: "${plain}"`);
+    }
+  } else if (ids.length && failStreak) {
+    console.log(`[telegram] delivery recovered after ${failStreak} failed broadcast(s)`);
+    failStreak = 0; failSince = 0;
+  }
   return ids;
 }
 

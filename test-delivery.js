@@ -2768,6 +2768,30 @@ console.log('75. a stray "<" cannot make a message undeliverable — escaped at 
   check('the live heartbeat, escaped, carries no "<" outside our own tags', !/<(?!\/?(b|i|a|code|pre|u|s|strong|em)\b)/.test(text));
 }
 
+console.log('76. after N consecutive failed broadcasts the DM gets a PLAINTEXT line — the reporter is simpler than what it reports');
+{
+  const tgm = await import('./src/core/telegram.js');
+  check('decision: fires at the 3rd consecutive failure, not before, and at most hourly while the streak continues', !tgm.fallbackDecision(2, 0, 1e12) && tgm.fallbackDecision(3, 0, 1e12) && !tgm.fallbackDecision(9, 1e12 - 1000, 1e12) && tgm.fallbackDecision(9, 1e12 - 3600e3, 1e12));
+  const txt = tgm.fallbackText(574, Date.parse('2026-10-01T09:45:00Z'), "Bad Request: can't parse entities: Unsupported start tag \"\" at byte offset 2237 and more text that should be cut");
+  check('text: count, since-time, first 80 chars of the error — and no "<" or HTML anywhere in it', /^\[radar\] 574 sends failed since 2026-10-01T09:45Z, last error: Bad Request: can't parse entities/.test(txt) && !/[<>]/.test(txt) && txt.length < 160);
+  const src = readFileSync('src/core/telegram.js', 'utf8');
+  check('sendPlain sends with NO parse_mode, and tg() escapes only HTML-mode text (the plain line is sent byte-for-byte)', /async function sendPlain[^\n]*\{ return tg\('sendMessage', \{ chat_id: chatId, text, disable_web_page_preview: true \}\)/.test(src) && /payload\.parse_mode === 'HTML'\) payload = \{ \.\.\.payload, text: safeHtml/.test(src));
+  // Execution: a recorder in place of fetch; Telegram "rejects" every HTML send; the third broadcast produces exactly one plain DM.
+  const recorded = [];
+  const saved = globalThis.fetch;
+  globalThis.fetch = async (url, init) => { const p = JSON.parse(init.body); recorded.push(p); return { status: 400, json: async () => (p.parse_mode ? { ok: false, description: "Bad Request: can't parse entities: Unsupported start tag" } : { ok: true, result: { message_id: 1 } }) }; };
+  try {
+    tgm.resetDeliveryStreak();
+    const subsBefore = getState().subscribers.length;
+    for (let i = 0; i < 3; i++) await tgm.broadcast('<b>x</b> <14d', { toChannel: false });
+    const plain = recorded.filter((p) => !p.parse_mode);
+    check(`after three failed broadcasts exactly one plaintext line per DM subscriber went out (${subsBefore} subscriber(s)), with the count and Telegram's own error`, subsBefore > 0 && plain.length === subsBefore && plain.every((p) => /^\[radar\] 3 sends failed since .* last error: Bad Request: can't parse entities/.test(p.text)));
+    check('the HTML sends that failed were the escaped text (safeHtml ran), the plain one was not escaped', recorded.filter((p) => p.parse_mode).every((p) => p.text === '<b>x</b> &lt;14d') && plain.every((p) => !/&lt;/.test(p.text)));
+    await tgm.broadcast('<b>y</b>', { toChannel: false });
+    check('a fourth failure within the hour does NOT send a second plain line (hourly cap)', recorded.filter((p) => !p.parse_mode).length === subsBefore && tgm.deliveryStreak().failStreak === 4);
+  } finally { globalThis.fetch = saved; tgm.resetDeliveryStreak(); }
+}
+
 console.error = origErr;
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
