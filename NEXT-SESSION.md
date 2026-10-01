@@ -171,7 +171,16 @@ wait for the siren if a session is happening anyway.
 the operator's desktop (re-tested 2026-09-07). The in-app browser pane loads it
 normally. So the index arrives by hand, carried as gzip+base64, CRC-checked.
 
-**Steps** (about ten minutes):
+**Route A, since 2026-10-01 (two minutes, nothing transcribed):** on the desktop,
+`node C:\Users\bloom\OneDrive\Desktop\radar-relay\fetch-defillama.mjs` opens the
+installed Chrome HEADED (headless is 403), saves the page's data as
+`defillama-raw.json` with a sha256 sidecar; then the bot's own `trim()` from
+`fetch-unlock-index.js` over the VPS keep-set writes the index in the exact schema,
+and the file goes to the VPS as `data/unlock-index.json` (copy the old one to
+`data/unlock-index.<date>.bak.json` first). Steps 5–8 below are unchanged. The
+2026-10-01 scripts (build-index, chore.sh, diff-keys) are in the session notes.
+
+**Route B, the browser pane** (about ten minutes) — the fallback if Chrome is blocked:
 
 1. Browser pane → `https://defillama.com/unlocks`.
 2. Get the keep-set:
@@ -195,8 +204,19 @@ normally. So the index arrives by hand, carried as gzip+base64, CRC-checked.
    `node -e "import('./src/core/unlock-promote.js').then(m=>console.log(JSON.stringify(m.derivePressureFloor(JSON.parse(require('fs').readFileSync('unlocks.json')).tokens))))"`
    — update `SOURCED_PRESSURE_FLOOR` (value, n, basis) in `src/core/unlock-promote.js`.
    Fixture 47 fails until you do; that is the point of it.
-8. `node test-delivery.js` (ALL GREEN), then `sudo systemctl restart market-radar`; scp
-   unlocks.json and the changed data/ files back to the desktop tree and push from there.
+8. `node boot-check.js` ON THE VPS TREE (ALL GREEN) before the restart, then
+   `sudo systemctl restart market-radar`; scp unlocks.json and the changed data/ files
+   back to the desktop tree and push from there.
+
+**Two rules learned 2026-10-01, both from the same incident:**
+- Before step 5, copy `unlocks.json` aside (`/tmp/chore/unlocks.pre.json`) and after it
+  diff KEYS per row, not just stages and dates. The re-ingest rebuilt ORDER and dropped
+  its `tierHistory` (the 2026-09-17 tier correction, grid and all); a six-field diff
+  said "23 changes, all expected". Fixed in `sourceRow` (history survives a re-ingest)
+  — but diff keys anyway; the next dropped field will be a different one.
+- Run the suite on the VPS tree BEFORE restarting (step 8), not only on the desktop
+  after the scp back. The loss above was caught by the desktop suite an hour after the
+  VPS was already running on the stripped row.
 
 **Verify:** heartbeat shows `index age 0d`, `Sourced firing: N rows · N with a
 future event`, and no `🚨 MUTE`.
