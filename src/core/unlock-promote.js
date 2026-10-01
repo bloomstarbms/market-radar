@@ -87,10 +87,10 @@ export function sourcedRowProblems(t) {
 // Re-derive with derivePressureFloor() when the index is refreshed; record the new
 // value, do not let the floor move under the rows at runtime.
 export const SOURCED_PRESSURE_FLOOR = {
-  pctOfMaxSupply: 0.0585,
+  pctOfMaxSupply: 0.0587,
   percentile: 15,
   n: 30,
-  basis: '15th percentile of PER-ROW MEDIAN tranche/maxSupply across 30 sourced rows, index 2026-09-15T03:49 (p5 0.0137 p25 0.1419 p50 0.824); statistic is per-row because the floor is APPLIED to a row median. Re-derived 2026-09-15 when ORDER (median 0.05) returned to the sourced population by tier correction: was 0.0688/n29; CFG (0.0585) now sits exactly AT the floor — its stored LOGGED stage is unchanged, a re-ingest would default it STANDARD',
+  basis: '15th percentile of PER-ROW MEDIAN tranche/maxSupply across 30 sourced rows, index 2026-10-01T20:06; statistic is per-row because the floor is APPLIED to a row median. Re-derived 2026-10-01 on the index refresh: was 0.0585 (index 2026-09-15T03:49, re-derived then when ORDER returned to the sourced population; 0.0688/n29 before that). CFG sat exactly AT the old floor and, as that note predicted, the 2026-10-01 re-ingest defaulted it LOGGED -> STANDARD (its median 0.0585 is now below 0.0587 again, so the next re-ingest will return it to LOGGED — a row on the floor flips with the floor; decide its stage by hand if that matters)',
 };
 export const NON_PRESSURE_CATS = ['farming', 'staking'];
 // PER-ROW, not per-event. The first derivation (v0.30.0) took the percentile over
@@ -212,6 +212,13 @@ export function sourceRow(oldRow, { source, sourceFetchedAt, sourceEvents, chain
     row.tierHistory = { from: 'verified', retractedAt: new Date().toISOString().slice(0, 10), reason: tierCorrection.reason.trim(), retracted };
     if (ev) row.tierHistory.evidence = { bar: MIN_FALSIFIER_MARGIN, ...ev };
   }
+  // A SOURCED row that already carries a tierHistory keeps it through every later
+  // re-ingest. 2026-10-01: the index-refresh re-ingest rebuilt ORDER and dropped the
+  // tier correction recorded 2026-09-17 (the grid, the margins, the retracted spec) —
+  // the fixtures caught it on the desktop an hour later, and the row was restored from
+  // the pre-chore copy. History is a property of the row, not of the snapshot that
+  // rebuilt it; a re-ingest replaces what the index says, never what the row remembers.
+  if (!wasVerified && oldRow.tierHistory) row.tierHistory = oldRow.tierHistory;
   if (mechanismBasis) row.mechanismBasis = mechanismBasis;
   if (token) row.token = token;
   if (circSupply != null) row.circSupply = circSupply;

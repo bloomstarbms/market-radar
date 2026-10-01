@@ -4203,3 +4203,42 @@ fix; the lesson is that the delivery layer must not trust the rendering layer.
 AND THE CHORE IS DUE: "coverage horizon 13d < 14d" is RECURRING CHORE 1 (NEXT-SESSION.md),
 the unlock-index refresh via the browser pane. Not done in this session; the first
 delivered heartbeat after this deploy will say so, legibly.
+
+## 2026-10-01 — v0.33.4: INDEX REFRESH (RECURRING CHORE 1) — AND THE RE-INGEST DROPPED A ROW'S HISTORY
+
+The heartbeat's "coverage horizon 13d < 14d" was right (and undeliverable, v0.33.2).
+Refreshed the same evening, by a NEW ROUTE: the installed Chrome driven by Playwright,
+HEADED, from the desktop (radar-relay/fetch-defillama.mjs) — 370 protocols, generated
+19:04Z, 8.9 MB raw with a sha256 sidecar — then the bot's OWN trim() over the VPS's
+keep-set, then the file to the VPS. No base64 slices, no browser-pane transcription,
+same output schema as fetch-unlock-index.js. The pane route in NEXT-SESSION.md stays
+documented as the fallback; this one takes two minutes and cannot mistype a byte.
+
+RESULT: 49 protocols (same set), 522 events, horizon 13.0d → 29.8d. Fourteen sourced
+rows that had gone "no future event" (MAV, ZK, H, L3, REZ, ACX, ZORA, KAITO, WAL, XPL,
+ASTER, FF, SOLV, RE) regain an October cliff. YB, FXN, LISTA have no listed event in
+the window; HOOK, RLS, SCR, TAIKO are not on DefiLlama at all (unchanged).
+
+RE-INGEST (30 sourced rows through promote-unlock.js): all clean. CFG LOGGED → STANDARD,
+exactly as the floor's own basis note predicted ("sits exactly AT the floor — a
+re-ingest would default it STANDARD"). Floor re-derived 0.0585 → 0.0587 (n 30) and
+re-recorded; CFG's median 0.0585 is now just under it again, so the NEXT re-ingest
+flips it back — a row on the floor flips with the floor. L3 and REZ flagged "index
+dates MOVED, re-run": both re-run against eth.blockscout.com (which allows 180 calls
+per window from the VPS — the base instance allows 10; per-instance limits) and
+re-stamped. REZ: 0/4 cliffs cluster, still index-contradicted. L3: 1/4 (the 2026-07-30
+cliff at 15.95x/193 recipients), 2,367 claimants on 100% of days — still a stream.
+
+THE LOSS, caught by the suite an hour later on the desktop, not on the VPS: the sourced
+re-ingest rebuilt ORDER through sourceRow() and DROPPED tierHistory — the 2026-09-17
+tier correction with its grid, margins and retracted spec. sourceRow writes tierHistory
+only when a VERIFIED row is being corrected; a plain sourced row carrying one from an
+earlier correction got a fresh row with none. Restored from the pre-chore copy (kept
+at /tmp/chore/unlocks.pre.json for exactly this), then fixed where it belongs: a
+sourced row keeps its tierHistory through every re-ingest, fixture beside it. History
+is a property of the row, not of the snapshot that rebuilt it.
+
+Two lessons for the chore text: (1) keep a pre-chore copy of unlocks.json and diff
+KEYS, not just stages and dates — the diff I ran first compared six fields and said
+"23 changes, all expected"; (2) run the suite on the VPS tree BEFORE the restart, not
+only on the desktop after the scp back. Both added to RECURRING CHORE 1.

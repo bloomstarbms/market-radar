@@ -978,6 +978,9 @@ console.log('49. FALSIFIER STRENGTH is derived on EVERY verified row (chance rat
   check('a verified row is still refused by sourceRow WITHOUT a reason', (() => { try { sourceRow(wasVer, src); return false; } catch (e) { return /TIER CORRECTION/.test(e.message); } })());
   check('a token reason (<20 chars) is refused', (() => { try { sourceRow(wasVer, { ...src, tierCorrection: { reason: 'bar' } }); return false; } catch { return true; } })());
   const corrected = sourceRow(wasVer, { ...src, tierCorrection: { reason: 'falsifier margin 0.17 below the 0.40 admission bar' } });
+  // 2026-10-01: the index-refresh re-ingest DROPPED ORDER's tierHistory. A plain sourced re-ingest keeps it.
+  const reingested = sourceRow(corrected, { ...src, sourceFetchedAt: '2026-10-01T20:06' });
+  check('a sourced row re-ingested from a new index KEEPS its tierHistory, byte-identical (the 2026-10-01 ORDER loss)', JSON.stringify(reingested.tierHistory) === JSON.stringify(corrected.tierHistory) && reingested.sourceFetchedAt === '2026-10-01T20:06');
   check('with a reason the row is SOURCED and carries tierHistory with what was retracted', corrected.provenance === 'sourced' && corrected.events === undefined && corrected.tierHistory.from === 'verified' && corrected.tierHistory.retracted.enforcement === 'contract' && corrected.tierHistory.retracted.falsifier.margin === 0.17 && /0\.40/.test(corrected.tierHistory.reason));
   // The EVIDENCE travels with the decision. A row that held a clusterSpec cannot be
   // corrected on "the grid" without the grid: margins per point, computed from the
@@ -1434,9 +1437,17 @@ console.log('60. a CACHE may not answer a request whose window it does not cover
   check('the same cache DOES satisfy the window it was actually built for', cacheSatisfies(sept5, '2026-05-15', '2026-09-05'));
   // Pre-fix entries recorded no recent boundary at all — they must not be trusted.
   check('a pre-fix entry with no coveredTo cannot prove coverage, so it does not', !cacheSatisfies({ oldest: '2026-05-11', done: true }, '2026-09-05', '2026-09-12'));
-  check('LIVE-SHAPED: every entry now on disk lacks coveredTo and will be discarded', (() => {
+  // LIVE-SHAPED, by RULE not by snapshot: the first version asserted "every entry on
+  // disk lacks coveredTo" — true on 2026-09-13, false the day a detector ran again
+  // (2026-10-01, L3 and REZ). A fixture that encodes a date's state fails on progress.
+  check('LIVE-SHAPED: on disk, an entry without coveredTo never satisfies a window; an entry with one satisfies exactly the span it recorded and nothing past it', (() => {
     const c = JSON.parse(readFileSync('data/cliff-fetch-cache.json', 'utf8'));
-    return Object.values(c).every((e) => !cacheSatisfies(e, '2026-09-05', '2026-09-30'));
+    const dayAfter = (d) => new Date(Date.parse(d) + 86400e3).toISOString().slice(0, 10);
+    const entries = Object.values(c).filter((e) => e && e.oldest);
+    const without = entries.filter((e) => !e.coveredTo), withC = entries.filter((e) => e.coveredTo);
+    return entries.length > 0
+      && without.every((e) => !cacheSatisfies(e, '2026-09-05', '2026-09-30'))
+      && withC.every((e) => cacheSatisfies(e, dayAfter(e.oldest), e.coveredTo) && !cacheSatisfies(e, e.oldest, e.coveredTo) && !cacheSatisfies(e, dayAfter(e.oldest), dayAfter(e.coveredTo)));
   })());
   // MUTATION — the guard must still let a GOOD cache through, or every read refetches.
   check('MUTATION: a cache fetched after the window end satisfies it', cacheSatisfies({ oldest: '2026-05-01', coveredTo: '2026-10-01' }, '2026-09-05', '2026-09-30'));
@@ -1610,7 +1621,7 @@ console.log('47. sourced PRESSURE FLOOR is derived from the index distribution, 
 {
   const { SOURCED_PRESSURE_FLOOR: F, derivePressureFloor, pressureStage, NON_PRESSURE_CATS } = await import('./src/core/unlock-promote.js');
   const { unlockCoverage, leadsFor } = await import('./src/sources/calendar/unlocks.js');
-  check('floor is recorded with percentile, n and a basis sentence', F.pctOfMaxSupply > 0 && F.percentile === 15 && F.n === 30 && /percentile/.test(F.basis) && /2026-09-15/.test(F.basis));
+  check('floor is recorded with percentile, n and a basis sentence naming the index it was derived from', F.pctOfMaxSupply > 0 && F.percentile === 15 && F.n === 30 && /percentile/.test(F.basis) && /index 2026-10-01T20:06/.test(F.basis));
   // The recorded static must be what the live index derives (re-derive on refresh, record again).
   const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
   const d = derivePressureFloor(live);
