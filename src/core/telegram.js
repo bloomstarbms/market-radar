@@ -7,7 +7,29 @@ const API = () => `https://api.telegram.org/bot${config.telegramToken}`;
 let offset = 0;
 let running = false;
 
+// A STRAY '<' IS AN UNDELIVERABLE MESSAGE. Messages are sent as HTML, so Telegram reads
+// every '<' as a tag; a '<' that is not one of ours — "<14d", "n<25", a symbol with an
+// angle bracket — makes the whole send fail with "can't parse entities", and a
+// heartbeat that fails is retried every poll, failing every poll. On 2026-10-01 the
+// "Sourced firing" line gained such a '<' when the unlock index's coverage horizon
+// dropped under 14 days, and the heartbeat was undeliverable for ten hours (574
+// retries) while saying, correctly, that the index needed a refresh. The escape lives
+// HERE, at the one place every message leaves, so no renderer has to remember it.
+// Only our own tags survive: <b> <i> <a href=…> <code> <pre> <u> <s> and their closers.
+const OWN_TAG = /^<\/?(b|strong|i|em|u|s|code|pre|a(?:\s+href="[^"]*")?)>/;
+export function safeHtml(text) {
+  const s = String(text ?? '');
+  let out = '';
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '<') { const m = s.slice(i).match(OWN_TAG); if (m) { out += m[0]; i += m[0].length - 1; continue; } out += '&lt;'; continue; }
+    out += ch;
+  }
+  return out;
+}
+
 async function tg(method, payload) {
+  if (typeof payload?.text === 'string') payload = { ...payload, text: safeHtml(payload.text) };
   const res = await fetch(`${API()}/${method}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

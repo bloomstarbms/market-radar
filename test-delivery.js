@@ -2751,6 +2751,23 @@ console.log('74. MACRO MESSAGES — full names, one plain sentence, no bare abbr
   check('pollMacro renders every stage through macroMessage (no inline title = / lines = left), and the digest-tier entry carries the full name too', /macroMessage\(ev, stage, ctx\)/.test(pollSrc) && !/\btitle = `/.test(pollSrc) && !/\blines = \[/.test(pollSrc) && /title: `\$\{eventName\(ev\)\} released/.test(pollSrc));
 }
 
+console.log('75. a stray "<" cannot make a message undeliverable — escaped at the one exit every send uses');
+{
+  const { safeHtml } = await import('./src/core/telegram.js');
+  check('a bare "<14d" becomes &lt;14d (the 2026-10-01 heartbeat failure)', safeHtml('🚨 coverage horizon <14d · n<25') === '🚨 coverage horizon &lt;14d · n&lt;25');
+  check('our own tags survive untouched: <b> <i> <a href> <code> and closers', safeHtml('<b>[TAG]</b> t\n<i>x</i>\n<a href="https://x/y?a=1&b=2">chart</a> <code>k</code>') === '<b>[TAG]</b> t\n<i>x</i>\n<a href="https://x/y?a=1&b=2">chart</a> <code>k</code>');
+  check('a tag-shaped thing that is not ours is escaped (<script>, <14d>, <-)', safeHtml('<script>x</script> <14d> a<-b') === '&lt;script>x&lt;/script> &lt;14d> a&lt;-b');
+  check('text with no "<" is returned byte-identical', safeHtml('plain · 12:30 UTC · ≤6 lines') === 'plain · 12:30 UTC · ≤6 lines');
+  // The exit itself: every send and edit goes through tg(), and tg() escapes payload.text.
+  const src = readFileSync('src/core/telegram.js', 'utf8');
+  check('tg() escapes payload.text before the request, so sendMessage AND editMessageText are covered', /payload = \{ \.\.\.payload, text: safeHtml\(payload\.text\) \}/.test(src) && (src.match(/tg\('(sendMessage|editMessageText)'/g) || []).length >= 2 && !/fetch\([^)]*sendMessage/.test(src));
+  // The heartbeat that failed: build it from the live state and prove the escaped text has no bare '<'.
+  const { buildHeartbeat } = await import('./src/core/telemetry.js');
+  const hb = buildHeartbeat(Date.now(), {});
+  const text = safeHtml(['<b>[💓 HEARTBEAT]</b> ' + hb.title, ...hb.lines.map((l) => '• ' + l)].join('\n'));
+  check('the live heartbeat, escaped, carries no "<" outside our own tags', !/<(?!\/?(b|i|a|code|pre|u|s|strong|em)\b)/.test(text));
+}
+
 console.error = origErr;
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

@@ -4171,3 +4171,35 @@ header (the abbreviation may appear once, in parentheses), ≤6 lines / ≤420 c
 lint-clean, operator ⊇ public, and that a directional `plain` falls back.
 
 First live rendering in the new shape: NFP T-24h on 2026-10-01 at 12:30 UTC.
+
+## 2026-10-01 — v0.33.2: THE HEARTBEAT WAS UNDELIVERABLE FOR TEN HOURS, BECAUSE OF WHAT IT WAS SAYING
+
+Found by the v0.33.1 deploy: the first poll after restart logged "[telegram][OPERATOR]
+broadcast: 0/1 sends succeeded", and bot.log held 574 of them since 09:45Z — one per
+poll, because a heartbeat that fails is retried every cycle. The cause was one line:
+"Sourced firing: … 🚨 coverage horizon 13d < 14d — listed events run out before the
+…". Messages go out as HTML; Telegram read "< 14d" as a tag and refused the whole
+message: "can't parse entities: Unsupported start tag". The line appeared the moment
+the unlock index's coverage horizon dropped under 14 days — the reminder that the
+index needs refreshing was itself the thing that made the heartbeat undeliverable.
+The last heartbeat that landed was 2026-09-30T09:46Z; nothing in the channel or DM
+said anything was wrong, because the message that would have said so was the one
+failing. The "0/1 sends" line was on disk from the first failure; the deploy was
+the first time anyone read the log at the right minute.
+
+Fix is structural, not textual: safeHtml() in core/telegram.js escapes every '<' that
+does not open one of OUR tags (<b> <i> <a href> <code> <pre> <u> <s> and closers),
+applied inside tg() — the one function every sendMessage and editMessageText passes
+through — so no renderer has to remember it and the next "<" in a reason string, a
+symbol or a threshold cannot repeat this. Fixture 75, including the live heartbeat
+built from state and escaped. The reminder line keeps its wording; it now arrives.
+
+THE CLASS, named: a liveness message that depends on its own content being
+well-formed is not a liveness message. The heartbeat exists to make silence
+falsifiable; a heartbeat that can be silenced by a character in one of its lines
+fails at exactly the moment it has something to say. The escape at the exit is the
+fix; the lesson is that the delivery layer must not trust the rendering layer.
+
+AND THE CHORE IS DUE: "coverage horizon 13d < 14d" is RECURRING CHORE 1 (NEXT-SESSION.md),
+the unlock-index refresh via the browser pane. Not done in this session; the first
+delivered heartbeat after this deploy will say so, legibly.
