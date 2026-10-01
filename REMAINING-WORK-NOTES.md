@@ -4130,3 +4130,44 @@ NOT covered, by decision: HIP-3 builder-deployed exchanges (10 today, mostly equ
 and commodities, which the classifier would drop anyway), other perp DEXs (Aster,
 Lighter, edgeX, dYdX, Paradex, GMX — all reachable from the VPS, 2026-09-26 probe),
 perp price moves on any venue.
+
+## 2026-10-01 — v0.33.1: MACRO MESSAGES IN FULL NAMES AND PLAIN LANGUAGE (Cowork brief)
+
+Every macro stage now renders through one pure builder, macroMessage(ev, stage, ctx),
+and the public rendering carries the FULL NAME of the event plus one plain sentence
+saying what the number IS. "NFP in ~24h — 2026-10-02 08:30 ET (12:30 UTC)" became:
+
+    📊 TOMORROW · Non-Farm Payrolls (US jobs report)
+    Fri 2 Oct · 12:30 UTC · 08:30 ET
+    How many jobs the US added last month, plus the unemployment rate — the Fed's
+    main labour-market input.
+    Prior: not entered · consensus: not entered
+    Date verified against the official schedule on 2026-09-25.
+
+The calendar file carries `name` and `plain` on all 22 events (added on the VPS and
+the desktop copy, identical checksums); KIND_NAMES / KIND_PLAIN in macro.js are the
+fallback so an event added without them still renders in full. `prior`, `consensus`
+and `consensusAsOf` are the operator's to enter, dated; absent reads "not entered".
+Nothing scrapes or guesses a number — and the T+5m line now says so: "actual figure:
+not fetched by this bot (the reaction is measured, the print is not)". The old line
+promised "figure follows at T+30m if available" and nothing ever fetched one.
+
+THE LINT MOVED HOME. Fixture 30's DIRECTION/FREQ/EVIDENCE regexes lived inline in the
+fixture and linted SOURCE strings only; `plain` is prose arriving from a DATA file,
+so the same rules had to reach it without a second copy of the regex. They now live
+in core/prose-lint.js, used by fixture 30 (which also lints the live calendar's
+name/plain and plants "Soft print → cut odds rise → BTC bid" to prove it fires) and by
+macro.js at render time: a `plain` that fails never renders — the built-in sentence
+does, and the operator hears once per boot. "frequently" joined the FREQ list; it was
+the word the old T-60m line used ("the first move frequently reverses" — a frequency
+claim with no sample, plus "consider reducing", an instruction). Both gone; the
+hand-entered FOMC note with the same claim renders to the operator only.
+
+The second CPI path (cpi.js, its own schedule) said "US CPI", "CPI days", "YoY/MoM";
+all full names now, and the CAL:CPI label is "US INFLATION PRINT". Fixture 74 renders
+every kind through every stage with and without the calendar fields and asserts: full
+name in the title, no bare abbreviation anywhere in the public rendering including the
+header (the abbreviation may appear once, in parentheses), ≤6 lines / ≤420 chars,
+lint-clean, operator ⊇ public, and that a directional `plain` falls back.
+
+First live rendering in the new shape: NFP T-24h on 2026-10-01 at 12:30 UTC.

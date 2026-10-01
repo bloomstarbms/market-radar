@@ -21,6 +21,7 @@ import { dispatch } from '../../core/dispatcher.js';
 import { getState, save } from '../../core/store.js';
 import { btcPrice } from '../../core/outcomes.js';
 import { notePulse } from '../../core/pulse.js';
+import { proseProblems } from '../../core/prose-lint.js';
 
 const CAL_PATH = join(process.cwd(), 'data', 'macro-calendar.json');
 const STAGES = {
@@ -50,6 +51,84 @@ export function etToUtc(dateStr, hm) {
   }
   return Date.parse(`${dateStr}T${hm}:00-05:00`); // unreachable in practice
 }
+
+// ---- NAMES AND PLAIN LANGUAGE (v0.33.1) ------------------------------------------
+// The public rendering carries the FULL NAME of every event and one plain sentence
+// saying what the number IS. The abbreviation never stands alone; it may appear once
+// in parentheses after the full name. Both come from the calendar file (fields `name`
+// and `plain`, hand-entered) with these as the fallback, so an event added without
+// them still renders in full. `plain` is a FACT about the measure: "soft print → cut
+// odds rise → BTC bid" is a call, and the prose lint (fixture 30, core/prose-lint.js)
+// refuses it at render time — the built-in sentence renders instead and the operator
+// is told. Prior and consensus are hand-entered, dated, and say "not entered" when
+// absent; nothing here scrapes or guesses a number.
+export const KIND_NAMES = {
+  NFP: 'Non-Farm Payrolls (US jobs report)',
+  CPI: 'Consumer Price Index (US inflation)',
+  FOMC: 'Federal Reserve rate decision',
+  PCE: 'Personal Consumption Expenditures (the Fed\'s preferred inflation gauge)',
+  PPI: 'Producer Price Index (wholesale inflation)',
+};
+export const KIND_PLAIN = {
+  NFP: 'How many jobs the US added last month, plus the unemployment rate — the Fed\'s main labour-market input.',
+  CPI: 'How much the prices consumers pay rose last month and over the past year — the inflation figure the Fed is judged against.',
+  FOMC: 'The Federal Reserve\'s decision on its interest rate, with the statement at 14:00 ET and the press conference at 14:30 ET.',
+  PCE: 'How much the prices of what households buy rose last month — the inflation measure the Fed says it prefers.',
+  PPI: 'How much the prices US producers receive rose last month — inflation one step before the shop shelf.',
+};
+export const ABBREVIATIONS = Object.keys(KIND_NAMES);
+export function eventName(ev) { return (ev.name && !proseProblems(ev.name).length ? ev.name : null) ?? KIND_NAMES[ev.kind] ?? ev.kind; }
+export function eventPlain(ev) { return (ev.plain && !proseProblems(ev.plain).length ? ev.plain : null) ?? KIND_PLAIN[ev.kind] ?? null; }
+// Pure: every public-rendered calendar field that fails the prose lint. [] when clean.
+export function calendarProseProblems(events) {
+  const out = [];
+  for (const ev of events || []) for (const f of ['name', 'plain']) {
+    if (!ev[f]) continue;
+    const p = proseProblems(ev[f]);
+    if (p.length) out.push({ id: ev.id, field: f, problems: p, text: String(ev[f]).slice(0, 80) });
+  }
+  return out;
+}
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], MONS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+export function whenLine(ev, t0) {
+  const d = new Date(t0);
+  return `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONS[d.getUTCMonth()]} · ${d.toISOString().slice(11, 16)} UTC · ${ev.et} ET`;
+}
+export function priorLine(ev) {
+  const cons = ev.consensus ? `${ev.consensus}${ev.consensusAsOf ? ` (as of ${ev.consensusAsOf})` : ''}` : 'not entered';
+  return `Prior: ${ev.prior ?? 'not entered'} · consensus: ${cons}`;
+}
+// Pure: the message for one stage. ctx carries what the poll measured (t0, due, now,
+// reaction figures); nothing here fetches.
+export function macroMessage(ev, stage, ctx = {}) {
+  const name = eventName(ev), plain = eventPlain(ev);
+  const t0 = ctx.t0 ?? etToUtc(ev.date, ev.et), now = ctx.now ?? Date.now(), due = ctx.due ?? t0 + STAGE_AT[stage];
+  const sgn = (n) => `${n > 0 ? '+' : ''}${n}`;
+  const op = [`Calendar id ${ev.id} · stage ${stage}${ev.note ? ` · note: ${ev.note}` : ''}`];
+  if (stage === 't24h') {
+    return { title: `📊 TOMORROW · ${name}`, lines: [whenLine(ev, t0), ...(plain ? [plain] : []), priorLine(ev),
+      ev.verified ? `Date verified against the official schedule${ev.verifiedOn ? ' on ' + ev.verifiedOn : ''}.` : '⚠️ Date from the hand-entered schedule, not yet re-verified against the official release calendar.'], operatorLines: op };
+  }
+  if (stage === 't60m') {
+    return { title: `⏰ IN 60 MINUTES · ${name}`, lines: [whenLine(ev, t0), ...(plain ? [plain] : []), priorLine(ev)], operatorLines: op };
+  }
+  const tPlus = Math.round((now - t0) / 60e3);
+  if (stage === 't5m') {
+    const { b = null, e = null } = ctx;
+    return { title: `📊 ${name} printed — first reaction (T+${tPlus}m)`, lines: [
+      b !== null ? `BTC ${sgn(b)}% · ETH ${sgn(e)}% from just before the print to T+${tPlus}m` : 'Reaction basis unavailable (bot was not up before the print).',
+      ...[lagDisclosure(now - due, (m) => `delivered ${m}m after the T+5m mark — the window above is as stated, not live`)].filter(Boolean),
+      `Consensus: ${ev.consensus ? ev.consensus + (ev.consensusAsOf ? ' (as of ' + ev.consensusAsOf + ')' : '') : 'not entered'} · actual figure: not fetched by this bot (the reaction is measured, the print is not).`,
+    ], operatorLines: op };
+  }
+  const { b5 = null, b30 = null, held = 'unknown' } = ctx;
+  return { title: `📊 ${name} · T+${tPlus}m — initial move is ${held}`, lines: [
+    b30 !== null ? `BTC ${sgn(b30)}% from before the print to T+${tPlus}m (was ${sgn(b5)}% at the first reading)` : 'No pre-print basis.',
+    ...[lagDisclosure(now - due, (m) => `delivered ${m}m after the T+30m mark — observation window as stated, not live`)].filter(Boolean),
+    'No claim about the follow-through rate yet — that statistic starts accumulating from this event forward.',
+  ], operatorLines: op };
+}
+const proseReported = new Set();
 
 function loadCalendar() {
   if (!existsSync(CAL_PATH)) return [];
@@ -86,7 +165,7 @@ export async function pollMacro() {
     if (!stages.length) {
       if (now >= t0 && !rec.fired.digest) {
         rec.fired.digest = now;
-        (st.digestPool ??= []).push({ ts: now, kind: ev.kind, title: `${ev.kind} released — ${ev.date} ${ev.et} ET (digest-tier macro, never pushed by design)` });
+        (st.digestPool ??= []).push({ ts: now, kind: ev.kind, title: `${eventName(ev)} released — ${ev.date} ${ev.et} ET (digest-tier macro, never pushed by design)` });
         while (st.digestPool.length > 100) st.digestPool.shift();
         save();
       }
@@ -102,49 +181,29 @@ export async function pollMacro() {
       if (now < due) continue;
       if (now - due > STAGE_FRESH[stage]) { rec.fired[stage] = 'missed'; save(); continue; } // bot was down; stale, don't fake it
 
-      const utc = new Date(t0).toISOString().slice(11, 16);
-      let title, lines;
-      if (stage === 't24h') {
-        title = `${ev.kind} in ~24h — ${ev.date} ${ev.et} ET (${utc} UTC)`;
-        lines = [
-          ev.note || 'Scheduled macro print — crypto trades as a high-beta liquidity asset on these.',
-          ev.verified ? `Date verified against the official schedule${ev.verifiedOn ? ' on ' + ev.verifiedOn : ''}.` : '⚠️ Date from hand-entered schedule, not yet re-verified — check the official release calendar.',
-        ];
-      } else if (stage === 't60m') {
-        title = `${ev.kind} in 60 minutes (${utc} UTC)`;
-        lines = ['If leveraged, consider reducing before the print — the first move frequently reverses.'];
-      } else if (stage === 't5m') {
-        const snap = await marketSnap();
-        const b = pct(rec.pre?.btc, snap.btc), e = pct(rec.pre?.eth, snap.eth);
-        rec.post5 = snap;
-        // Observation window is pre-print -> NOW, which is only "the first 5 minutes"
-        // when delivery is on time. State the actual window; disclose lag when late.
-        const tPlus = Math.round((now - t0) / 60e3);
-        title = `${ev.kind} released — first reaction (T+${tPlus}m)`;
-        lines = [
-          b !== null ? `BTC ${b > 0 ? '+' : ''}${b}% · ETH ${e > 0 ? '+' : ''}${e}% from just before the print to T+${tPlus}m`
-            : 'Reaction basis unavailable (bot was not up pre-print).',
-          ...[lagDisclosure(now - due, (m) => `delivered ${m}m after the T+5m mark — the window above is as stated, not live`)].filter(Boolean),
-          'Print value not yet published by the source — reaction is the tradeable part; figure follows at T+30m if available.',
-        ];
-      } else { // t30m
-        const snap = await marketSnap();
-        const b5 = pct(rec.pre?.btc, rec.post5?.btc), b30 = pct(rec.pre?.btc, snap.btc);
-        const held = b5 !== null && b30 !== null
-          ? (Math.sign(b30) === Math.sign(b5) && Math.abs(b30) >= Math.abs(b5) * 0.5 ? 'HOLDING' : 'FADING')
-          : 'unknown';
-        const tPlus = Math.round((now - t0) / 60e3);
-        title = `${ev.kind} +${tPlus}m — initial move is ${held}`;
-        lines = [
-          b30 !== null ? `BTC ${b30 > 0 ? '+' : ''}${b30}% from pre-print to T+${tPlus}m (was ${b5 > 0 ? '+' : ''}${b5}% at the first reading)` : 'No pre-print basis.',
-          ...[lagDisclosure(now - due, (m) => `delivered ${m}m after the T+30m mark — observation window as stated, not live`)].filter(Boolean),
-          'No claim about the follow-through rate yet — that statistic starts accumulating from this event forward.',
-        ];
+      // A calendar field that fails the prose lint never renders (eventPlain falls back
+      // to the built-in sentence); the operator hears once per boot, not per poll.
+      for (const p of calendarProseProblems([ev])) {
+        const k = `${p.id}:${p.field}`;
+        if (!proseReported.has(k)) { proseReported.add(k); console.error(`[macro][OPERATOR] calendar ${p.id}.${p.field} fails the prose lint (${p.problems.join(', ')}): "${p.text}" — rendering the built-in sentence instead. Fix data/macro-calendar.json.`); }
       }
+      const ctx = { t0, now, due };
+      if (stage === 't5m') {
+        const snap = await marketSnap();
+        ctx.b = pct(rec.pre?.btc, snap.btc); ctx.e = pct(rec.pre?.eth, snap.eth);
+        rec.post5 = snap;
+      } else if (stage === 't30m') {
+        const snap = await marketSnap();
+        ctx.b5 = pct(rec.pre?.btc, rec.post5?.btc); ctx.b30 = pct(rec.pre?.btc, snap.btc);
+        ctx.held = ctx.b5 !== null && ctx.b30 !== null
+          ? (Math.sign(ctx.b30) === Math.sign(ctx.b5) && Math.abs(ctx.b30) >= Math.abs(ctx.b5) * 0.5 ? 'HOLDING' : 'FADING')
+          : 'unknown';
+      }
+      const msg = macroMessage(ev, stage, ctx);
       if (await dispatch({
         source: 'CAL', type: 'MACRO', severity: stage === 't5m' || stage === 't60m' ? 'HIGH' : 'MEDIUM',
         key: `${ev.id}:${stage}`, dedupeKey: `MACRO:${ev.id}:${stage}`, cooldownMin: 12 * 60,
-        title, lines,
+        title: msg.title, lines: msg.lines, operatorLines: msg.operatorLines,
       })) { rec.fired[stage] = Date.now(); save(); }
     }
   }

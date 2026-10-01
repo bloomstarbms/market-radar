@@ -24,17 +24,17 @@ export async function pollCpi() {
     if (now >= t - 24 * 3600e3 && now < t - 20 * 3600e3) {
       await dispatch({
         source: 'CAL', type: 'CPI', severity: 'MEDIUM', key: `${dateKey}:24h`, cooldownMin: 2880,
-        title: `US CPI (${rel.refMonth}) releases tomorrow`,
+        title: `Consumer Price Index (US inflation) for ${rel.refMonth} releases tomorrow`,
         lines: [`Release: ${rel.utc.replace('T', ' ').replace(':00Z', ' UTC')} (8:30 AM ET)`,
-          `Scheduled macro print. Crypto trades as a high-beta liquidity asset on these — magnitude, not direction.`],
+          'How much the prices consumers pay rose last month and over the past year — the inflation figure the Fed is judged against.'],
       });
     }
     // T-1h warning
     if (now >= t - 3600e3 && now < t) {
       await dispatch({
         source: 'CAL', type: 'CPI', severity: 'HIGH', key: `${dateKey}:1h`, cooldownMin: 2880,
-        title: `US CPI (${rel.refMonth}) in under 1 hour`,
-        lines: [`High-volatility window opening. Leverage is how accounts die on CPI days.`],
+        title: `Consumer Price Index (US inflation) for ${rel.refMonth} in under 1 hour`,
+        lines: ['Release at 8:30 AM ET. Price moves around this print are routinely among the largest of the month in both directions.'],
       });
     }
     // Post-release: fetch the actual number (retry every 5 min, up to 12h)
@@ -44,9 +44,9 @@ export async function pollCpi() {
       if (nums) {
         await dispatch({
           source: 'CAL', type: 'CPI', severity: 'HIGH', key: `${dateKey}:result`, cooldownMin: 2880,
-          title: `US CPI ${rel.refMonth}: ${nums.yoy}% YoY · ${nums.mom}% MoM`,
+          title: `Consumer Price Index (US inflation), ${rel.refMonth}: ${nums.yoy}% year on year · ${nums.mom}% month on month`,
           lines: [
-            `Headline CPI YoY: ${nums.yoy}% · MoM (seasonally adj): ${nums.mom}%`,
+            `Headline inflation: ${nums.yoy}% over the past year · ${nums.mom}% over the month (seasonally adjusted)`,
             `Watch BTC/majors for the reaction over the next hours`,
           ],
         });

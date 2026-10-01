@@ -639,9 +639,9 @@ console.log('30. message prose is linted — direction ban + unsupported-statist
   });
   const files = [...walk('src/sources'), 'src/core/dispatcher.js', 'src/core/confluence.js', 'src/core/telemetry.js'];
   check('auto-discovery finds a non-trivial module set', files.length >= 15);
-  const DIRECTION = /(close now|exit here|buy now|sell now|take profit|dump hard|sell off sharply|capitulation bottom|blow-off top|reversal risk|front-run|bleeds into|drift usually)/i;
-  const FREQ = /\b(usually|typically|historically|often|tend to|most of the time)\b/i;
-  const EVIDENCE = /n\s*[=>\u2265]|\b\d+\s*of\s*\d+\b|\bmeasured\b|percentile|\bp99\b/i;
+  // The regexes live in core/prose-lint.js since v0.33.1 so the same rules reach the
+  // macro calendar's `plain` sentence (data, not source) at render time.
+  const { DIRECTION, FREQ, EVIDENCE, proseProblems } = await import('./src/core/prose-lint.js');
   const dirHits = [], freqHits = [];
   for (const f of files) {
     for (const line of readFileSync(f, 'utf8').split(/\r?\n/)) {
@@ -657,6 +657,15 @@ console.log('30. message prose is linted — direction ban + unsupported-statist
   check('frequency guard can fire', FREQ.test("'these usually fade'") && !EVIDENCE.test("'these usually fade'"));
   check('frequency WITH evidence passes', !(FREQ.test("'usually fades (measured: 21 of 30, n=30)'") && !EVIDENCE.test("'usually fades (measured: 21 of 30, n=30)'")));
   check('volatility language still permitted', !DIRECTION.test("'expect wider swings'") && !FREQ.test("'the open is violent'"));
+  // INPUT SET EXTENDED (v0.33.1): the calendar's public prose fields are linted with the
+  // same rules, and a planted directional `plain` proves the lint fires on data.
+  const { calendarProseProblems } = await import('./src/sources/calendar/macro.js');
+  const liveCal = JSON.parse(readFileSync('data/macro-calendar.json', 'utf8')).events;
+  const calHits = calendarProseProblems(liveCal);
+  check(`the live calendar's name/plain fields pass the prose lint (${liveCal.length} events)`, calHits.length === 0, calHits.map((h) => h.id + '.' + h.field).join(','));
+  const planted = calendarProseProblems([{ id: 'nfp-x', kind: 'NFP', plain: 'Soft print → cut odds rise → BTC bid' }, { id: 'cpi-x', kind: 'CPI', plain: 'This one usually moves BTC 3%' }]);
+  check('a planted directional plain and an unevidenced frequency plain are both refused', planted.length === 2 && planted[0].problems.includes('directional claim') && planted[1].problems.includes('frequency claim without evidence'));
+  check('proseProblems is the same rule the source lint uses (direction + frequency, evidence excuses frequency)', proseProblems('Close now').length === 1 && proseProblems('usually fades (n=30)').length === 0);
 }
 
 console.log('24. classifiers-wired boot assertion');
@@ -2684,6 +2693,62 @@ console.log('73. HYPERLIQUID — listings on a persisted baseline, funding in it
   check('outcomes can price a hyperliquid track (allMids) — without it every Hyperliquid row is unscoreable', /r\.exchange === 'hyperliquid'[\s\S]{0,300}allMids/.test(readFileSync('src/core/outcomes.js', 'utf8')));
   check('the poll loop calls pollHyperliquid', /pollHyperliquid\(\)\]\);/.test(readFileSync('src/index.js', 'utf8')));
   check('the pulse is named dex:… so it never counts as a live TEXT feed for the "we were looking" companions', /notePulse\('dex:hyperliquid'\)/.test(src));
+}
+
+console.log('74. MACRO MESSAGES — full names, one plain sentence, no bare abbreviation, prior/consensus hand-entered or "not entered"');
+{
+  const m = await import('./src/sources/calendar/macro.js');
+  const { renderMessage, formatAlert } = await import('./src/core/dispatcher.js');
+  const { PUBLIC_MAX_LINES, PUBLIC_MAX_CHARS } = await import('./src/sources/calendar/unlocks.js');
+  const { proseProblems } = await import('./src/core/prose-lint.js');
+  const bare = (text) => text.replace(/\([^)]*\)/g, '').match(new RegExp('\\b(' + m.ABBREVIATIONS.join('|') + ')\\b'));
+  const t0 = Date.UTC(2026, 9, 2, 12, 30);
+  const events = {
+    withFields: { id: 'nfp-2026-10', kind: 'NFP', tier: 'STANDARD', date: '2026-10-02', et: '08:30', verified: true, verifiedOn: '2026-09-25', name: 'Non-Farm Payrolls (US jobs report)', plain: 'How many jobs the US added last month, plus the unemployment rate — the Fed\'s main labour-market input.', prior: '+162k (Aug)', consensus: '+150k', consensusAsOf: '2026-09-30' },
+    bareCpi: { id: 'cpi-2026-10', kind: 'CPI', tier: 'FULL', date: '2026-10-14', et: '08:30', verified: true },
+    bareFomc: { id: 'fomc-2026-10', kind: 'FOMC', tier: 'FULL', date: '2026-10-28', et: '14:00', verified: false, note: 'presser 14:30 ET — frequently reverses the 14:00 move' },
+    barePce: { id: 'pce-2026-10', kind: 'PCE', tier: 'STANDARD', date: '2026-10-29', et: '08:30' },
+    barePpi: { id: 'ppi-2026-10', kind: 'PPI', tier: 'DIGEST', date: '2026-10-15', et: '08:30' },
+  };
+  const stages = ['t24h', 't60m', 't5m', 't30m'];
+  const ctxFor = (stage) => ({ t0, now: t0 + ({ t24h: -24 * 3600e3, t60m: -3600e3, t5m: 5 * 60e3, t30m: 30 * 60e3 })[stage] + 60e3, b: 0.8, e: -0.3, b5: 0.8, b30: 1.1, held: 'HOLDING' });
+  for (const [k, ev] of Object.entries(events)) for (const stage of stages) {
+    const msg = m.macroMessage(ev, stage, ctxFor(stage));
+    const pub = renderMessage(msg, 'public'), op = renderMessage(msg, 'operator');
+    const full = formatAlert({ source: 'CAL', type: 'MACRO', ...msg }, { kind: 'FACT' }, 'public').replace(/<[^>]+>/g, '');
+    const name = m.KIND_NAMES[ev.kind];
+    check(`${k} ${stage}: full name in the title, no bare abbreviation anywhere in the public rendering (header included), ≤${PUBLIC_MAX_LINES} lines / ≤${PUBLIC_MAX_CHARS} chars, lint-clean`,
+      pub.title.includes(name) && !bare(full) && pub.lines.length <= PUBLIC_MAX_LINES && pub.text.length <= PUBLIC_MAX_CHARS && pub.lines.concat(pub.title).every((l) => proseProblems(l).length === 0),
+      `title="${pub.title}" bare=${bare(full)?.[0] ?? '-'} lines=${pub.lines.length} chars=${pub.text.length}`);
+    check(`${k} ${stage}: operator ⊇ public`, pub.lines.every((l) => op.lines.includes(l)));
+  }
+  const t24 = renderMessage(m.macroMessage(events.withFields, 't24h', ctxFor('t24h')), 'public');
+  check('T-24h renders exactly the brief\'s shape: TOMORROW title, "Fri 2 Oct · 12:30 UTC · 08:30 ET", the plain sentence, prior and dated consensus, the verified-date line', /^📊 TOMORROW · Non-Farm Payrolls \(US jobs report\)$/.test(t24.title) && t24.lines[0] === 'Fri 2 Oct · 12:30 UTC · 08:30 ET' && t24.lines[1] === events.withFields.plain && t24.lines[2] === 'Prior: +162k (Aug) · consensus: +150k (as of 2026-09-30)' && /verified against the official schedule on 2026-09-25/.test(t24.lines[3]));
+  const t24b = renderMessage(m.macroMessage(events.bareCpi, 't24h', ctxFor('t24h')), 'public');
+  check('an event WITHOUT name/plain fields still renders the full name and the built-in plain sentence, and says "not entered" for prior and consensus', /Consumer Price Index \(US inflation\)/.test(t24b.title) && t24b.lines[1] === m.KIND_PLAIN.CPI && t24b.lines[2] === 'Prior: not entered · consensus: not entered');
+  check('the abbreviation appears at most once, and only inside parentheses, when the name carries it', !bare(renderMessage(m.macroMessage({ ...events.bareCpi, name: 'Consumer Price Index (CPI)' }, 't24h', ctxFor('t24h')), 'public').text));
+  const t60 = renderMessage(m.macroMessage(events.bareFomc, 't60m', ctxFor('t60m')), 'public');
+  check('T-60m: same header shape with "IN 60 MINUTES", the plain sentence, no advice line ("consider reducing" is gone)', /^⏰ IN 60 MINUTES · Federal Reserve rate decision$/.test(t60.title) && t60.lines.includes(m.KIND_PLAIN.FOMC) && !/consider reducing|frequently reverses/.test(t60.text));
+  const op60 = renderMessage(m.macroMessage(events.bareFomc, 't60m', ctxFor('t60m')), 'operator');
+  check('the hand-entered note (a frequency claim) renders to the OPERATOR only', /frequently reverses/.test(op60.text) && !/frequently reverses/.test(t60.text));
+  const t5 = renderMessage(m.macroMessage(events.withFields, 't5m', ctxFor('t5m')), 'public');
+  check('T+5m: "printed — first reaction", the BTC/ETH move, consensus restated, and an honest "actual figure: not fetched" line', /^📊 Non-Farm Payrolls \(US jobs report\) printed — first reaction \(T\+6m\)$/.test(t5.title) && /BTC \+0\.8% · ETH -0\.3%/.test(t5.text) && /Consensus: \+150k \(as of 2026-09-30\) · actual figure: not fetched/.test(t5.text));
+  const t30 = renderMessage(m.macroMessage(events.withFields, 't30m', ctxFor('t30m')), 'public');
+  check('T+30m: full name, initial move HOLDING, both readings, no follow-through claim', /Non-Farm Payrolls \(US jobs report\) · T\+31m — initial move is HOLDING/.test(t30.title) && /BTC \+1\.1% .* \(was \+0\.8% at the first reading\)/.test(t30.text) && /No claim about the follow-through rate yet/.test(t30.text));
+  // A directional plain in the DATA never renders: the built-in sentence does, and the operator is told (fixture 30 proves the lint; this proves the fallback).
+  const bad = { ...events.withFields, plain: 'Soft print → cut odds rise → BTC bid' };
+  const tbad = renderMessage(m.macroMessage(bad, 't24h', ctxFor('t24h')), 'public');
+  check('MUTATION: a directional plain in the calendar is replaced by the built-in sentence in the rendering', !/cut odds/.test(tbad.text) && tbad.lines[1] === m.KIND_PLAIN.NFP);
+  check('every built-in name and plain sentence is itself lint-clean and names its kind in full', Object.keys(m.KIND_NAMES).every((k) => proseProblems(m.KIND_NAMES[k]).length === 0 && proseProblems(m.KIND_PLAIN[k]).length === 0 && !bare(m.KIND_NAMES[k] + ' ' + m.KIND_PLAIN[k])));
+  // The other CPI path (cpi.js, its own hardcoded schedule) and its dispatcher label carry no bare abbreviation either.
+  const cpiSrc = readFileSync('src/sources/calendar/cpi.js', 'utf8');
+  const cpiStrings = [...cpiSrc.matchAll(/(?:title|lines):\s*\[?\s*`([^`]*)`/g)].map((x) => x[1]);
+  check('cpi.js titles and lines carry the full name, never "US CPI" / "CPI days" / YoY / MoM', cpiStrings.length >= 3 && cpiStrings.every((s) => /Consumer Price Index/.test(s) || !/\bCPI\b/.test(s)) && !/YoY|MoM|CPI days/.test(cpiSrc.split('export { SCHEDULE }')[0].replace(/^\s*\/\/.*$/gm, '')));
+  const { TAG_FOR_TEST } = await import('./src/core/dispatcher.js').then((d) => ({ TAG_FOR_TEST: formatAlert({ source: 'CAL', type: 'CPI', title: 'x', lines: [] }, { kind: 'FACT' }, 'public') }));
+  check('the CAL:CPI dispatcher label no longer says "CPI"', !/\bCPI\b/.test(TAG_FOR_TEST));
+  // The poll path builds through the pure builder (no inline title/lines left in pollMacro).
+  const pollSrc = readFileSync('src/sources/calendar/macro.js', 'utf8').split('export async function pollMacro')[1].split('// ---- WEEKLY VERIFIER')[0];
+  check('pollMacro renders every stage through macroMessage (no inline title = / lines = left), and the digest-tier entry carries the full name too', /macroMessage\(ev, stage, ctx\)/.test(pollSrc) && !/\btitle = `/.test(pollSrc) && !/\blines = \[/.test(pollSrc) && /title: `\$\{eventName\(ev\)\} released/.test(pollSrc));
 }
 
 console.error = origErr;
