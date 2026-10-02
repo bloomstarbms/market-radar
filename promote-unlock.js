@@ -8,6 +8,28 @@
 // Use this for the five pending confirmations (ZRO/OP/ENA/SUI/SEI) instead of hand
 // editing unlocks.json — the 23 Aug milestone message carried a stale pctOfMcap
 // precisely because promotion was done by hand-patching.
+//
+// THE REBUILD RULE (stated 2026-10-02, after the third loss of its kind):
+//
+//   A rebuild from a source may only replace the fields that source OWNS. Everything
+//   else on the row is CARRIED, never reconstructed.
+//
+// "Constructs the row, never edits in place" protects against stale fields from the
+// era a row is leaving. It has three times been read as "the source decides the whole
+// row", and three times a field a HUMAN put there was silently discarded by a bot-side
+// rewrite: the regime tags (v0.13.1), the void marker on a verdict (annotate-verdict),
+// and ORDER's tierHistory (2026-10-01 — the index refresh re-ingested the row and the
+// 2026-09-17 tier correction, grid and margins and retracted spec, was gone until the
+// desktop suite noticed an hour later). The index owns: sourceEvents, sourceFetchedAt,
+// chain, token, circSupply, totalLocked, maxSupply, and the pressure-rule default
+// stage. It does NOT own: tierHistory, mechanism/mechanismBasis (a fact about the
+// contract, carried and re-checked when dates move), note, operatorNote, an explicit
+// stage=, or any field added later for a reason the index cannot know. When you add
+// a field to a row, decide which source owns it and make sure every rebuild path
+// (sourceRow, promoteRow, the mechanism stamp) carries it when that source is not
+// the one rebuilding — and write the fixture that proves it survives a re-ingest
+// (fixture 49 does this for tierHistory). "Whitelist copy" means the whitelist is of
+// fields the source may OVERWRITE, not of fields the row may KEEP.
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 import { promoteRow, resolveWalletRef } from './src/core/unlock-promote.js';
 import { deriveTolerance } from './src/sources/calendar/cadence-watch.js';
