@@ -4242,3 +4242,37 @@ Two lessons for the chore text: (1) keep a pre-chore copy of unlocks.json and di
 KEYS, not just stages and dates — the diff I ran first compared six fields and said
 "23 changes, all expected"; (2) run the suite on the VPS tree BEFORE the restart, not
 only on the desktop after the scp back. Both added to RECURRING CHORE 1.
+
+## 2026-10-04 — QUEUED: THE PRINT BESIDE THE REACTION (small, not urgent)
+
+The first full-words macro message (NFP T+5m, 2026-10-02 12:35Z) carried the reaction
+(BTC +0.25% · ETH +0.11%) and said honestly that the print was not fetched. The print
+is the number a reader most wants next to the move. Operator review asked for it.
+
+FOUND WHILE CHECKING: src/sources/calendar/cpi.js — its own CPI schedule, T-24h/T-1h
+reminders, and fetchCpiNumbers() against api.bls.gov — is DEAD CODE. pollCpi is not
+in index.js's pollAll and never has been since macro.js took over the calendar; no
+CAL:CPI stamp exists in state.lastAlert. So "actual figure: not fetched by this bot"
+is accurate, and the BLS fetch that would make it untrue already exists, unused.
+
+TESTED 2026-10-04 from the VPS, no key: api.bls.gov v2 answers CES0000000001 (total
+nonfarm, level — the headline is the month-on-month CHANGE: Sep 159,044 − Aug 159,015
+= +29k), LNS14000000 (unemployment rate, Sep 4.2%, Aug 4.1%) and CUSR0000SA0 (CPI,
+seasonally adjusted). Keyless v2 is limited to 25 queries/day — enough at one retry
+every 5 min for an hour after a release, not enough for retrying all day.
+
+THE ITEM: for NFP and CPI (BLS-published), fetch the print after release and put it
+in the T+30m message ("Non-Farm Payrolls: +29k · unemployment 4.2% (prior 4.1%)").
+If the figure is not yet published at T+30m, say so, and post nothing later — no
+second message, the T+30m line carries whatever was known. PPI is DIGEST tier and
+can share the fetch. PCE is BEA (keyed API) and FOMC has no keyless source; both
+keep "not fetched". Reuse fetchCpiNumbers' period logic, then DELETE cpi.js rather
+than leave a second CPI schedule that can drift from the calendar (it already had the
+right dates while the calendar had wrong ones — two sources of truth, one wrong).
+Fixtures: the headline is a CHANGE for NFP and a RATE for CPI (an NFP message that
+prints 159,044 is the bug to prevent); a missing print renders as "not yet published
+at T+Nm", never as zero; the 25/day cap is respected. Respect the first-estimate
+caveat: NFP is revised twice; the message says "first estimate".
+
+Before the 14 Oct CPI if a session happens to be open; otherwise the CPI renders as
+NFP did, honestly without the figure.

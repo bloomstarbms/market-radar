@@ -127,6 +127,9 @@ the case a derivation exists for.
   was, and the row must carry its best margin so the weakness is on the row.
 
 ALSO QUEUED, small, whenever there is room:
+  - THE PRINT BESIDE THE REACTION (2026-10-04): fetch NFP and CPI from api.bls.gov
+    after release into the T+30m message; cpi.js is dead code and should be deleted
+    once its period logic is reused. Full item in REMAINING-WORK-NOTES.md.
   - The version bump should ask each file's PREMISE what "Written against" means
     rather than sed-ing a number across every .md. The 2026-09-13 blanket sed
     reached a parked patch and a brief that each had a different claim to make
