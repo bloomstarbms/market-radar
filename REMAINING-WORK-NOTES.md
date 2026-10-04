@@ -4274,5 +4274,17 @@ prints 159,044 is the bug to prevent); a missing print renders as "not yet publi
 at T+Nm", never as zero; the 25/day cap is respected. Respect the first-estimate
 caveat: NFP is revised twice; the message says "first estimate".
 
+THE FIXTURE, specified (operator review 2026-10-04): feed TWO REAL CONSECUTIVE LEVELS —
+CES0000000001 Aug 159015, Sep 159044 — and assert the rendered headline is "+29k". A
+check that a number appears passes with 159,044; this one cannot. Same units-rule
+family as pressure_vs_book against ADV. Mutation: swap the two months and assert
+"-29k"; feed only one month and assert "not yet published", not a figure.
+
+AND THE DELETION IS NOT OPTIONAL: the dead cpi.js had the right dates while the live
+calendar had the wrong ones, and nothing compared them. A second hand-kept schedule
+nothing reads is right only by luck; the next drift goes the other way and someone
+revives it "because it already has the schedule". Reuse the period logic, delete the
+file, and let the calendar verifier remain the only thing that checks dates.
+
 Before the 14 Oct CPI if a session happens to be open; otherwise the CPI renders as
 NFP did, honestly without the figure.
