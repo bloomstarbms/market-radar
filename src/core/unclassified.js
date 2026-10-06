@@ -25,10 +25,17 @@ const MAX = 400;
 // strip tickers, digits, dates and parentheticals, keep the phrasing skeleton.
 export function shapeOf(title) {
   return String(title || '')
+    // "뉴메레르(NMR)" -> <SYM> first: once Hangul survives (below), a coin's Korean name
+    // would otherwise split every listing of the same form into a shape of its own.
+    .replace(/[\p{L}\p{N}]+\(([A-Z0-9]{2,15})\)/gu, ' <sym> ')
     .replace(/\([^)]*\)/g, ' ')
     .replace(/\b[A-Z0-9]{2,15}(?:USDT|USD|KRW)?\b/g, '<SYM>')
     .replace(/\d+/g, 'N')
-    .replace(/[^\w<>\s]/g, ' ')
+    // Unicode letters survive (v0.33.5). The old [^\w] was ASCII-only, so a Korean title
+    // collapsed to its one Latin token: "라이터(LIT) KRW 마켓 디지털 자산 추가" became "<sym>",
+    // merged with every other such title, and one without a Latin token became "" and
+    // was not recorded at all. Seven missed Upbit listings sat in one "<sym>" row.
+    .replace(/[^\p{L}\p{N}_<>\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase()
@@ -148,5 +155,9 @@ export function unclassifiedStats(now = Date.now()) {
   const all = unclassifiedSummary();
   const recurring = all.filter((e) => e.count >= 3);
   const fresh = all.filter((e) => now - e.lastSeen < 24 * 3600e3);
-  return { shapes: all.length, recurring: recurring.length, seen24h: fresh.length, top: recurring[0]?.shape ?? null };
+  // An Upbit TRADING notice the classifier did not recognise is the drift that cost seven
+  // listings' lead time. It is not "review someday": it gets its own count and example.
+  const upbitTrade = fresh.filter((e) => /^upbit_trade_unmatched/.test(e.shape));
+  return { shapes: all.length, recurring: recurring.length, seen24h: fresh.length, top: recurring[0]?.shape ?? null,
+    upbitTradeUnmatched24h: upbitTrade.length, upbitTradeExample: upbitTrade[0]?.example?.replace(/^\[UPBIT_TRADE_UNMATCHED\]\s*/, '') ?? null };
 }

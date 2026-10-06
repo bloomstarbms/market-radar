@@ -257,6 +257,9 @@ export function buildHeartbeat(now = Date.now(), deps = {}) {
         const looking = deps.feedLooking ?? feedWasLooking(/^(?!dex:|funding$|macro$).+/);
         return `Unclassified announcements: ${u.shapes} shapes · ${u.recurring} recurring · ${u.seen24h} seen 24h`
           + (u.recurring >= 5 ? ' · ⚠️ review: node review-unclassified.js' : '')
+          // A permanently-on flag is no flag (recurring has been ≥5 since 2026-08-18), so the
+          // one class that cost lead time gets its own line-item with the title in it.
+          + (u.upbitTradeUnmatched24h ? ` · 🚨 ${u.upbitTradeUnmatched24h} Upbit trading notice(s) matched no pattern in 24h, e.g. "${String(u.upbitTradeExample).slice(0, 60)}" — check upbit.js classifyUpbitNotice` : '')
           + (u.seen24h === 0 && !looking ? ' · 🚨 zero with NO live text feed — not looking, not clean' : '');
       })(),
       (() => {

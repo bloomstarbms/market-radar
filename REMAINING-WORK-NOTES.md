@@ -4288,3 +4288,58 @@ file, and let the calendar verifier remain the only thing that checks dates.
 
 Before the 14 Oct CPI if a session happens to be open; otherwise the CPI renders as
 NFP did, honestly without the figure.
+
+## 2026-10-06 — v0.33.5: THE UPBIT NOTICE DETECTOR HAD DRIFTED TWICE, AND THE LOG THAT SAW IT COULD NOT SAY SO
+
+Operator: "a new listing on Upbit, my bot didn't catch it, others already announced it."
+Numeraire (NMR), notice 6642 at 11:36:26Z, "뉴메레르(NMR) KRW, USDT 마켓 디지털 자산 추가".
+The notice detector read it and skipped it; the market-list detector alerted when trading
+opened at 11:40:57Z — 4.5 minutes behind every channel reading the notice.
+
+THE DRIFT. Upbit titles a KRW market added to a coin it already lists as "X 마켓 디지털
+자산 추가"; the pattern knew only "마켓 추가" with nothing between. Seven skipped since
+25 Jul (NMR, BFC, NCT, LIT, CRV, PROM, MORPHO); KMNO and EUL matched only by accident,
+through "추가" in their amendment suffix. And warnings had drifted identically: Upbit
+writes "거래 유의 종목 지정" (spaces), the pattern wanted "유의종목 지정" — BLAST, SOPH,
+EGLD and INJ designations never alerted (no stamp in state.lastAlert). Plus a form the
+bot never knew: "유의 촉구 안내" (call for caution, SAND, HBAR).
+
+PART 1 — DID THE LOG SEE IT? Yes, and could not say so. The announcement poller also
+reads Upbit and logged every one of these as unclassified — under the shape "<sym>",
+because shapeOf stripped every non-ASCII character: a Korean title collapsed to its one
+Latin token ("KRW"). Six sightings, Upbit and Bithumb merged, one example kept (LIT's);
+a Korean title with no Latin token outside parentheses became "" and was not recorded
+at all. The heartbeat line read "Unclassified announcements: 209 shapes · 21 recurring ·
+7 seen 24h · ⚠️ review: node review-unclassified.js" — and that ⚠️ has been on since
+2026-08-18, when recurring first reached 5. A flag that is always on is not a flag.
+Nothing in the line could distinguish "seven missed Upbit listings" from venue noise.
+
+FIXES. (1) classifyUpbitNotice(): one pure classifier — LIST, MARKET_ADD, DELIST, WARN,
+WARN_FOLLOWUP (released/extended: not a new warning), CAUTION — matched on the title
+with its trailing "(… 안내)" amendment suffix peeled off (balanced, so a nested
+"(헤미(HEMI) 거래지원 취소 안내)" comes off whole). Over 100 real trade notices: 98 matched
+before CAUTION was added, 100 after. (2) MARKET_ADD renders "Upbit adds a KRW market for
+NMR (Numeraire)" — the coin is already on Upbit; and the market-list detector now says
+the same when a KNOWN ticker gains a quote. (3) Amendments: Upbit edits IN PLACE (same
+id, new title, later listed_at — 6450 KMNO, 6560 REZ, 6580 PYUSD), so id-dedupe already
+prevents a second alert; a NEW-id amendment for a ticker already announced is skipped and
+logged; one for a ticker the bot never announced is sent (still news here); a
+cancellation suffix is never treated as harmless. (4) An Upbit TRADING notice that
+matches nothing is logged as "[UPBIT_TRADE_UNMATCHED] …" — its own shape — and the
+heartbeat names it with 🚨 and the title, separate from the always-on review flag.
+(5) shapeOf keeps Unicode letters and folds "이름(TICKER)" into one placeholder, so the
+seven become two readable shapes ("<sym> <sym> 마켓 디지털 자산 추가", one per market set)
+instead of one "<sym>". Old collapsed rows stay in the file and age out.
+
+PART 4 — CADENCE, measured from the VPS against api-manager.upbit.com (Cloudflare,
+cache-control max-age=1): 1/s → 429 after 11; 1 per 3 s → 429 at the 14th; 1 per 5 s →
+24/24 over 2 min; 1 per 10 s → 12/12. ≈12 requests per minute per IP. Notices now poll
+every 15 s on their OWN timer (4/min, a third of the budget; announcements.js also reads
+this feed every 10 min), started after the bot, never in --once, backing off 60 s on a
+429. Every other poller is unchanged, including the Upbit market list (120 s). From a
+2-minute worst case to 15 s.
+
+NOT DONE, worth knowing: an IN-PLACE cancellation (HEMI, 6558: listing announced, then the
+same notice edited to "(헤미(HEMI) 거래지원 취소 안내)") is never re-read, because the id
+is already seen. Detecting it means tracking listed_at per id. Queued, small.
+Fixture 77 (37 checks); suite 1003.

@@ -2803,6 +2803,77 @@ console.log('76. after N consecutive failed broadcasts the DM gets a PLAINTEXT l
   } finally { globalThis.fetch = saved; tgm.resetDeliveryStreak(); }
 }
 
+console.log('77. UPBIT notices — the "마켓 … 추가" form, warnings with spaces, amendments, unmatched trading notices, its own cadence');
+{
+  const u = await import('./src/sources/cex/upbit.js');
+  // The seven titles the old pattern skipped (real, from Upbit's feed, 2026-07-25 .. 2026-10-06).
+  const missed = [
+    ['NMR', '뉴메레르(NMR) KRW, USDT 마켓 디지털 자산 추가', ['KRW', 'USDT']],
+    ['BFC', '바이프로스트(BFC) KRW, USDT 마켓 디지털 자산 추가', ['KRW', 'USDT']],
+    ['NCT', '폴리스웜(NCT) KRW 마켓 디지털 자산 추가', ['KRW']],
+    ['LIT', '라이터(LIT) KRW 마켓 디지털 자산 추가', ['KRW']],
+    ['CRV', '커브(CRV) KRW, USDT 마켓 디지털 자산 추가', ['KRW', 'USDT']],
+    ['PROM', '프롬(PROM) KRW, USDT 마켓 디지털 자산 추가', ['KRW', 'USDT']],
+    ['MORPHO', '모포(MORPHO) KRW 마켓 디지털 자산 추가', ['KRW']],
+  ];
+  for (const [tk, title, q] of missed) {
+    const c = u.classifyUpbitNotice(title);
+    check(`${tk}: "${title}" is a MARKET_ADD for ${tk} on ${q.join('+')} (was skipped)`, c.kind === 'MARKET_ADD' && c.tickers.join() === tk && c.quotes.join() === q.join() && !c.amendment);
+  }
+  // KMNO and EUL used to match ONLY through "추가" in their amendment suffix. Now they must
+  // match with the suffix REMOVED — on purpose, not by accident.
+  for (const [tk, title] of [['KMNO', '카미노파이낸스(KMNO) KRW 마켓 디지털 자산 추가 (거래지원 개시 시점 추가 변경 안내)'], ['EUL', '오일러(EUL) KRW 마켓 디지털 자산 추가 (거래지원 개시 시점 변경 안내)']]) {
+    const c = u.classifyUpbitNotice(title);
+    check(`${tk}: matches on the base title, the amendment suffix is split off and not what matched`, c.kind === 'MARKET_ADD' && c.tickers.join() === tk && /거래지원 개시 시점/.test(c.amendment) && !/안내/.test(c.base) && u.classifyUpbitNotice(c.base).kind === 'MARKET_ADD');
+  }
+  check('MUTATION: a title whose only "추가" is in the amendment suffix does NOT match', u.classifyUpbitNotice('오일러(EUL) KRW 마켓 디지털 자산 (거래지원 개시 시점 추가 변경 안내)').kind === null);
+  check('splitAmendment peels a nested suffix whole, and leaves the market and date parentheticals', u.splitAmendment('헤미(HEMI), 유즈리스(USELESS) 신규 거래지원 안내 (BTC, USDT 마켓) (헤미(HEMI) 거래지원 취소 안내)').base === '헤미(HEMI), 유즈리스(USELESS) 신규 거래지원 안내 (BTC, USDT 마켓)' && u.splitAmendment('아이콘(ICX) 거래지원 종료 안내 (10/19 15:00)').amendment === null);
+  // Warnings drifted the same way: "거래 유의 종목 지정" (spaces). Follow-ups are not new warnings.
+  check('WARN: "블라스트(BLAST) 거래 유의 종목 지정 안내" is a warning (was skipped: the old pattern wanted no spaces)', u.classifyUpbitNotice('블라스트(BLAST) 거래 유의 종목 지정 안내').kind === 'WARN');
+  check('release (지정 해제) and extension (기간 연장) are follow-ups, never a new warning', u.classifyUpbitNotice('샌드박스(SAND) 거래 유의 종목 지정 해제 안내').kind === 'WARN_FOLLOWUP' && u.classifyUpbitNotice('질리카(ZIL) 거래 유의 종목 지정 기간 연장 안내').kind === 'WARN_FOLLOWUP');
+  check('CAUTION: "헤데라(HBAR) 유의 촉구 안내" is its own kind', u.classifyUpbitNotice('헤데라(HBAR) 유의 촉구 안내').kind === 'CAUTION');
+  check('the existing forms still classify: new listing, delisting with date', u.classifyUpbitNotice('돌핀(POD) 신규 거래지원 안내 (KRW, BTC, USDT 마켓)').kind === 'LIST' && u.classifyUpbitNotice('아이콘(ICX) 거래지원 종료 안내 (10/19 15:00)').kind === 'DELIST');
+  // Rendering: "adds a KRW market", never "will list", for a coin already on Upbit.
+  const ma = u.upbitMarketAddMessage('NMR (Numeraire)', ['KRW', 'USDT'], '뉴메레르(NMR) KRW, USDT 마켓 디지털 자산 추가');
+  check('MARKET_ADD renders "Upbit adds a KRW market for NMR (Numeraire)" with the markets and "already listed"', ma.title === 'Upbit adds a KRW market for NMR (Numeraire)' && /^KRW, USDT markets · already listed on Upbit · announced before trading opens$/.test(ma.lines[0]) && !/will list/.test(JSON.stringify(ma)));
+  check('a USDT-only market add says "a USDT market", not KRW', u.upbitMarketAddMessage('X', ['USDT'], 't').title === 'Upbit adds a USDT market for X');
+  const { renderMessage } = await import('./src/core/dispatcher.js');
+  const { proseProblems } = await import('./src/core/prose-lint.js');
+  check('the new Upbit shapes are lint-clean and within the cap', [ma, u.upbitNoticeMessage('HBAR', '헤데라(HBAR) 유의 촉구 안내', { isCaution: true }), u.upbitMarketAddMessage('NMR', ['KRW'], null, { trading: true })].every((m) => { const r = renderMessage(m, 'public'); return r.lines.length <= 6 && r.lines.concat(r.title).every((l) => !proseProblems(l).length); }));
+  // processNotices, executed: baseline, a real listing, its in-place amendment, a new-id amendment, a cancellation, an unmatched trading notice.
+  const sent = [], noted = [];
+  const stamps = new Set();
+  const deps = { dispatch: async (a) => { sent.push(a); stamps.add(a.dedupeKey.replace(/^UPBIT:/, '')); return true; }, stamped: (tk) => stamps.has(tk), note: (v, t) => noted.push(t) };
+  const st = {};
+  await u.processNotices([{ id: 1, title: 'old notice', category: '거래' }], st, deps);
+  check('first poll is a baseline: nothing sent', sent.length === 0 && st.upbitNotices.join() === '1');
+  await u.processNotices([{ id: 6450, title: '카미노파이낸스(KMNO) KRW 마켓 디지털 자산 추가', category: '거래' }], st, deps);
+  check('the KMNO market add is sent once, as "adds a KRW market"', sent.length === 1 && /^Upbit adds a KRW market for KMNO/.test(sent[0].title) && sent[0].dedupeKey === 'UPBIT:KMNO');
+  // Upbit amends IN PLACE (same id, new title, new listed_at) — the real 6450 at 15:45 KST.
+  await u.processNotices([{ id: 6450, title: '카미노파이낸스(KMNO) KRW 마켓 디지털 자산 추가 (거래지원 개시 시점 추가 변경 안내)', category: '거래' }], st, deps);
+  check('REAL AMENDMENT (6450, edited in place): no second alert', sent.length === 1);
+  const r = await u.processNotices([{ id: 99001, title: '카미노파이낸스(KMNO) KRW 마켓 디지털 자산 추가 (거래지원 개시 시점 추가 변경 안내)', category: '거래' }], st, deps);
+  check('the same amendment under a NEW id, for an already-announced ticker: no second alert, and the skip is recorded', sent.length === 1 && r.skipped.length === 1 && /already-announced KMNO/.test(r.skipped[0].why));
+  await u.processNotices([{ id: 99002, title: '오일러(EUL) KRW 마켓 디지털 자산 추가 (거래지원 개시 시점 변경 안내)', category: '거래' }], st, deps);
+  check('an amendment for a ticker NEVER announced (bot missed the original) is sent — it is still news here', sent.length === 2 && /EUL/.test(sent[1].title));
+  await u.processNotices([{ id: 99003, title: '헤미(HEMI), 유즈리스(USELESS) 신규 거래지원 안내 (BTC, USDT 마켓) (헤미(HEMI) 거래지원 취소 안내)', category: '거래' }], st, deps);
+  check('a cancellation suffix is never treated as a harmless amendment', sent.length === 3);
+  await u.processNotices([{ id: 99004, title: '뉴메레르(NMR) 새로운 형식의 공지', category: '거래' }, { id: 99005, title: '이벤트 안내', category: '이벤트' }], st, deps);
+  check('an unmatched TRADING notice is logged with its own marker; a non-trading notice is not', noted.length === 1 && /^\[UPBIT_TRADE_UNMATCHED\] 뉴메레르\(NMR\) 새로운 형식의 공지$/.test(noted[0]) && sent.length === 3);
+  // The log keeps Korean now: the seven titles are seven readable shapes, not one "<sym>".
+  const { shapeOf } = await import('./src/core/unclassified.js');
+  const shapes = new Set(missed.map(([, t]) => shapeOf(t)));
+  check('shapeOf keeps Hangul: the seven missed titles fold into readable shapes (one per market set) that say "마켓 디지털 자산 추가", never the bare "<sym>"', shapes.size === 2 && [...shapes].every((x) => / 마켓 디지털 자산 추가$/.test(x)) && ![...shapes].includes('<sym>'));
+  check('a Korean title with no Latin token outside parentheses no longer becomes an empty shape', shapeOf('돌핀(POD) 신규 거래지원 안내') === '<sym> 신규 거래지원 안내');
+  check('the unmatched-trading marker produces its own shape row', /^upbit_trade_unmatched/.test(shapeOf('[UPBIT_TRADE_UNMATCHED] 뉴메레르(NMR) 새로운 형식의 공지')));
+  const { buildHeartbeat } = await import('./src/core/telemetry.js');
+  const hb = buildHeartbeat(Date.now(), { rows: [], unclassified: { shapes: 3, recurring: 21, seen24h: 2, upbitTradeUnmatched24h: 1, upbitTradeExample: '뉴메레르(NMR) 새로운 형식의 공지' }, feedLooking: true });
+  check('the heartbeat names an unmatched Upbit trading notice with its title (🚨), separate from the always-on review flag', hb.lines.some((l) => /🚨 1 Upbit trading notice\(s\) matched no pattern in 24h, e\.g\. "뉴메레르\(NMR\) 새로운 형식의 공지"/.test(l)));
+  // Cadence: notices on their own timer, every other poller untouched.
+  check(`notice cadence is ${u.NOTICE_EVERY_MS / 1000} s on its own timer, started after the bot and never in --once`, u.NOTICE_EVERY_MS === 15000 && /setInterval\(pollAll[^\n]*\n[\s\S]{0,200}startUpbitNoticeWatch\(\)/.test(readFileSync('src/index.js', 'utf8')));
+  check('a 429 from the notice feed backs off 60 s instead of retrying every tick', /__rateLimited[\s\S]{0,200}noticeBackoffUntil = Date\.now\(\) \+ 60e3/.test(readFileSync('src/sources/cex/upbit.js', 'utf8')));
+}
+
 console.error = origErr;
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

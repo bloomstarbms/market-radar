@@ -14,7 +14,7 @@ import { screen as screenContract } from './sources/dex/rugscreen.js';
 import { pollCex } from './sources/cex/monitor.js';
 import { pollFunding } from './sources/cex/funding.js';
 import { pollAnnouncements } from './sources/cex/announcements.js';
-import { pollUpbit } from './sources/cex/upbit.js';
+import { pollUpbit, startUpbitNoticeWatch } from './sources/cex/upbit.js';
 import { pollCascade } from './sources/cex/cascade.js';
 import { pollHyperliquid } from './sources/perp/hyperliquid.js';
 import { checkWhales } from './sources/chain/whale.js';
@@ -208,6 +208,8 @@ async function main() {
   await pollAll();
   if (ONCE) { console.log('[once] done'); process.exit(0); }
   setInterval(pollAll, config.pollIntervalSec * 1000);
+  // Upbit notices on their own cadence: the one source where seconds of lead time matter.
+  startUpbitNoticeWatch();
 }
 
 main();
