@@ -2464,7 +2464,7 @@ console.log('67. the VERSION BUMP asks each PREMISE what it claims — a blanket
   check('LIVE: every doc that tracks live is AT the live version (the tool was used, not sed)', bumpTree('.', '99.99.99', { dry: true }).moved.every((m) => new RegExp(`\\(v${v.config.replace(/\./g, '\\.')} →`).test(m)));
 }
 
-console.log('68. --preflight runs the four boot gates and NOTHING else — systemd ExecStartPre on the VPS');
+console.log('68. --preflight runs the five boot gates and NOTHING else — systemd ExecStartPre on the VPS');
 {
   // The brief's first draft imported index.js with a `?preflight=1` query nothing
   // read: that would have started the bot inside the preflight. A `--once` would have
@@ -2485,7 +2485,7 @@ console.log('68. --preflight runs the four boot gates and NOTHING else — syste
     const before = digest(dst);
     const ok = run(dst, '');
     const out = (ok.stdout || '') + (ok.stderr || '');
-    check('preflight on a green copy exits 0 with four gates and the banner', ok.status === 0 && /\[boot\] admit\(\) self-test/.test(out) && /tier-route assertion: OK/.test(out) && /classifiers-wired assertion: OK/.test(out) && /pagination-guard assertion: OK/.test(out) && /\[preflight\] v\d+\.\d+\.\d+: four gates OK — not starting/.test(out));
+    check('preflight on a green copy exits 0 with five gates and the banner', ok.status === 0 && /\[boot\] admit\(\) self-test/.test(out) && /tier-route assertion: OK/.test(out) && /classifiers-wired assertion: OK/.test(out) && /pagination-guard assertion: OK/.test(out) && /tier-1 venue collectors: OK \(/.test(out) && /\[preflight\] v\d+\.\d+\.\d+: five gates OK — not starting/.test(out));
     check('preflight does NOT start: no "starting" banner, no poller scan, no telegram', !/Market Radar v.* starting/.test(out) && !/\[cex\]/.test(out) && !/\[telegram\]/.test(out));
     check('preflight writes NOTHING under data/ or unlocks.json (digest identical)', digest(dst) === before);
     check('preflight with a real-looking token in a marked copy is refused by config.js (exit 3) — the copy guard still holds', run(dst, 'not-a-stub').status === 3);
@@ -2702,7 +2702,7 @@ console.log('73. HYPERLIQUID — listings on a persisted baseline, funding in it
   const book = hyperliquidBook({ levels: [[{ px: '0.99', sz: '100', n: 2 }], [{ px: '1.01', sz: '50', n: 1 }]] });
   check('executability reads Hyperliquid\'s object levels as [px, sz] pairs, bids then asks', book.bids[0][0] === '0.99' && book.bids[0][1] === '100' && book.asks[0][0] === '1.01');
   check('outcomes can price a hyperliquid track (allMids) — without it every Hyperliquid row is unscoreable', /r\.exchange === 'hyperliquid'[\s\S]{0,300}allMids/.test(readFileSync('src/core/outcomes.js', 'utf8')));
-  check('the poll loop calls pollHyperliquid', /pollHyperliquid\(\)\]\);/.test(readFileSync('src/index.js', 'utf8')));
+  check('the poll loop calls pollHyperliquid (anywhere in the list, not necessarily last)', /Promise\.allSettled\(\[[^\]]*\bpollHyperliquid\(\)/.test(readFileSync('src/index.js', 'utf8')));
   check('the pulse is named dex:… so it never counts as a live TEXT feed for the "we were looking" companions', /notePulse\('dex:hyperliquid'\)/.test(src));
 }
 
@@ -2872,6 +2872,67 @@ console.log('77. UPBIT notices — the "마켓 … 추가" form, warnings with s
   // Cadence: notices on their own timer, every other poller untouched.
   check(`notice cadence is ${u.NOTICE_EVERY_MS / 1000} s on its own timer, started after the bot and never in --once`, u.NOTICE_EVERY_MS === 15000 && /setInterval\(pollAll[^\n]*\n[\s\S]{0,200}startUpbitNoticeWatch\(\)/.test(readFileSync('src/index.js', 'utf8')));
   check('a 429 from the notice feed backs off 60 s instead of retrying every tick', /__rateLimited[\s\S]{0,200}noticeBackoffUntil = Date\.now\(\) \+ 60e3/.test(readFileSync('src/sources/cex/upbit.js', 'utf8')));
+}
+
+console.log('78. COINBASE — stage-aware product diff from the real response; a tier-1 venue must have a live collector');
+{
+  const cb = await import('./src/sources/cex/coinbase.js');
+  const real = JSON.parse(readFileSync('fixtures/coinbase-products-2026-10-06.json', 'utf8')).products;
+  const byId = Object.fromEntries(real.map((p) => [p.id, p]));
+  check('the fixture is the real response shape: SYND-USD is limit-only, MOVE-USD delisted, the rest online', byId['SYND-USD'].limit_only === true && byId['MOVE-USD'].status === 'delisted' && byId['BTC-USD'].status === 'online');
+  check('stageOf reads the real flags: LIMIT_ONLY, DELISTED (trading_disabled with it), FULL', cb.stageOf(byId['SYND-USD']) === 'LIMIT_ONLY' && cb.stageOf(byId['MOVE-USD']) === 'DELISTED' && cb.stageOf(byId['BTC-USD']) === 'FULL');
+  const sent = [], edits = [];
+  const deps = { dispatch: async (a) => { sent.push(a); return true; }, edit: async (key, line) => { edits.push({ key, line }); return true; }, now: Date.parse('2026-10-06T14:00:00Z') };
+  const without = (ids, list = real) => list.filter((p) => !ids.includes(p.id));
+  const st = {};
+  await cb.processProducts(without(['SYND-USD']), st, deps);
+  check('poll 1 is a baseline: nothing sent, the baseline is persisted in state', sent.length === 0 && Object.keys(st.coinbase.products).length === real.length - 1);
+  await cb.processProducts(real, st, deps);
+  check('poll 2: SYND-USD appears (a NEW base) in limit-only -> ONE opening alert, "Coinbase is opening a market for SYND (limit-only stage)"', sent.length === 1 && sent[0].title === 'Coinbase is opening a market for SYND (limit-only stage)' && sent[0].dedupeKey === 'COINBASE:SYND' && sent[0].venue === 'coinbase' && /limit orders only/.test(sent[0].lines[0]));
+  const full = real.map((p) => (p.id === 'SYND-USD' ? { ...p, limit_only: false } : p)); // the one simulated change
+  await cb.processProducts(full, st, deps);
+  check('poll 3: SYND-USD goes to full trading -> the opening message is EDITED once, no second alert', sent.length === 1 && edits.length === 1 && edits[0].key === 'COINBASE:SYND' && /^Full trading open from 14:00 UTC \(SYND-USD\)$/.test(edits[0].line));
+  await cb.processProducts(full, st, deps);
+  check('poll 4, nothing changed: nothing sent, nothing edited', sent.length === 1 && edits.length === 1);
+  // A delisting: a real online product goes delisted (status + trading_disabled, as the real delisted rows carry).
+  const delisted = full.map((p) => (p.id === 'AAVE-USD' ? { ...p, status: 'delisted', trading_disabled: true } : p));
+  await cb.processProducts(delisted, st, deps);
+  check('AAVE-USD online -> delisted: ONE delisting fact', sent.length === 2 && sent[1].type === 'ANNOUNCE' && sent[1].delist === true && sent[1].title === 'Coinbase delisted AAVE');
+  await cb.processProducts(delisted, st, deps);
+  check('the delisting is not repeated on the next poll', sent.length === 2);
+  // Market adds: a coin already on Coinbase gains a quote.
+  const st2 = {};
+  await cb.processProducts(without(['ETH-USD', 'ETH-GBP']), st2, deps);
+  await cb.processProducts(without(['ETH-GBP']), st2, deps);
+  check('ETH already on Coinbase (ETH-EUR) gains ETH-USD -> "Coinbase adds a USD market for ETH", never "lists"', sent.length === 3 && sent[2].title === 'Coinbase adds a USD market for ETH' && !/lists/.test(sent[2].title));
+  await cb.processProducts(real, st2, deps);
+  check('a known coin gaining a GBP market is skipped (non-crypto quote)', sent.length === 3);
+  const st3 = {};
+  await cb.processProducts([byId['BTC-USD']], st3, deps);
+  await cb.processProducts([byId['BTC-USD'], byId['ETH-GBP']], st3, deps);
+  check('a NEW coin is reported even when its first market is GBP', sent.length === 4 && /ETH/.test(sent[3].title) && /GBP/.test(sent[3].lines[0]));
+  // Limit-only is not only a launch stage: an ESTABLISHED limit-only product going full is not news.
+  const st4 = {};
+  await cb.processProducts(real, st4, deps);
+  const e4 = cb.diffProducts(st4.coinbase.products, cb.snapshot(full));
+  check('an established limit-only product reaching full trading yields only a FULL event (edit-or-log), never a new alert', e4.length === 1 && e4[0].kind === 'FULL' && e4[0].base === 'SYND');
+  check('a product that first appears already delisted is history, not news', cb.diffProducts({}, cb.snapshot([byId['MOVE-USD']])).length === 0);
+  // Messages: lint and cap.
+  const { renderMessage } = await import('./src/core/dispatcher.js');
+  const { proseProblems } = await import('./src/core/prose-lint.js');
+  const shapes = [cb.coinbaseOpeningMessage({ base: 'SYND', quotes: ['USD'], ids: ['SYND-USD'], stage: 'AUCTION', msg: '' }), cb.coinbaseListedMessage({ base: 'X', quotes: ['USD', 'USDC'], ids: ['X-USD', 'X-USDC'] }), cb.coinbaseMarketAddMessage({ base: 'ETH', quote: 'USD', id: 'ETH-USD', stage: 'LIMIT_ONLY' }), cb.coinbaseDelistMessage({ base: 'AAVE', ids: ['AAVE-USD'], allGone: false, msg: 'Trading has been disabled' })];
+  check('every Coinbase message shape is lint-clean and within the cap', shapes.every((m) => { const r = renderMessage(m, 'public'); return r.lines.length <= 6 && r.lines.concat(r.title).every((l) => !proseProblems(l).length); }));
+  check('auction stage reads "Coinbase is opening a market for SYND (auction stage)"', shapes[0].title === 'Coinbase is opening a market for SYND (auction stage)');
+  // THE GATE: every tier-1 venue has a live collector, or boot refuses.
+  const { checkVenueCollectors, VENUE_COLLECTORS } = await import('./src/core/routes.js');
+  const { LISTING_TIER1 } = await import('./src/core/dispatcher.js');
+  const rd = (rel) => { try { return readFileSync('src/' + rel, 'utf8'); } catch { return null; } };
+  check('every tier-1 venue on the live tree has a declared, readable, wired collector', checkVenueCollectors({ tier1: LISTING_TIER1 }).ok && [...LISTING_TIER1].every((v) => VENUE_COLLECTORS[v]));
+  check('the state BEFORE this version — coinbase in tier-1, no coinbase.js — fails the gate', !checkVenueCollectors({ tier1: LISTING_TIER1, readFile: (f) => (f === 'sources/cex/coinbase.js' ? null : rd(f)) }).ok);
+  check('a tier-1 venue with no declared collector fails, naming it', /'kraken' has NO declared collector/.test(checkVenueCollectors({ tier1: new Set([...LISTING_TIER1, 'kraken']) }).problems.join()));
+  check('a collector that exists but is never called by index.js fails', !checkVenueCollectors({ tier1: new Set(['coinbase']), readFile: (f) => (f === 'index.js' ? rd(f).replace(/pollCoinbase\(\)/g, 'x') : rd(f)) }).ok);
+  check('binance switched off in CEX_EXCHANGES fails (configured, not just present)', !checkVenueCollectors({ tier1: new Set(['binance']), cfg: { cexExchanges: ['mexc'] } }).ok);
+  check(`Coinbase polls every ${cb.POLL_EVERY_MS / 1000} s inside the poll loop`, cb.POLL_EVERY_MS === 60000 && /Promise\.allSettled\(\[[^\]]*\bpollCoinbase\(\)/.test(readFileSync('src/index.js', 'utf8')));
 }
 
 console.error = origErr;

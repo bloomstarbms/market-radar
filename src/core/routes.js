@@ -150,6 +150,36 @@ export function checkClassifiersWired({ readFile } = {}) {
   return { ok: problems.length === 0, problems };
 }
 
+// TIER-1 VENUES MUST HAVE A LIVE COLLECTOR (v0.33.6). LISTING_TIER1 says "a listing on
+// this venue reprices the asset globally — push immediately". Coinbase was in it for
+// months while nothing polled Coinbase: a coverage claim with nothing behind it, and the
+// claim reads as coverage to anyone reading the list. Declared, not inferred (the same
+// discipline as EMITTERS): each tier-1 venue names the file that collects it, a host
+// string proving the file reads that venue, the poll function index.js must call, and,
+// where the venue is configurable, the config that must include it.
+export const VENUE_COLLECTORS = {
+  upbit: { file: 'sources/cex/upbit.js', host: 'api-manager.upbit.com', poll: 'pollUpbit' },
+  bithumb: { file: 'sources/cex/announcements.js', host: 'api.bithumb.com/v1/notices', poll: 'pollAnnouncements' },
+  binance: { file: 'sources/cex/exchanges.js', host: 'api.binance.com', poll: 'pollCex', configured: (cfg) => cfg.cexExchanges.includes('binance') },
+  coinbase: { file: 'sources/cex/coinbase.js', host: 'api.exchange.coinbase.com', poll: 'pollCoinbase' },
+};
+export function checkVenueCollectors({ tier1, readFile, cfg = config, collectors = VENUE_COLLECTORS } = {}) {
+  const problems = [];
+  const rd = readFile ?? ((rel) => { try { return readFileSync(join(process.cwd(), 'src', rel), 'utf8'); } catch { return null; } });
+  const venues = [...(tier1 ?? [])];
+  const index = rd('index.js') ?? '';
+  for (const v of venues) {
+    const c = collectors[v];
+    if (!c) { problems.push(`tier-1 venue '${v}' has NO declared collector — a tier-1 listing route with no source behind it`); continue; }
+    const src = rd(c.file);
+    if (src === null) { problems.push(`tier-1 venue '${v}': collector ${c.file} is not readable`); continue; }
+    if (!src.includes(c.host)) problems.push(`tier-1 venue '${v}': ${c.file} never reads ${c.host}`);
+    if (!new RegExp(`\\b${c.poll}\\(\\)`).test(index)) problems.push(`tier-1 venue '${v}': index.js never calls ${c.poll}()`);
+    if (c.configured && !c.configured(cfg)) problems.push(`tier-1 venue '${v}': collector exists but is switched off in config`);
+  }
+  return { ok: problems.length === 0, problems, venues };
+}
+
 export function assertTierRoutes(opts) {
   const r = checkTierRoutes(opts);
   if (!r.ok) {

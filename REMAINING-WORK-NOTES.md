@@ -4343,3 +4343,45 @@ NOT DONE, worth knowing: an IN-PLACE cancellation (HEMI, 6558: listing announced
 same notice edited to "(헤미(HEMI) 거래지원 취소 안내)") is never re-read, because the id
 is already seen. Detecting it means tracking listed_at per id. Queued, small.
 Fixture 77 (31 checks at runtime: 972 → 1003); suite 1003.
+
+## 2026-10-06 — v0.33.6: COINBASE, AND A BOOT GATE FOR THE CLAIM IT WAS MISSING
+
+Coinbase sat in LISTING_TIER1 ("a listing here reprices the asset globally — push
+immediately") while nothing polled Coinbase. A tier-1 entry with no source behind it is
+a coverage claim that reads as coverage. Now: src/sources/cex/coinbase.js, and a FIFTH
+boot gate, checkVenueCollectors — every tier-1 venue must name its collector file, a
+host string proving the file reads that venue, the poll function index.js calls and,
+where configurable, the config that includes it. Before this version the gate fails on
+coinbase; fixture 78 proves that state fails. preflight's banner is "five gates OK".
+
+SOURCE, tested from the VPS like the Step 2 smoke test: api.exchange.coinbase.com/
+products — 200 on IPv4 and IPv6, identical 354 KB bodies, 839 products (512 online, 327
+delisted). Cloudflare-cached, max-age=5. Rate: every 1 s ×20, 0.5 s ×30, 0.2 s ×40,
+0.1 s ×40 — all 200, no limit reached at 10 req/s (Coinbase documents 10/s for public
+endpoints). INTERVAL: 60 s in the existing poll loop. The limit is not the constraint —
+the 5 s cache is the floor and each call is 354 KB (≈510 MB/day at 60 s, ≈2 GB/day at
+15 s); and the stage machine is itself the lead time: a new product is seen in its
+pre-trading stage and the move to full trading edits that message.
+
+STAGES. A new product in auction / post-only / limit-only (or not yet enabled) →
+"Coinbase is opening a market for X (limit-only stage)"; its move to full trading EDITS
+that thread ("Full trading open from HH:MM UTC"); online → delisted is one delisting
+fact; a coin already on Coinbase gaining a crypto or USD quote → "Coinbase adds a USD
+market for X", never "lists"; GBP/EUR/INR/… skipped unless the base is new. LIMIT-ONLY
+IS NOT ONLY A LAUNCH STAGE: 20 established products sat in it on the day (stablecoin
+crosses, INR pairs, SYND-USD), so stage alerts fire for NEW products only; an old
+limit-only product going full is edit-or-log, never a fresh alert. Baseline persisted
+(st.coinbase) — a restart cannot swallow a listing. Fixture 78, from 7 real, unmodified
+products saved in fixtures/; the single simulated change is SYND-USD's limit_only →
+false for the full-trading step.
+
+THE FLAG LESSON (operator, 2026-10-06), recorded as a rule: the unclassified-announcements
+⚠️ had been on since 2026-08-18, when "recurring ≥ 5" was first crossed, and a flag that
+is always on reads exactly like one that is off — nobody reads it on day 49. ANY WARNING
+FLAG SHOULD BE KEYED TO NEW ITEMS SINCE THE LAST REVIEW, not to a running total crossing a
+threshold once. "21 recurring shapes" says nothing; "3 new shapes since your last review
+(e.g. …)" says what to look at, and goes quiet when reviewed. The v0.33.5 Upbit 🚨 is the
+first flag built that way (unmatched trading notices in the last 24 h, with the title);
+the unclassified ⚠️ itself still counts a total — QUEUED: key it to a review stamp
+(review-unclassified.js writes one, as review-exclusions.js already does for the
+exclusions line) and list the new shapes by name.

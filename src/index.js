@@ -4,7 +4,8 @@ import { load, getState, save } from './core/store.js';
 import { startBot } from './core/telegram.js';
 import { dispatch, recordSuppressedRug, checkPendingListings } from './core/dispatcher.js';
 import { dailyDigest, heartbeat } from './core/telemetry.js';
-import { assertTierRoutes, checkClassifiersWired } from './core/routes.js';
+import { assertTierRoutes, checkClassifiersWired, checkVenueCollectors } from './core/routes.js';
+import { LISTING_TIER1 } from './core/dispatcher.js';
 import { checkPaginationGuards } from './core/pagination.js';
 import { notePulse } from './core/pulse.js';
 import { loadOutcomes, checkOutcomes, statsSummary, recordAlert, backupOutcomes } from './core/outcomes.js';
@@ -15,6 +16,7 @@ import { pollCex } from './sources/cex/monitor.js';
 import { pollFunding } from './sources/cex/funding.js';
 import { pollAnnouncements } from './sources/cex/announcements.js';
 import { pollUpbit, startUpbitNoticeWatch } from './sources/cex/upbit.js';
+import { pollCoinbase } from './sources/cex/coinbase.js';
 import { pollCascade } from './sources/cex/cascade.js';
 import { pollHyperliquid } from './sources/perp/hyperliquid.js';
 import { checkWhales } from './sources/chain/whale.js';
@@ -27,7 +29,7 @@ import { startUniverseSweep } from './core/universe.js';
 import { classifySymbol } from './core/taxonomy.js';
 
 const ONCE = process.argv.includes('--once');
-// --preflight: load state READ-ONLY, run the four boot gates, print the banner, exit
+// --preflight: load state READ-ONLY, run the five boot gates, print the banner, exit
 // 0 — no Telegram, no poll, no state write. systemd's ExecStartPre on the VPS runs
 // this; a preflight that polled would mark cooldowns the real instance then honours
 // (alerts eaten by the check), and one that merely imported this file would start
@@ -94,7 +96,7 @@ async function pollDex() {
 // messages (content vs telemetry), both idempotent-across-restart via persisted,
 // delivery-gated markers. Do not reintroduce in-memory sent-flags here.
 async function pollAll() {
-  const settled = await Promise.allSettled([pollDex(), pollCex(), pollFunding(), pollCascade(), pollAnnouncements(), pollMacro(), pollEvents(), pollUnlocks(), pollUpbit(), pollCadence(), pollSourceRecheck(), pollCliffWatch(), pollHyperliquid()]);
+  const settled = await Promise.allSettled([pollDex(), pollCex(), pollFunding(), pollCascade(), pollAnnouncements(), pollMacro(), pollEvents(), pollUnlocks(), pollUpbit(), pollCadence(), pollSourceRecheck(), pollCliffWatch(), pollHyperliquid(), pollCoinbase()]);
   settled.forEach((r, i) => { if (r.status === 'rejected') console.error('[OPERATOR] poller #' + i + ' rejected:', r.reason?.stack || r.reason); });
   await checkPendingListings().catch((e) => console.error('[listing] pending re-check failed:', e.message));
   await checkOutcomes().catch(() => {});
@@ -199,7 +201,14 @@ async function main() {
     process.exit(1);
   }
   console.log(`[boot] pagination-guard assertion: OK (${pg.readers.length} paginated readers, ${pg.readers.filter((r) => r.exempt).length} declared exempt)`);
-  if (PREFLIGHT) { console.log(`[preflight] v${VERSION}: four gates OK — not starting (no poll, no send, no write)`); process.exit(0); }
+  const vc = checkVenueCollectors({ tier1: LISTING_TIER1 });
+  if (!vc.ok) {
+    console.error('[OPERATOR][BOOT] tier-1 venue without a live collector: ' + vc.problems.join(' ; ')
+      + ' — a venue the dispatcher treats as tier-1 must be polled; refusing to start.');
+    process.exit(1);
+  }
+  console.log(`[boot] tier-1 venue collectors: OK (${vc.venues.join(', ')})`);
+  if (PREFLIGHT) { console.log(`[preflight] v${VERSION}: five gates OK — not starting (no poll, no send, no write)`); process.exit(0); }
   purgeExcludedFromAdv();
   const whaleMode = (config.etherscanKey ? 'evm ' : '') + (config.heliusKey ? 'solana' : '') || 'OFF (no keys)';
   console.log(`Market Radar v${VERSION} starting · poll ${config.pollIntervalSec}s · minSev ${config.minSeverity} · telegram ${config.telegramToken ? 'ON' : 'OFF (console-only)'} · cex [${config.cexExchanges.join(', ')}] · whale ${whaleMode}`);

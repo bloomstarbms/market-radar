@@ -77,7 +77,7 @@ const TAG = {
 // LISTING_FLOOR_USD are the qualifying conditions for the catalyst bypasses. Editing
 // either — adding a venue, moving the floor — changes which catalysts bypass the
 // budget. Re-run the bypass audit when you touch them.
-const LISTING_TIER1 = new Set(['upbit', 'bithumb', 'coinbase', 'binance']);
+export const LISTING_TIER1 = new Set(['upbit', 'bithumb', 'coinbase', 'binance']);
 export const LISTING_FLOOR_USD = Number(process.env.LISTING_FLOOR_USD || 25000);
 const LISTING_DEFER_MS = Number(process.env.LISTING_DEFER_MIN || 30) * 60e3;
 export function listingRoute(exchange) {
