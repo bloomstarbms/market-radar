@@ -4342,4 +4342,4 @@ this feed every 10 min), started after the bot, never in --once, backing off 60 
 NOT DONE, worth knowing: an IN-PLACE cancellation (HEMI, 6558: listing announced, then the
 same notice edited to "(헤미(HEMI) 거래지원 취소 안내)") is never re-read, because the id
 is already seen. Detecting it means tracking listed_at per id. Queued, small.
-Fixture 77 (37 checks); suite 1003.
+Fixture 77 (31 checks at runtime: 972 → 1003); suite 1003.
