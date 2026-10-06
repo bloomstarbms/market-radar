@@ -159,7 +159,9 @@ export async function processProducts(products, state, deps = {}) {
         key: `coinbase:delist:${e.ids.join(',')}`, dedupeKey: `COINBASE:delist:${e.base}`, cooldownMin: 24 * 60, ...coinbaseDelistMessage(e) })) out.sent++;
     }
   }
-  state.coinbase = { products: live, at: now };
+  // The ETag is stored WITH the products it describes, so a 304 after a restart still
+  // means "unchanged from the persisted baseline", never "unchanged from something else".
+  state.coinbase = { products: live, at: now, ...(deps.etag ? { etag: deps.etag } : {}) };
   return out;
 }
 
@@ -173,22 +175,39 @@ async function editThread(dedupeKey, line) {
   return false;
 }
 
+// One fetch-and-diff, conditional on the stored ETag. Node's fetch already asks for gzip
+// (accept-encoding: gzip, deflate): the 354 KB list is ~26 KB on the wire. With
+// If-None-Match an unchanged list is HTTP 304 and 0 bytes. A 304 is a SUCCESSFUL look —
+// the venue answered and nothing changed — so it notes the pulse (feedWasLooking stays
+// true) and produces no diff and no warning. deps: { fetchImpl, pulse, ...processProducts deps }
+export async function coinbaseCycle(state, deps = {}) {
+  const fetchImpl = deps.fetchImpl ?? fetch;
+  const pulse = deps.pulse ?? notePulse;
+  const headers = { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' };
+  if (state.coinbase?.products && state.coinbase.etag) headers['If-None-Match'] = state.coinbase.etag;
+  let res, products;
+  try {
+    res = await fetchImpl(PRODUCTS_URL, { headers });
+    if (res.status === 304) { pulse('coinbase'); return { status: 'not-modified' }; }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    products = await res.json();
+    // A truncated list would read as hundreds of delistings; refuse it. (839 live today.)
+    if (!Array.isArray(products) || products.length < (deps.minProducts ?? 100)) throw new Error(`implausible product list (${Array.isArray(products) ? products.length : typeof products})`);
+  } catch (e) { console.error('[coinbase] poll failed:', e.message); return { status: 'failed', error: e.message }; }
+  pulse('coinbase');
+  const baseline = !state.coinbase?.products;
+  const r = await processProducts(products, state, { ...deps, etag: res.headers?.get?.('etag') ?? null });
+  return { status: baseline ? 'baseline' : 'ok', ...r, count: products.length };
+}
+
 let lastPoll = 0;
 export async function pollCoinbase() {
   if (Date.now() - lastPoll < POLL_EVERY_MS) return;
   lastPoll = Date.now();
-  let products;
-  try {
-    const res = await fetch(PRODUCTS_URL, { headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    products = await res.json();
-    if (!Array.isArray(products) || products.length < 100) throw new Error(`implausible product list (${Array.isArray(products) ? products.length : typeof products})`);
-  } catch (e) { console.error('[coinbase] poll failed:', e.message); return; }
-  notePulse('coinbase');
   const st = getState();
-  const baseline = !st.coinbase?.products;
-  const r = await processProducts(products, st);
+  const r = await coinbaseCycle(st);
+  if (r.status === 'not-modified' || r.status === 'failed') return;
   save();
-  if (baseline) console.log(`[coinbase] baseline: ${products.length} products (persisted)`);
+  if (r.status === 'baseline') console.log(`[coinbase] baseline: ${r.count} products (persisted)`);
   else if (r.events.length) console.log(`[coinbase] ${r.events.map((e) => `${e.kind} ${e.base}`).join(' · ')}${r.sent ? ` · ${r.sent} alert(s)` : ''}${r.edited ? ` · ${r.edited} edit(s)` : ''}`);
 }

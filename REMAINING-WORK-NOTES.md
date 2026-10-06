@@ -4358,10 +4358,10 @@ SOURCE, tested from the VPS like the Step 2 smoke test: api.exchange.coinbase.co
 products — 200 on IPv4 and IPv6, identical 354 KB bodies, 839 products (512 online, 327
 delisted). Cloudflare-cached, max-age=5. Rate: every 1 s ×20, 0.5 s ×30, 0.2 s ×40,
 0.1 s ×40 — all 200, no limit reached at 10 req/s (Coinbase documents 10/s for public
-endpoints). INTERVAL: 60 s in the existing poll loop. The limit is not the constraint —
-the 5 s cache is the floor and each call is 354 KB (≈510 MB/day at 60 s, ≈2 GB/day at
-15 s); and the stage machine is itself the lead time: a new product is seen in its
-pre-trading stage and the move to full trading edits that message.
+endpoints). INTERVAL: 60 s in the existing poll loop. [CORRECTED in v0.33.7 — the
+bandwidth figures first written here (354 KB a call, ≈510 MB/day) were the UNCOMPRESSED
+size; Node's fetch sends accept-encoding gzip and the list is ~26 KB on the wire. See the
+v0.33.7 entry for the measured numbers and the reasoning that is actually true.]
 
 STAGES. A new product in auction / post-only / limit-only (or not yet enabled) →
 "Coinbase is opening a market for X (limit-only stage)"; its move to full trading EDITS
@@ -4385,3 +4385,38 @@ first flag built that way (unmatched trading notices in the last 24 h, with the 
 the unclassified ⚠️ itself still counts a total — QUEUED: key it to a review stamp
 (review-unclassified.js writes one, as review-exclusions.js already does for the
 exclusions line) and list the new shapes by name.
+
+## 2026-10-06 — v0.33.7: COINBASE BANDWIDTH CORRECTED, CONDITIONAL FETCH ADDED, AND WHY IT RARELY FIRES
+
+Operator correction: 354 KB is the uncompressed size. MEASURED from the VPS:
+  identity  353,803 bytes on the wire
+  gzip       25,858 bytes on the wire (content-encoding gzip; Node's fetch sends
+             "accept-encoding: gzip, deflate" — checked against a local echo server)
+  ETag       weak, e.g. W/"6502-ktP4…"; If-None-Match with it → HTTP 304, 0 bytes;
+             Node's fetch sees status 304, res.ok false, empty body.
+So 60 s polling costs ≈26 KB × 1,440 ≈ 37 MB/day, not ≈510 MB. Bandwidth is not a
+constraint at any sensible interval (15 s would be ≈150 MB/day).
+
+ADDED: the last ETag is stored WITH the products it describes (st.coinbase.etag), sent as
+If-None-Match, and a 304 is a SUCCESSFUL look — the pulse is noted, so feedWasLooking stays
+true; no diff, no warning, state untouched. A 503 is still a failure (logged, no pulse).
+coinbaseCycle() is the testable core; fixture 78 runs 200 → 304 → 200 → 503 against a
+stub and proves the third response diffs against the STORED baseline, not the 304.
+
+WHY IT RARELY FIRES, measured the same evening: two bodies 8 s apart had the SAME 839
+product ids and NO field changed in any product — only the ORDER differed. Coinbase
+returns the list in varying order, so the ETag changes on almost every response:
+  60 s conditional polls  0 of 6 were 304
+   5 s conditional polls  0 of 12 were 304
+  immediately after a 200, inside the 5 s CDN window: 304
+The ETag path is correct and harmless; today it saves almost nothing at 60 s, and it pays
+off by itself the day Coinbase orders the list stably. The diff is keyed by product id,
+so the reordering cannot produce a false event (checked: self-diff of a reordered real
+list is empty).
+
+THE INTERVAL, with reasoning that is true: 60 s, unchanged. Neither the rate limit (no
+429 at 10 req/s) nor bandwidth (≈37 MB/day) binds. It is 60 s because that is the
+existing poll loop — no separate timer — and because a Coinbase opening is seen in its
+pre-trading stage, which is itself the lead time; the move to full trading edits that
+message. If seconds turn out to matter here as they do for Upbit notices, 15 s costs
+≈150 MB/day and needs only its own timer (the Upbit pattern).

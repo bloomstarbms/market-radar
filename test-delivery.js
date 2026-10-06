@@ -2932,6 +2932,31 @@ console.log('78. COINBASE — stage-aware product diff from the real response; a
   check('a tier-1 venue with no declared collector fails, naming it', /'kraken' has NO declared collector/.test(checkVenueCollectors({ tier1: new Set([...LISTING_TIER1, 'kraken']) }).problems.join()));
   check('a collector that exists but is never called by index.js fails', !checkVenueCollectors({ tier1: new Set(['coinbase']), readFile: (f) => (f === 'index.js' ? rd(f).replace(/pollCoinbase\(\)/g, 'x') : rd(f)) }).ok);
   check('binance switched off in CEX_EXCHANGES fails (configured, not just present)', !checkVenueCollectors({ tier1: new Set(['binance']), cfg: { cexExchanges: ['mexc'] } }).ok);
+  // CONDITIONAL FETCH: ETag stored with the products it describes; 304 = a successful look, no diff, no warning.
+  {
+    const calls = [], pulses = [];
+    const queue = [
+      { status: 200, etag: 'W/"a"', body: without(['SYND-USD']) },
+      { status: 304, etag: 'W/"a"', body: null },
+      { status: 200, etag: 'W/"b"', body: real },
+      { status: 503, etag: null, body: null },
+    ];
+    const fetchImpl = async (u, init) => { calls.push(init.headers['If-None-Match'] ?? null); const r = queue.shift(); return { status: r.status, ok: r.status >= 200 && r.status < 300, headers: { get: (h) => (h === 'etag' ? r.etag : null) }, json: async () => r.body }; };
+    const sent5 = [];
+    // minProducts 1: the fixture carries 7 real products; production refuses a list under 100 (a truncation guard).
+    const d5 = { fetchImpl, minProducts: 1, pulse: (n) => pulses.push(n), dispatch: async (a) => { sent5.push(a); return true; }, edit: async () => true, now: Date.parse('2026-10-06T15:00:00Z') };
+    const st5 = {};
+    const r1 = await cb.coinbaseCycle(st5, d5);
+    check('cycle 1 (200): baseline, no If-None-Match sent, the ETag stored WITH the products', r1.status === 'baseline' && calls[0] === null && st5.coinbase.etag === 'W/"a"' && Object.keys(st5.coinbase.products).length === real.length - 1);
+    const errBefore = errors.length, snapBefore = JSON.stringify(st5.coinbase);
+    const r2 = await cb.coinbaseCycle(st5, d5);
+    check('cycle 2 (304): If-None-Match carried the stored ETag; status not-modified; no diff, nothing sent', calls[1] === 'W/"a"' && r2.status === 'not-modified' && sent5.length === 0 && !r2.events);
+    check('a 304 is NOT a failed fetch: no warning logged, the pulse IS noted (feedWasLooking stays true), the baseline untouched', errors.length === errBefore && pulses.filter((p) => p === 'coinbase').length === 2 && JSON.stringify(st5.coinbase) === snapBefore);
+    const r3 = await cb.coinbaseCycle(st5, d5);
+    check('cycle 3 (200, changed): diffs against the STORED baseline — SYND-USD is a new limit-only opening — and the new ETag replaces the old', r3.status === 'ok' && sent5.length === 1 && /^Coinbase is opening a market for SYND/.test(sent5[0].title) && st5.coinbase.etag === 'W/"b"' && calls[2] === 'W/"a"');
+    const r4 = await cb.coinbaseCycle(st5, d5);
+    check('contrast: a 503 IS a failure — logged, no pulse, state untouched', r4.status === 'failed' && errors.length === errBefore + 1 && /\[coinbase\] poll failed: HTTP 503/.test(errors.at(-1)) && pulses.length === 3 && st5.coinbase.etag === 'W/"b"');
+  }
   check(`Coinbase polls every ${cb.POLL_EVERY_MS / 1000} s inside the poll loop`, cb.POLL_EVERY_MS === 60000 && /Promise\.allSettled\(\[[^\]]*\bpollCoinbase\(\)/.test(readFileSync('src/index.js', 'utf8')));
 }
 
