@@ -2957,6 +2957,35 @@ console.log('78. COINBASE — stage-aware product diff from the real response; a
     const r4 = await cb.coinbaseCycle(st5, d5);
     check('contrast: a 503 IS a failure — logged, no pulse, state untouched', r4.status === 'failed' && errors.length === errBefore + 1 && /\[coinbase\] poll failed: HTTP 503/.test(errors.at(-1)) && pulses.length === 3 && st5.coinbase.etag === 'W/"b"');
   }
+  // TRUNCATION at the PRODUCTION floor (no minProducts override): a short list is a failed look,
+  // never mass delistings, and never a shrunken baseline that turns the next full list into mass "openings".
+  {
+    const tmpl = byId['BTC-USD']; // a real product's shape, cloned 839 times (ids synthetic)
+    const full839 = Array.from({ length: 839 }, (_, i) => ({ ...tmpl, id: `T${i}-USD`, base_currency: `T${i}`, display_name: `T${i}-USD` }));
+    const okRes = (body, etag) => ({ status: 200, ok: true, headers: { get: (h) => (h === 'etag' ? etag : null) }, json: async () => body });
+    let next = null;
+    const sent6 = [], pulses6 = [];
+    const d6 = { fetchImpl: async () => next, pulse: (n) => pulses6.push(n), dispatch: async (a) => { sent6.push(a); return true; }, edit: async () => true };
+    const st6 = {};
+    next = okRes(full839, 'W/"full"');
+    check('baseline of 839 at the production floor', (await cb.coinbaseCycle(st6, d6)).status === 'baseline' && Object.keys(st6.coinbase.products).length === 839);
+    const snap6 = JSON.stringify(st6.coinbase);
+    for (const [label, n] of [['50 products (under the absolute floor of 100)', 50], ['150 products (over the floor, but 18% of the baseline)', 150]]) {
+      const errBefore = errors.length, pulsesBefore = pulses6.length;
+      next = okRes(full839.slice(0, n), 'W/"short"');
+      const r = await cb.coinbaseCycle(st6, d6);
+      check(`a truncated list of ${label} is a FAILED look: warning logged, no events, no pulse, baseline and ETag unchanged`, r.status === 'failed' && errors.length === errBefore + 1 && /\[coinbase\] poll failed/.test(errors.at(-1)) && !r.events && sent6.length === 0 && pulses6.length === pulsesBefore && JSON.stringify(st6.coinbase) === snap6);
+    }
+    next = okRes(full839, 'W/"full2"');
+    const back = await cb.coinbaseCycle(st6, d6);
+    check('the next full list diffs against the KEPT baseline: no events, nothing sent', back.status === 'ok' && back.events.length === 0 && sent6.length === 0);
+    check('structurally, missing products are never delistings: 50 of 839 present -> zero DELISTED events', cb.diffProducts(cb.snapshot(full839), cb.snapshot(full839.slice(0, 50))).filter((e) => e.kind === 'DELISTED').length === 0);
+    // MUTATION: the failure the relative guard prevents — accept the 150, then the full list.
+    const st7 = {}; await cb.processProducts(full839, st7, { dispatch: async () => true, edit: async () => true });
+    await cb.processProducts(full839.slice(0, 150), st7, { dispatch: async () => true, edit: async () => true });
+    const flood = cb.diffProducts(st7.coinbase.products, cb.snapshot(full839)).filter((e) => e.kind === 'OPENING' || e.kind === 'LISTED').length;
+    check(`MUTATION: without the guard, accepting the 150 and then the full list would announce ${flood} "new" coins`, flood === 689);
+  }
   check(`Coinbase polls every ${cb.POLL_EVERY_MS / 1000} s inside the poll loop`, cb.POLL_EVERY_MS === 60000 && /Promise\.allSettled\(\[[^\]]*\bpollCoinbase\(\)/.test(readFileSync('src/index.js', 'utf8')));
 }
 

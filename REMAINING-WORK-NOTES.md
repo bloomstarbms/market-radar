@@ -4420,3 +4420,17 @@ existing poll loop — no separate timer — and because a Coinbase opening is s
 pre-trading stage, which is itself the lead time; the move to full trading edits that
 message. If seconds turn out to matter here as they do for Upbit notices, 15 s costs
 ≈150 MB/day and needs only its own timer (the Upbit pattern).
+
+## 2026-10-07 — v0.33.8: COINBASE TRUNCATION GUARD AT THE PRODUCTION FLOOR
+
+Operator: the fixtures lowered the under-100 guard to fit 7 products; test the real floor.
+Doing so showed the guard protected the wrong thing. A missing product is never read as
+delisted (only status "delisted" is), so a short list cannot produce mass delistings —
+but a short list ABOVE the floor (150 of 839) would have been ACCEPTED, overwritten the
+baseline, and made the next full list announce 689 "new" coins (fixture 78 mutation,
+exact). Now two parts: the absolute floor (100), and a list that shrank more than 10%
+against the stored baseline is refused ("shrank from 839 to 150 — treated as truncated,
+baseline kept"). Coinbase does not remove products; delisted ones stay listed. Fixture
+78 at the production floor, 839 shape-cloned real products: 50 and 150 are failed looks
+(warning, no events, no pulse, baseline and ETag unchanged), the next full list diffs to
+zero events. Suite 1035.

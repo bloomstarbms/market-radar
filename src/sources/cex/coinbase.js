@@ -191,8 +191,16 @@ export async function coinbaseCycle(state, deps = {}) {
     if (res.status === 304) { pulse('coinbase'); return { status: 'not-modified' }; }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     products = await res.json();
-    // A truncated list would read as hundreds of delistings; refuse it. (839 live today.)
+    // TRUNCATION GUARD, two parts. A missing product is not read as delisted (only a
+    // status of "delisted" is), so a short list cannot produce delistings directly. The
+    // damage is one step later: a short list ACCEPTED would overwrite the baseline, and
+    // the next full list would make every product it lost look NEW — hundreds of
+    // "opening a market" alerts. So: an absolute floor, and a list that shrank more than
+    // 10% against the stored baseline is refused. Coinbase does not remove products
+    // (839 = 512 online + 327 delisted, 2026-10-06); delisted ones stay in the list.
     if (!Array.isArray(products) || products.length < (deps.minProducts ?? 100)) throw new Error(`implausible product list (${Array.isArray(products) ? products.length : typeof products})`);
+    const known = Object.keys(state.coinbase?.products || {}).length;
+    if (known && products.length < known * 0.9) throw new Error(`product list shrank from ${known} to ${products.length} — treated as truncated, baseline kept`);
   } catch (e) { console.error('[coinbase] poll failed:', e.message); return { status: 'failed', error: e.message }; }
   pulse('coinbase');
   const baseline = !state.coinbase?.products;
