@@ -91,7 +91,7 @@ export function expectedEmissionDate(spec, year, month /* 1-based */) {
 // spec.wallets: [{addr, meanAmount}] (family) — or legacy spec.wallet + meanAmount.
 // outflows: {'YYYY-MM-DD': n} for a single-wallet spec, or {addr: {day: n}} for a
 // family. Injected entirely — hermetic.
-export function cadenceDecision(spec, year, month, now, outflows) {
+export function cadenceDecision(spec, year, month, now, outflows, { rule = 'window-total' } = {}) {
   const expected = expectedEmissionDate(spec, year, month);
   const grace = spec.graceDays ?? 3;
   const start = new Date(expected.getTime() - 86400e3);
@@ -108,13 +108,26 @@ export function cadenceDecision(spec, year, month, now, outflows) {
   const fam = Array.isArray(spec.wallets) && spec.wallets.length;
   if (!fam) {
     const { day, amt } = peakIn(outflows);
-    // ratio: where in the band this landed. CONFIRM/DEMOTE alone discards it, and
-    // eleven observations AT the mean vs eleven trending +20% are different facts —
-    // only one of them says the schedule is changing. Compared like with like: the
-    // spec mean is derived from PEAK DAY per month, so the ratio uses peak day, not
-    // the window sum (mixing those was a units error waiting to happen).
-    if (amt >= spec.meanAmount * 0.5) return { action: 'CONFIRM', date: day, amount: Math.round(amt), ratio: +(amt / spec.meanAmount).toFixed(3) };
-    return { action: 'DEMOTE', window, largestSeen: Math.round(amt) };
+    // THE WATCH TESTS THE QUANTITY THE MESSAGE CLAIMS (v0.33.9). The claim is a monthly
+    // distribution — what the wallet pays out in the window — and the T+3 line already
+    // sums the window. The test used to take the LARGEST DAY: ENA's 2026-09 window paid
+    // 15.54M over five days (1.80M, 5.15M, 3.67M, 4.60M, 0.32M) against a 12.07M mean,
+    // no single day cleared 50%, and the row was demoted for a schedule that paid 1.29x.
+    // A multi-day payout is a payout. The window TOTAL is tested, and the day-level
+    // figures stay on the stamp for the record. Units, stated: the spec mean is a
+    // PEAK-DAY mean, so total/mean reads >= the old peak/mean on every month (total >=
+    // peak always) — the verdict is strictly more permissive, never less, and the
+    // drift detector is handed peakRatio (like with like) so a units shift is not read
+    // as drift. QUEUED: derive meanAmount from window totals at the next spec derivation.
+    const days = {};
+    for (const [d, v] of Object.entries(outflows || {})) if (d >= sKey && d <= eKey && v > 0) days[d] = Math.round(v);
+    const total = Object.values(days).reduce((s, v) => s + v, 0);
+    const tested = rule === 'peak-day' ? amt : total;
+    if (tested >= spec.meanAmount * 0.5) {
+      return { action: 'CONFIRM', date: day, amount: Math.round(tested), ratio: +(tested / spec.meanAmount).toFixed(3),
+        window, windowTotal: Math.round(total), peakDay: day, peakAmount: Math.round(amt), peakRatio: +(amt / spec.meanAmount).toFixed(3), days, rule };
+    }
+    return { action: 'DEMOTE', window, largestSeen: Math.round(amt), windowTotal: Math.round(total), days, rule };
   }
 
   const per = spec.wallets.map((w) => {
@@ -274,9 +287,13 @@ export async function pollCadence(loadTokens) {
       // meets in the heartbeat summary is a verdict with no timestamp of its own.
       if (dec.action === 'CONFIRM') {
         const strength = t.falsifier?.chanceRate != null ? ` · this window passes by chance ${Math.round(t.falsifier.chanceRate * 100)}% of the time` : '';
+        // Single-wallet stamps (v0.33.9) carry the window total; the line says what was summed.
+        const verdictLine = dec.windowTotal !== undefined && !Array.isArray(t.cadence.wallets)
+          ? `Watch verdict, not a market event: ${dec.amount.toLocaleString()} ${t.sym} paid out in the ${dec.window} window (${Math.round(dec.ratio * 100)}% of the spec mean; largest day ${dec.peakDay}: ${dec.peakAmount.toLocaleString()})${strength}.`
+          : `Watch verdict, not a market event: ${dec.amount.toLocaleString()} ${t.sym} emitted on ${dec.date} (${Math.round(dec.ratio * 100)}% of the spec mean)${strength}.`;
         await broadcast(formatAlert({ source: 'SYS', type: 'CADENCE', severity: 'LOW',
           title: `${t.sym} cadence window ${mKey} CONFIRMED · ratio ${dec.ratio}`,
-          lines: [`Watch verdict, not a market event: ${dec.amount.toLocaleString()} ${t.sym} emitted on ${dec.date} (${Math.round(dec.ratio * 100)}% of the spec mean)${strength}.`] }), { toChannel: false }).catch(() => []);
+          lines: [verdictLine] }), { toChannel: false }).catch(() => []);
       }
       dirty = true;
     }
@@ -389,24 +406,27 @@ export function deriveTolerance(ratios, { k = 3, margin = 1.1, hardFloor = 0.05,
 // DRIFT (operator judgement) rather than as a demotion (automatic silence).
 // Pure: takes the stamped months for one token.
 export function driftStatus(months, { minRun = 3, threshold = 0.10 } = {}) {
+  // Compared like with like: the spec mean is a peak-day mean, so drift reads peakRatio
+  // where the stamp carries it (v0.33.9 window-total verdicts) and ratio on older stamps.
+  const basis = (r) => (typeof r.peakRatio === 'number' ? r.peakRatio : r.ratio);
   const confirms = Object.entries(months || {})
-    .filter(([, r]) => r.action === 'CONFIRM' && typeof r.ratio === 'number')
+    .filter(([, r]) => r.action === 'CONFIRM' && typeof basis(r) === 'number')
     .sort(([a], [b]) => a.localeCompare(b));
   if (!confirms.length) return null;
   // longest run of same-side deviations ending at the most recent window
   let run = 0, side = 0;
   for (let i = confirms.length - 1; i >= 0; i--) {
-    const dev = confirms[i][1].ratio - 1;
+    const dev = basis(confirms[i][1]) - 1;
     const s = dev > threshold ? 1 : dev < -threshold ? -1 : 0;
     if (s === 0) break;
     if (side === 0) side = s;
     else if (s !== side) break;
     run++;
   }
-  const recent = confirms.slice(-Math.max(run, 1)).map(([, r]) => r.ratio);
+  const recent = confirms.slice(-Math.max(run, 1)).map(([, r]) => basis(r));
   const mean = recent.reduce((a, b) => a + b, 0) / recent.length;
   return { run, side, drifting: run >= minRun,
-    pct: Math.round((mean - 1) * 100), last: confirms[confirms.length - 1][1].ratio, n: confirms.length };
+    pct: Math.round((mean - 1) * 100), last: basis(confirms[confirms.length - 1][1]), n: confirms.length };
 }
 
 // SOURCE RECHECK — the sourced tier's falsifier. A sourced row's claim is "DefiLlama

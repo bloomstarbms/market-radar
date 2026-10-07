@@ -1368,7 +1368,10 @@ console.log('59. SCORING IS DETERMINISTIC — nothing can be safely re-scored if
   const m1 = cadenceDecision(moveSpec, 2026, 9, moveNow, moveDays);
   const m2 = cadenceDecision(moveSpec, 2026, 9, moveNow, moveDays);
   check('single-wallet: two runs over identical input give identical verdicts', eq(m1, m2));
-  check('REGRESSION: MOVE 2026-09 re-derives as CONFIRM 19,376,705 ratio 2.048', m1.action === 'CONFIRM' && m1.amount === 19376705 && m1.ratio === 2.048 && m1.date === '2026-09-09');
+  // v0.33.9: the verdict is the WINDOW TOTAL (19,584,705 over 09-08..09-12, ratio 2.070); the
+  // peak-day figures the 2026-09 stamp was originally recorded with (19,376,705, 2.048) survive
+  // on the stamp as peakAmount/peakRatio, and the drift detector reads those.
+  check('REGRESSION: MOVE 2026-09 re-derives as CONFIRM — window total 19,584,705 ratio 2.070, peak day 19,376,705 / 2.048 on the stamp', m1.action === 'CONFIRM' && m1.amount === 19584705 && m1.ratio === 2.07 && m1.date === '2026-09-09' && m1.peakAmount === 19376705 && m1.peakRatio === 2.048);
 
   // --- SINGLE-WALLET, the ENA 2026-09 regression case (DEMOTE, largestSeen 5,148,798) ---
   const enaSpec = { wallet: '0x54B8c65f0635fD91C8729Dd3269C630d9AED54e5', expectDay: 6, meanAmount: 12069436, roll: 'nextBusinessDay' };
@@ -1377,7 +1380,7 @@ console.log('59. SCORING IS DETERMINISTIC — nothing can be safely re-scored if
   const e1 = cadenceDecision(enaSpec, 2026, 9, enaNow, enaDays);
   const e2 = cadenceDecision(enaSpec, 2026, 9, enaNow, enaDays);
   check('the DEMOTE path is deterministic too, not just the confirming one', eq(e1, e2));
-  check('REGRESSION: ENA 2026-09 re-derives as DEMOTE with largestSeen 5,148,798', e1.action === 'DEMOTE' && e1.largestSeen === 5148798 && e1.window === '2026-09-06..2026-09-10');
+  check('REGRESSION: ENA 2026-09 on its peak day ALONE still re-derives as DEMOTE with largestSeen 5,148,798', e1.action === 'DEMOTE' && e1.largestSeen === 5148798 && e1.window === '2026-09-06..2026-09-10');
 
   // --- FAMILY, the EIGEN 2026-08 regression case (CONFIRM, ratio 0.976) ---
   const eigenSpec = { wallets: [{ addr: '0xA', meanAmount: 7822556 }, { addr: '0xB', meanAmount: 1692519 }],
@@ -1911,10 +1914,15 @@ console.log('42. static mean + recorded ratio = drift detection without false de
   const after = new Date('2026-09-13T00:00:00Z');
   const d = cadenceDecision(spec, 2026, 8, after, { '2026-08-06': 13318135 });
   check('CONFIRM records the ratio, not just the verdict', d.ratio === 1.103);
-  // UNITS: the spec mean is peak-day-derived, so the ratio must use peak day. The
-  // 5-day window sum (14.5M) would read +20% and compare different denominators —
-  // the Part 0 units rule, which is exactly how this metric could have lied.
-  check('ratio compares peak-day to a peak-day mean, not the window sum', Math.abs(d.ratio - 13318135 / 12069436) < 0.001 && d.ratio < 1.15);
+  // UNITS (revised v0.33.9): the VERDICT tests the window total — the quantity the
+  // message claims — so `ratio` is total/mean and reads >= peak/mean. The spec mean is
+  // still peak-day-derived, so the stamp also carries peakRatio, and DRIFT reads that:
+  // like with like. The 5-day August window (14.5M) is ratio 1.20 but peakRatio 1.10,
+  // and the drift detector sees 1.10.
+  const aug5 = cadenceDecision(spec, 2026, 8, after, { '2026-08-05': 400000, '2026-08-06': 13318135, '2026-08-07': 781865 });
+  check('a single-day window: ratio equals peakRatio (13,318,135 / 12,069,436)', Math.abs(d.ratio - 13318135 / 12069436) < 0.001 && d.peakRatio === d.ratio);
+  check('a five-day window: ratio is the total (1.201), peakRatio the largest day (1.103), both on the stamp with the days', aug5.ratio === 1.201 && aug5.peakRatio === 1.103 && aug5.windowTotal === 14500000 && Object.keys(aug5.days).length === 3);
+  check('DRIFT reads peakRatio, so a window-total stamp of 1.201 is NOT a +20% reading', driftStatus({ '2026-08': aug5 }).last === 1.103);
   const mk = (ratios) => Object.fromEntries(ratios.map((r, i) => [`2026-0${i + 1}`, { action: 'CONFIRM', ratio: r }]));
   check('one high reading is NOT drift', driftStatus(mk([1.10])).drifting === false);
   check('two is still not drift', driftStatus(mk([1.10, 1.12])).drifting === false);
@@ -2987,6 +2995,48 @@ console.log('78. COINBASE — stage-aware product diff from the real response; a
     check(`MUTATION: without the guard, accepting the 150 and then the full list would announce ${flood} "new" coins`, flood === 689);
   }
   check(`Coinbase polls every ${cb.POLL_EVERY_MS / 1000} s inside the poll loop`, cb.POLL_EVERY_MS === 60000 && /Promise\.allSettled\(\[[^\]]*\bpollCoinbase\(\)/.test(readFileSync('src/index.js', 'utf8')));
+}
+
+console.log('79. the cadence watch tests the WINDOW TOTAL — the quantity the message claims — not the largest day');
+{
+  const { cadenceDecision, driftStatus } = await import('./src/sources/calendar/cadence-watch.js');
+  // ENA 2026-09, the real window (eth.blockscout.com, read 2026-10-07): five days, no single one >= 50% of the mean.
+  const enaSpec = { wallet: '0x54B8c65f0635fD91C8729Dd3269C630d9AED54e5', expectDay: 6, meanAmount: 12069436, roll: 'nextBusinessDay' };
+  const sept = { '2026-09-05': 289271, '2026-09-06': 1795433, '2026-09-07': 5148798, '2026-09-08': 3670333, '2026-09-09': 4604770, '2026-09-10': 320155, '2026-09-11': 186913 };
+  const now = new Date(Date.UTC(2026, 8, 20));
+  const neu = cadenceDecision(enaSpec, 2026, 9, now, sept);
+  const old = cadenceDecision(enaSpec, 2026, 9, now, sept, { rule: 'peak-day' });
+  check('NEW RULE: ENA 2026-09 CONFIRMs on the window total 15,539,489 at ratio 1.29 (1.288)', neu.action === 'CONFIRM' && neu.amount === 15539489 && neu.windowTotal === 15539489 && Math.round(neu.ratio * 100) / 100 === 1.29 && neu.window === '2026-09-06..2026-09-10');
+  check('OLD RULE, same input: DEMOTE with largestSeen 5,148,798 — the change is demonstrated, not asserted', old.action === 'DEMOTE' && old.largestSeen === 5148798 && old.rule === 'peak-day');
+  check('the stamp keeps the day-level data for the record: five in-window days, the 09-05 and 09-11 outflows excluded', Object.keys(neu.days).join() === '2026-09-06,2026-09-07,2026-09-08,2026-09-09,2026-09-10' && neu.days['2026-09-07'] === 5148798 && neu.peakDay === '2026-09-07' && neu.peakAmount === 5148798 && neu.peakRatio === 0.427);
+  check('a window that paid nothing still DEMOTEs under the new rule (total 0)', cadenceDecision(enaSpec, 2026, 9, now, { '2026-09-20': 13e6 }).action === 'DEMOTE');
+  check('dust spread over the window does not confirm (five days of 1M against a 12.07M mean = 5M total)', cadenceDecision(enaSpec, 2026, 9, now, { '2026-09-06': 1e6, '2026-09-07': 1e6, '2026-09-08': 1e6, '2026-09-09': 1e6, '2026-09-10': 1e6 }).action === 'DEMOTE');
+  check('DRIFT on the ENA stamp reads peakRatio 0.427 is not applicable (DEMOTE); on a CONFIRM it reads peakRatio, not the total ratio', driftStatus({ '2026-09': neu }).last === neu.peakRatio);
+  // EIGEN family spec: unaffected — the family path already sums per-wallet peaks into familyTotal.
+  const eigenSpec = { wallets: [{ addr: '0xA', meanAmount: 7822556 }, { addr: '0xB', meanAmount: 1692519 }], familyMean: 9515075, tolerance: 0.13, expectDay: 30, monthEnd: true, graceDays: 3 };
+  const eigenDays = { '0xA': { '2026-08-29': 300000, '2026-08-30': 7920090 }, '0xB': { '2026-08-30': 1364336 } };
+  const eigenNow = new Date(Date.UTC(2026, 8, 10));
+  const g1 = cadenceDecision(eigenSpec, 2026, 8, eigenNow, eigenDays), g2 = cadenceDecision(eigenSpec, 2026, 8, eigenNow, eigenDays, { rule: 'peak-day' });
+  check('EIGEN family spec is byte-identical under both rules: CONFIRM familyTotal 9,284,426 ratio 0.976', JSON.stringify(g1) === JSON.stringify(g2) && g1.action === 'CONFIRM' && g1.familyTotal === 9284426 && g1.ratio === 0.976);
+}
+
+console.log('80. detect-cadence: the significance floor is a median of the largest days, so one 186M day cannot hide a 13-month metronome');
+{
+  const { detectCadence, significanceFloor } = await import('./detect-cadence.js');
+  const fx = JSON.parse(readFileSync('fixtures/ena-0x54B8-outflows-2026-10-07.json', 'utf8'));
+  const all = fx.byDay;
+  const through = (cut) => Object.fromEntries(Object.entries(all).filter(([d]) => d <= cut));
+  const oct = new Date(Date.UTC(2026, 9, 7)), sep = new Date(Date.UTC(2026, 8, 13));
+  const oldFull = detectCadence(all, { floor: 'peak', now: oct });
+  check('OLD FLOOR on the real 14 months with the 186M day: INSUFFICIENT — the floor rose to 18.6M and only 3 months cleared it', oldFull.verdict === 'INSUFFICIENT' && oldFull.sigFloor === 18638786 && oldFull.monthsSeen === 3);
+  const neuFull = detectCadence(all, { now: oct });
+  check('NEW FLOOR, same data: 10% of the median of the top-14 days = ~1.3M, the day-6 pattern is detected over 14 consecutive months', neuFull.pattern === 'FIXED-DAY' && neuFull.targetDay === 6 && neuFull.monthsRun === 14 && neuFull.sigFloor > 1e6 && neuFull.sigFloor < 2e6);
+  check('and it says what the 186M day did: DAY-STABLE-AMOUNT-UNSTABLE, emissions 5.1M..186.4M, not a false "cadence" at a 24M mean', neuFull.verdict === 'DAY-STABLE-AMOUNT-UNSTABLE' && neuFull.cv >= 1.0 && neuFull.emissions.at(-1).d === '2026-10-06' && neuFull.emissions.at(-1).amt === 186387859);
+  const neu13 = detectCadence(through('2026-09-30'), { now: sep });
+  check('the same 13 months without the 186M day: CADENCE, day 6, 13 months, mean within 1% of the recorded spec (11,972,127)', neu13.verdict === 'CADENCE' && neu13.targetDay === 6 && neu13.monthsRun === 13 && Math.abs(neu13.meanAmount - 11972127) / 11972127 < 0.01);
+  check('the median-of-top-k floor is robust: one 186M day moves it from 1.21M to 1.30M, not to 18.6M', (() => { const v = Object.values(through('2026-09-30')); const a = significanceFloor(v, 13); const b = significanceFloor([...v, 186387859], 14); return a > 1.1e6 && a < 1.3e6 && b > 1.2e6 && b < 1.4e6; })());
+  check('a 4-month wallet with one outlier keeps its floor on the typical emission (median of top-4)', significanceFloor([10e6, 11e6, 9e6, 500e6], 4) === 0.1 * (11e6 + 10e6) / 2);
+  check('"the run must be current" is judged against the injected now, not the wall clock (fixtures built on real dates do not rot)', detectCadence(through('2026-09-30'), { now: new Date(Date.UTC(2027, 5, 1) ) }).verdict !== 'CADENCE');
 }
 
 console.error = origErr;

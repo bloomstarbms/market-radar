@@ -4434,3 +4434,54 @@ baseline kept"). Coinbase does not remove products; delisted ones stay listed. F
 78 at the production floor, 839 shape-cloned real products: 50 and 150 are failed looks
 (warning, no events, no pulse, baseline and ETag unchanged), the next full list diffs to
 zero events. Suite 1035.
+
+## 2026-10-07 — v0.33.9: THE WATCH TESTS THE WINDOW TOTAL; THE DETECTOR'S FLOOR IS A MEDIAN; ENA'S SEPTEMBER VOIDED
+
+Both from the 2026-10-07 ENA report (October window: 0x54B8 paid 9.63M on the 5th and
+186.39M on the 6th to 26 recipients, after 395.5M arrived from 0xdeDc; 0xA7eE has done
+nothing since 1 Sep; the schedule resumed on the original wallet, not migrated, not
+stopped — and one month cannot say whether 16x is the old schedule, a batch, or a new
+one). Three changes, each demonstrated by a fixture against the real figures, none
+re-promoting anything.
+
+1. cadenceDecision, single-wallet: CONFIRM when the WINDOW TOTAL >= 50% of the mean, not
+   the largest day. ENA 2026-09 paid 15,539,489 over five days (1.80M · 5.15M · 3.67M ·
+   4.60M · 0.32M) against a 12.07M mean — 1.29x — and was DEMOTED because no single day
+   reached 6.03M. The message claims a monthly distribution; the T+3 line already sums
+   the window; the test now tests the same quantity. Fixture 79: the real September
+   window CONFIRMs at ratio 1.288 under the new rule and DEMOTEs with largestSeen
+   5,148,798 under `rule: 'peak-day'` (kept for exactly this demonstration); the
+   day-level figures stay on the stamp (days, peakDay, peakAmount, peakRatio). UNITS,
+   stated rather than hidden: the spec mean is PEAK-DAY-derived, so total/mean reads
+   >= the old peak/mean every month (August's five-day window is 1.201 against a peak
+   ratio of 1.103). The verdict is therefore strictly more permissive, never less; and
+   driftStatus reads peakRatio where the stamp carries it, so the units shift is not
+   read as drift. QUEUED: derive meanAmount from window totals at the next spec
+   derivation, then retire peakRatio. EIGEN's family path already summed per-wallet
+   peaks and is byte-identical under both rules.
+
+2. detect-cadence significance floor: 10% of the MEDIAN of the top-k days (k = months in
+   the span, >= 4), not 10% of the single largest day. The soft spot logged 2026-09-08
+   became blocking on 2026-10-06: the 186M day lifted the floor to 18,638,786 and the
+   13-month metronome read INSUFFICIENT (3 months cleared it). Fixture 80, on the real
+   14 months (fixtures/ena-0x54B8-outflows-2026-10-07.json, 62 days): old floor →
+   INSUFFICIENT/3; new floor 1,302,282 → FIXED-DAY, day 6, 14 consecutive months, verdict
+   DAY-STABLE-AMOUNT-UNSTABLE (cv 1.84, emissions 5.1M..186.4M) — which is the TRUE
+   reading: the day held, the amount did not. The same data through September gives
+   CADENCE, 13 months, mean 11,972,127 — the recorded spec to the token. `now` is now
+   injectable; "the run must be current" used the wall clock, which would have rotted
+   every fixture built on real dates.
+
+3. ENA 2026-09 DEMOTE voided through annotate-verdict.js, reason "rule artifact: peak-day
+   test on a multi-day payout; window total 15.54M = 1.29x mean". The original stays in
+   data/verdict-annotations.json. The void clears demotions.ENA (the tool's existing
+   semantics, as for ORDER on 09-13), so the row stands as it was before 12 Sep —
+   verified, same spec, no new promotion — and the poller re-scores September under the
+   corrected rule on its next pass. Deployed BEFORE the void on purpose: voided first,
+   the running bot would have re-derived September under the old rule within a minute
+   and demoted it again.
+
+4. October: not pre-empted. The window closes 2026-10-09; the watch scores it on the
+   10th under the corrected rule — the total (~196M) CONFIRMs and driftStatus flags the
+   peak ratio (~15x). That is the right outcome: the schedule paid, the amount changed
+   enormously, and a human decides what it means. Report what the 10th produces.

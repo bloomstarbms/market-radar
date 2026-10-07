@@ -62,17 +62,34 @@ const lastDayOfMonth = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate(); // m 
 // treasury move (Nov 19, 8.53M — the single largest day) out-sized Nov 30 and broke a
 // naive "largest emission per month" cluster. Treasuries make occasional ad-hoc moves;
 // the cadence is the DOMINANT class, and off-schedule moves are reported, not fatal.
-export function detectCadence(byDay, { minMonths = 4, minAmount = 0 } = {}) {
+// SIGNIFICANCE FLOOR (v0.33.9). It was 10% of the single largest day — logged as a soft
+// spot on 2026-09-08, made blocking by ENA on 2026-10-06: one 186M day lifted the floor
+// to 18.6M, above every normal 10-13M emission, and a 13-month metronome read
+// INSUFFICIENT. Now 10% of the MEDIAN of the top-k days, k = months in the span (at
+// least 4): a median of the largest days is what a "typical emission" is, and one
+// outlier cannot move it. `floor: 'peak'` keeps the old rule so the change is
+// demonstrated, not asserted. `now` is injectable: "the run must be current" used the
+// wall clock, which would rot every fixture built on real dates.
+export function significanceFloor(values, months, mode = 'median-top') {
+  if (!values.length) return 0;
+  if (mode === 'peak') return Math.max(...values) * 0.1;
+  const k = Math.max(4, months);
+  const top = [...values].sort((a, b) => b - a).slice(0, k);
+  const mid = Math.floor(top.length / 2);
+  const median = top.length % 2 ? top[mid] : (top[mid - 1] + top[mid]) / 2;
+  return median * 0.1;
+}
+export function detectCadence(byDay, { minMonths = 4, minAmount = 0, floor = 'median-top', now = new Date() } = {}) {
   const entries = Object.entries(byDay).filter(([, v]) => v > minAmount).sort();
   if (!entries.length) return { verdict: 'NO-OUTFLOWS' };
-  const peak = Math.max(...entries.map(([, v]) => v));
-  // significant emission days only: >= 10% of the largest daily outflow
-  const sig = entries.filter(([, v]) => v >= peak * 0.1)
+  const monthsInSpan = new Set(entries.map(([d]) => d.slice(0, 7))).size;
+  const sigFloor = significanceFloor(entries.map(([, v]) => v), monthsInSpan, floor);
+  const sig = entries.filter(([, v]) => v >= sigFloor)
     .map(([d, v]) => { const [y, m, day] = d.split('-').map(Number); return { d, y, m, day, v, last: lastDayOfMonth(y, m) }; });
   const monthKey = (e) => `${e.y}-${String(e.m).padStart(2, '0')}`;
   const monthIdx = (k) => { const [y, m] = k.split('-').map(Number); return y * 12 + m; };
   if (new Set(sig.map(monthKey)).size < minMonths)
-    return { verdict: 'INSUFFICIENT', monthsSeen: new Set(sig.map(monthKey)).size };
+    return { verdict: 'INSUFFICIENT', monthsSeen: new Set(sig.map(monthKey)).size, sigFloor: Math.round(sigFloor) };
 
   // Candidate classes: MONTH-END (within 2 days of month's last day — the EIGEN shape,
   // day 30 clamping to 28/29) and FIXED-DAY d for every d, tolerance ±1.
@@ -80,7 +97,7 @@ export function detectCadence(byDay, { minMonths = 4, minAmount = 0 } = {}) {
   for (let d = 1; d <= 28; d++) candidates.push({ id: `D${d}`, match: (e) => Math.abs(e.day - d) <= 1, day: d });
 
   let best = null;
-  const nowIdx = (() => { const n = new Date(); return n.getUTCFullYear() * 12 + n.getUTCMonth() + 1; })();
+  const nowIdx = now.getUTCFullYear() * 12 + now.getUTCMonth() + 1;
   for (const c of candidates) {
     // largest matching emission per month, then longest consecutive run ending recently
     const perMonth = {};
@@ -97,7 +114,7 @@ export function detectCadence(byDay, { minMonths = 4, minAmount = 0 } = {}) {
     if (run.length < minMonths || nowIdx - monthIdx(run[run.length - 1]) > 2) continue;
     if (!best || run.length > best.run.length) best = { c, run, perMonth };
   }
-  if (!best) return { verdict: 'IRREGULAR', sigDays: sig.length };
+  if (!best) return { verdict: 'IRREGULAR', sigDays: sig.length, sigFloor: Math.round(sigFloor) };
 
   const es = best.run.map((k) => best.perMonth[k]);
   const amounts = es.map((e) => e.v);
@@ -115,7 +132,7 @@ export function detectCadence(byDay, { minMonths = 4, minAmount = 0 } = {}) {
   const span = [es[0].d, es[es.length - 1].d];
   const offSchedule = sig.filter((e) => e.d >= span[0] && e.d <= span[1] && !best.c.match(e))
     .map((e) => ({ d: e.d, amt: Math.round(e.v) }));
-  if (cv >= 1.0) return { verdict: 'DAY-STABLE-AMOUNT-UNSTABLE', pattern, targetDay, monthsRun: best.run.length, cv: +cv.toFixed(2), offSchedule };
+  if (cv >= 1.0) return { verdict: 'DAY-STABLE-AMOUNT-UNSTABLE', pattern, targetDay, monthsRun: best.run.length, cv: +cv.toFixed(2), meanAmount: Math.round(mean), emissions: es.map((e) => ({ d: e.d, amt: Math.round(e.v) })), offSchedule, sigFloor: Math.round(sigFloor) };
   return {
     verdict: 'CADENCE', pattern, targetDay, monthsRun: best.run.length,
     meanAmount: Math.round(mean), cv: +cv.toFixed(2),
