@@ -127,6 +127,20 @@ the case a derivation exists for.
   was, and the row must carry its best margin so the weakness is on the row.
 
 ALSO QUEUED, small, whenever there is room:
+  - WINDOW-TOTAL MEAN (2026-10-07, do at the NEXT SPEC DERIVATION, not later): since
+    v0.33.9 the cadence verdict tests the window total while every spec's meanAmount is
+    still a peak-day mean, so every confirmation ratio reads high (ENA August: 1.201 by
+    total vs 1.103 by peak). The fix is in the DERIVATION, not the verdict: detect-cadence
+    reports, per emission month, the window total (expected-1d .. expected+graceDays over
+    the same byDay it already holds) beside the peak day; promoteRow stamps meanAmount
+    from the window totals and records `meanBasis: 'window-total'` on the spec; the
+    verdict's ratio is then like-for-like and peakRatio can be retired from drift. Every
+    verified cadence row (ENA, MOVE, EIGEN's family) is re-derived at the same time, in
+    one session, so no row carries a mean of one kind against a test of the other.
+    Fixture: ENA's 13 months — window-total mean vs the recorded 11,972,127 peak mean,
+    the September verdict ratio under each, and a spec with meanBasis unset is refused
+    by sourcedRowProblems/verifiedRowProblems (a mean of unknown kind is the units error
+    coming back).
   - THE PRINT BESIDE THE REACTION (2026-10-04): fetch NFP and CPI from api.bls.gov
     after release into the T+30m message; cpi.js is dead code and should be deleted
     once its period logic is reused. Full item in REMAINING-WORK-NOTES.md.
