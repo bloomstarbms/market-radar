@@ -4485,3 +4485,26 @@ re-promoting anything.
    10th under the corrected rule — the total (~196M) CONFIRMs and driftStatus flags the
    peak ratio (~15x). That is the right outcome: the schedule paid, the amount changed
    enormously, and a human decides what it means. Report what the 10th produces.
+
+## 2026-10-09 — v0.33.11: COINBASE TITLES LIKE EVERY OTHER VENUE; THREE LIVE FIXTURES THAT HAD FROZEN A DATE
+
+Operator: the Coinbase listing read "Coinbase is opening a market for WHUF (cancel-only
+stage)" while every other venue reads "🆕 LISTING · X on VENUE". Now "🆕 LISTING · WHUF on
+COINBASE — USD market" with the stage as the first line ("Not trading yet: cancel-only
+stage · orders can only be cancelled"), "Now trading on Coinbase" for a product first
+seen online. (WHUF was the detector's first catch — in cancel-only, before MEXC listed it.)
+
+v0.33.10 was tagged and REFUSED by the VPS suite — the rule "suite on the VPS before
+restart" earned its keep. Three LIVE fixtures read the real cadence state and asserted
+September's: "ENA is under an active DEMOTE", "re-promoting ENA is REFUSED today", "the
+annotation log reports ORDER (latest)". The 2026-10-07 void changed all three, and the
+desktop suite passed only because its data/ copy was stale. Same class as the coveredTo
+fixture on 2026-10-01: a live-shaped fixture that pins a date's state fails on progress.
+Rewritten as rules — the gate's answer must agree with whatever the live state is (an
+active DEMOTE refuses; none means nothing to satisfy AND the log names who cleared it);
+the real September case is frozen as its own fixture so it keeps proving the refusal;
+the log check asserts append-only permanence (ORDER and ENA both present, every entry
+with a reason and its original) and names the latest, whichever that is. The desktop
+data/ copy of cadence-watch.json, verdict-annotations.json and cadence-report.json was
+pulled from the VPS first, so the desktop reproduced the failure before the fix.
+v0.33.10's tag stays on its untested commit; 0.33.11 is the tree that shipped.

@@ -1542,9 +1542,14 @@ console.log('62. a CORRECTION is visible — removing a verdict from state must 
   check('the heartbeat carries the corrections line', hb.lines.some((l) => /Verdict corrections: 3/.test(l)));
   check('MUTATION: with no corrections the heartbeat adds no empty line', !buildHeartbeat(Date.now(), { rows: [], drops: { total: 0, byReason: {} }, bugs: 0, pulse: 'x', startedAt: Date.now(), digest: { line: 'd' }, corrections: { n: 0, line: '' } }).lines.some((l) => /Verdict corrections/.test(l)));
 
-  // LIVE — ORDER's correction is real and reportable.
+  // LIVE — the annotation log is append-only history: ORDER's 2026-09-13 void and ENA's
+  // 2026-10-07 void are both permanent entries, each with a stated reason and the original
+  // verdict it replaced. The line names the LATEST, whichever that is on the day.
   const live = verdictCorrections();
-  check('LIVE-RECORD: the real annotation log is readable and reports ORDER', !live.unreadable && live.n >= 1 && /ORDER 2026-09-07/.test(live.line));
+  const liveLog = JSON.parse(readFileSync('data/verdict-annotations.json', 'utf8')).annotations;
+  const has = (sym, key) => liveLog.find((a) => a.sym === sym && a.key === key && a.op === 'void');
+  check('LIVE-RECORD: the real annotation log is readable, reports the latest correction, and every entry carries a reason and the original', !live.unreadable && live.n === liveLog.length && live.n >= 2 && /void/.test(live.line) && liveLog.every((a) => a.reason?.length >= 20 && a.original && a.at));
+  check('LIVE-RECORD: ORDER 2026-09-07 and ENA 2026-09 are both in the log — a correction is recorded as a correction, never as an absence', !!has('ORDER', '2026-09-07') && has('ENA', '2026-09')?.original?.action === 'DEMOTE' && has('ENA', '2026-09').clearedDemotion?.kind === 'DEMOTE');
 }
 
 console.log('48. MECHANISM — a sourced date can name no discrete event; weak falsifiers are stated');
@@ -2342,15 +2347,22 @@ console.log('65. RE-PROMOTION requires POST-DEMOTION evidence — the gate refus
   check('no emission series -> refused, names detect-cadence (typed numbers do not re-promote)', /run detect-cadence/.test(repromotionProblems({ spec: spec13, demotion: dem, largestSeen: 1, emissions: null }).join()));
   check('a FAMILY spec is judged against the family mean', repromotionProblems({ spec: { wallets: [{ addr: 'a', meanAmount: 7e6 }, { addr: 'b', meanAmount: 5e6 }], monthsObserved: 12 }, demotion: dem, largestSeen: 5e6, emissions: [...hist, oct, nov] }).length === 0);
   check('no active demotion -> nothing to satisfy', repromotionProblems({ spec: spec13, demotion: null, largestSeen: 1, emissions: [] }).length === 0 && repromotionProblems({ spec: spec13, demotion: { kind: 'review-expired' }, largestSeen: 1, emissions: [] }).length === 0);
-  // LIVE: the real ENA record + the real report refuse today (the row IS the test case).
+  // THE REAL SEPTEMBER CASE, FROZEN: ENA's 2026-09 DEMOTE (largestSeen 5,148,798) against the
+  // 13-month CADENCE report — the gate refuses. Frozen because the live state moved on
+  // 2026-10-07 (the DEMOTE was voided as a rule artifact); a fixture that read the live
+  // demotion asserted a date's state and failed the day the correction landed.
   const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
   const st = loadWatchState();
-  const liveDem = activeDemotions(live, st).ENA;
   const liveEna = live.find((t) => t.sym === 'ENA');
   const rep = JSON.parse(readFileSync('data/cadence-report.json', 'utf8')).ENA;
   const w = (rep?.perWallet || []).find((x) => x.addr.toLowerCase() === liveEna?.cadence?.wallet?.toLowerCase());
-  check('LIVE: ENA is under an active DEMOTE and its report still says CADENCE on the same history', liveDem?.kind === 'DEMOTE' && w?.solo?.verdict === 'CADENCE');
-  check('LIVE: re-promoting ENA from that report is REFUSED today', repromotionProblems({ spec: liveEna.cadence, demotion: liveDem, largestSeen: st.months?.ENA?.[liveDem?.month]?.largestSeen, emissions: w?.solo?.emissions }).length >= 1);
+  const septDem = { at: '2026-09-12T13:58', month: '2026-09', window: '2026-09-06..2026-09-10', kind: 'DEMOTE' };
+  check('FROZEN: ENA under its real September DEMOTE, against a report that still said CADENCE on the same history, is REFUSED re-promotion', w?.solo?.verdict === 'CADENCE' && repromotionProblems({ spec: liveEna.cadence, demotion: septDem, largestSeen: 5148798, emissions: w?.solo?.emissions }).length >= 1);
+  // LIVE, as a RULE not a snapshot: the gate's answer agrees with whatever the live state is.
+  const liveDem = activeDemotions(live, st).ENA;
+  const liveProblems = repromotionProblems({ spec: liveEna.cadence, demotion: liveDem ?? null, largestSeen: st.months?.ENA?.[liveDem?.month]?.largestSeen, emissions: w?.solo?.emissions });
+  const voidedEna = JSON.parse(readFileSync('data/verdict-annotations.json', 'utf8')).annotations.some((a) => a.sym === 'ENA' && a.op === 'void' && a.clearedDemotion);
+  check('LIVE: under an active DEMOTE the gate refuses; with no active demotion it has nothing to satisfy AND the log says who cleared it', liveDem?.kind === 'DEMOTE' ? liveProblems.length >= 1 : (liveProblems.length === 0 && voidedEna));
   check('the CLI consults the gate before promoteRow (source-level: no override flag exists)', /repromotionProblems\(/.test(readFileSync('promote-unlock.js', 'utf8')) && !/force|override/i.test(readFileSync('promote-unlock.js', 'utf8').split('ITEM 10')[1].split('const row = promoteRow')[0].replace(/^\s*\/\/.*$/gm, '')));
 }
 
