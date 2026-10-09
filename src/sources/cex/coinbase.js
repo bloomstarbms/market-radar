@@ -96,18 +96,22 @@ export function diffProducts(prev, live) {
 
 // ---------------------------------------------------------------- messages, pure
 const url = (id) => `https://exchange.coinbase.com/trade/${id}`;
+// Same title shape as every other venue's listing (listings.js, upbit.js, hyperliquid.js):
+// "🆕 LISTING · SYMBOL on VENUE — markets". The pre-trading stage is a fact about the
+// market and stays, as the first line, in plain words.
+const marketsOf = (quotes) => `${quotes.join(', ')} market${quotes.length > 1 ? 's' : ''}`;
 export function coinbaseOpeningMessage(e) {
   return {
-    title: `Coinbase is opening a market for ${e.base} (${STAGE_LABEL[e.stage]} stage)`,
-    lines: [`${e.quotes.join(', ')} market${e.quotes.length > 1 ? 's' : ''} · ${STAGE_MEANS[e.stage] ?? STAGE_LABEL[e.stage]}`, ...(e.msg ? [`Coinbase: "${e.msg.slice(0, 100)}"`] : [])],
+    title: `🆕 LISTING · ${e.base} on COINBASE — ${marketsOf(e.quotes)}`,
+    lines: [`Not trading yet: ${STAGE_LABEL[e.stage]} stage · ${STAGE_MEANS[e.stage] ?? STAGE_LABEL[e.stage]}`, ...(e.msg ? [`Coinbase: "${e.msg.slice(0, 100)}"`] : [])],
     operatorLines: [`New product(s) ${e.ids.join(', ')} in stage ${e.stage}; this message is edited when full trading opens`],
     url: url(e.ids[0]),
   };
 }
 export function coinbaseListedMessage(e) {
   return {
-    title: `Coinbase lists ${e.base} — now trading`,
-    lines: [`${e.quotes.join(', ')} market${e.quotes.length > 1 ? 's' : ''} · full trading on first sighting (no pre-trading stage was seen)`],
+    title: `🆕 LISTING · ${e.base} on COINBASE — ${marketsOf(e.quotes)}`,
+    lines: ['Now trading on Coinbase (no pre-trading stage was seen)'],
     operatorLines: [`New product(s) ${e.ids.join(', ')} first seen already online`],
     url: url(e.ids[0]),
   };

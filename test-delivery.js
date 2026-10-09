@@ -2896,7 +2896,7 @@ console.log('78. COINBASE — stage-aware product diff from the real response; a
   await cb.processProducts(without(['SYND-USD']), st, deps);
   check('poll 1 is a baseline: nothing sent, the baseline is persisted in state', sent.length === 0 && Object.keys(st.coinbase.products).length === real.length - 1);
   await cb.processProducts(real, st, deps);
-  check('poll 2: SYND-USD appears (a NEW base) in limit-only -> ONE opening alert, "Coinbase is opening a market for SYND (limit-only stage)"', sent.length === 1 && sent[0].title === 'Coinbase is opening a market for SYND (limit-only stage)' && sent[0].dedupeKey === 'COINBASE:SYND' && sent[0].venue === 'coinbase' && /limit orders only/.test(sent[0].lines[0]));
+  check('poll 2: SYND-USD appears (a NEW base) in limit-only -> ONE opening alert, titled like every other venue ("🆕 LISTING · SYND on COINBASE — USD market") with the stage as its first line', sent.length === 1 && sent[0].title === '🆕 LISTING · SYND on COINBASE — USD market' && sent[0].dedupeKey === 'COINBASE:SYND' && sent[0].venue === 'coinbase' && /^Not trading yet: limit-only stage · limit orders only/.test(sent[0].lines[0]));
   const full = real.map((p) => (p.id === 'SYND-USD' ? { ...p, limit_only: false } : p)); // the one simulated change
   await cb.processProducts(full, st, deps);
   check('poll 3: SYND-USD goes to full trading -> the opening message is EDITED once, no second alert', sent.length === 1 && edits.length === 1 && edits[0].key === 'COINBASE:SYND' && /^Full trading open from 14:00 UTC \(SYND-USD\)$/.test(edits[0].line));
@@ -2918,7 +2918,7 @@ console.log('78. COINBASE — stage-aware product diff from the real response; a
   const st3 = {};
   await cb.processProducts([byId['BTC-USD']], st3, deps);
   await cb.processProducts([byId['BTC-USD'], byId['ETH-GBP']], st3, deps);
-  check('a NEW coin is reported even when its first market is GBP', sent.length === 4 && /ETH/.test(sent[3].title) && /GBP/.test(sent[3].lines[0]));
+  check('a NEW coin is reported even when its first market is GBP (the market is in the title now)', sent.length === 4 && /^🆕 LISTING · ETH on COINBASE — GBP market$/.test(sent[3].title));
   // Limit-only is not only a launch stage: an ESTABLISHED limit-only product going full is not news.
   const st4 = {};
   await cb.processProducts(real, st4, deps);
@@ -2930,7 +2930,8 @@ console.log('78. COINBASE — stage-aware product diff from the real response; a
   const { proseProblems } = await import('./src/core/prose-lint.js');
   const shapes = [cb.coinbaseOpeningMessage({ base: 'SYND', quotes: ['USD'], ids: ['SYND-USD'], stage: 'AUCTION', msg: '' }), cb.coinbaseListedMessage({ base: 'X', quotes: ['USD', 'USDC'], ids: ['X-USD', 'X-USDC'] }), cb.coinbaseMarketAddMessage({ base: 'ETH', quote: 'USD', id: 'ETH-USD', stage: 'LIMIT_ONLY' }), cb.coinbaseDelistMessage({ base: 'AAVE', ids: ['AAVE-USD'], allGone: false, msg: 'Trading has been disabled' })];
   check('every Coinbase message shape is lint-clean and within the cap', shapes.every((m) => { const r = renderMessage(m, 'public'); return r.lines.length <= 6 && r.lines.concat(r.title).every((l) => !proseProblems(l).length); }));
-  check('auction stage reads "Coinbase is opening a market for SYND (auction stage)"', shapes[0].title === 'Coinbase is opening a market for SYND (auction stage)');
+  check('auction stage: same title shape, "Not trading yet: auction stage" as the first line; the first-seen-online shape says "Now trading on Coinbase"', shapes[0].title === '🆕 LISTING · SYND on COINBASE — USD market' && /^Not trading yet: auction stage/.test(shapes[0].lines[0]) && shapes[1].title === '🆕 LISTING · X on COINBASE — USD, USDC markets' && /^Now trading on Coinbase/.test(shapes[1].lines[0]));
+  check('the Coinbase listing title matches the other venues\' shape exactly (listings.js, upbit.js): "🆕 LISTING · <sym> on <VENUE>"', /^🆕 LISTING · [A-Z0-9]+ on COINBASE — /.test(shapes[0].title) && /^🆕 LISTING · /.test(readFileSync('src/sources/cex/listings.js', 'utf8').match(/title: `(🆕 LISTING · [^`]*)`/)[1]));
   // THE GATE: every tier-1 venue has a live collector, or boot refuses.
   const { checkVenueCollectors, VENUE_COLLECTORS } = await import('./src/core/routes.js');
   const { LISTING_TIER1 } = await import('./src/core/dispatcher.js');
@@ -2961,7 +2962,7 @@ console.log('78. COINBASE — stage-aware product diff from the real response; a
     check('cycle 2 (304): If-None-Match carried the stored ETag; status not-modified; no diff, nothing sent', calls[1] === 'W/"a"' && r2.status === 'not-modified' && sent5.length === 0 && !r2.events);
     check('a 304 is NOT a failed fetch: no warning logged, the pulse IS noted (feedWasLooking stays true), the baseline untouched', errors.length === errBefore && pulses.filter((p) => p === 'coinbase').length === 2 && JSON.stringify(st5.coinbase) === snapBefore);
     const r3 = await cb.coinbaseCycle(st5, d5);
-    check('cycle 3 (200, changed): diffs against the STORED baseline — SYND-USD is a new limit-only opening — and the new ETag replaces the old', r3.status === 'ok' && sent5.length === 1 && /^Coinbase is opening a market for SYND/.test(sent5[0].title) && st5.coinbase.etag === 'W/"b"' && calls[2] === 'W/"a"');
+    check('cycle 3 (200, changed): diffs against the STORED baseline — SYND-USD is a new limit-only opening — and the new ETag replaces the old', r3.status === 'ok' && sent5.length === 1 && /^🆕 LISTING · SYND on COINBASE/.test(sent5[0].title) && st5.coinbase.etag === 'W/"b"' && calls[2] === 'W/"a"');
     const r4 = await cb.coinbaseCycle(st5, d5);
     check('contrast: a 503 IS a failure — logged, no pulse, state untouched', r4.status === 'failed' && errors.length === errBefore + 1 && /\[coinbase\] poll failed: HTTP 503/.test(errors.at(-1)) && pulses.length === 3 && st5.coinbase.etag === 'W/"b"');
   }
