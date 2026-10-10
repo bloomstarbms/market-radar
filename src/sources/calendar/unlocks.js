@@ -357,13 +357,17 @@ function verifiedPublic(t, lead) {
 // recorded them (windowTotal / familyTotal, ratio) — no re-derivation, no change to
 // the spec, no directional claim. Inside the band the line is absent: the mean
 // already says it. Only CONFIRM stamps count (a DEMOTE or ABSENT stamp has no
-// window paid). `months` is the watch state's months[sym] map, passed in so the
-// builder stays pure and a fixture can feed the real October stamp.
+// window paid). A single-wallet stamp must carry windowTotal (the window-total rule,
+// v0.33.9+): a pre-rule stamp's `amount` is a PEAK DAY, and "window paid" over a
+// peak day is the units mislabel — refused, not approximated (MOVE's September
+// stamp is exactly that case). Family stamps carry familyTotal, the quantity the
+// family verdict tests. `months` is the watch state's months[sym] map, passed in
+// so the builder stays pure and a fixture can feed the real October stamp.
 export function lastWindowLine(t, months) {
   if (!t?.cadence || !months || typeof months !== 'object') return null;
   const key = Object.keys(months).filter((k) => months[k]?.action === 'CONFIRM').sort().at(-1);
   const s = key ? months[key] : null;
-  const total = s?.windowTotal ?? s?.familyTotal ?? s?.amount;
+  const total = Array.isArray(t.cadence.wallets) ? s?.familyTotal : s?.windowTotal;
   if (!s || typeof s.ratio !== 'number' || typeof total !== 'number') return null;
   if (Math.abs(s.ratio - 1) <= (t.cadence.tolerance ?? 0.25)) return null;
   return `last window paid ${fmtN(total)} (${s.ratio.toFixed(2)}×)`;

@@ -4523,3 +4523,17 @@ ENA's real October stamp → "last window paid 207,259,731 (17.17×)" at every f
 lead, 4 public lines; EIGEN's 0.976 inside ±13% → nothing; EIGEN at 1.14 would carry
 it from familyTotal; a later DEMOTE is not "the last window"; latest CONFIRM by month
 key, not object order. ENA's next forward stage is T-14 on 2026-10-23 for 2026-11-06.
+
+## 2026-10-10 — v0.33.13: THE LINE REFUSES A PEAK-DAY STAMP
+
+v0.33.12's read-only render against the live state showed MOVE at T-14 carrying "last
+window paid 19,376,705 (2.05×)" — MOVE's only stamp is September's, written under the
+peak-day rule before v0.33.9: `amount` is a peak day and there is no windowTotal. The
+first version fell back to `amount`, so "window paid" labelled a peak day. Units
+mislabel, the ambiguous case: refused, not approximated. A single-wallet row now
+requires windowTotal on the stamp (every stamp the window-total rule writes has it);
+a family row reads familyTotal, the quantity its verdict tests. Fixture 81 freezes
+MOVE's real September stamp as the refusal and the same stamp with the rule's fields
+as the carry. MOVE's October verdict (expectDay 9, scored by ~13 Oct) will be the
+first stamp that can produce the line for it. Live after 0.33.13: ENA carries
+207,259,731 (17.17×); EIGEN (last CONFIRM 0.925, inside ±13%) and MOVE do not.
