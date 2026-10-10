@@ -4508,3 +4508,18 @@ with a reason and its original) and names the latest, whichever that is. The des
 data/ copy of cadence-watch.json, verdict-annotations.json and cadence-report.json was
 pulled from the VPS first, so the desktop reproduced the failure before the fix.
 v0.33.10's tag stays on its untested commit; 0.33.11 is the tree that shipped.
+
+## 2026-10-10 — v0.33.12: FORWARD STAGES CARRY "LAST WINDOW PAID" WHEN THE LAST CONFIRMED WINDOW LEFT THE BAND
+
+Forward unlock stages (T-14/T-7/T-3/T-0) of a cadence row add one public line when the
+last CONFIRMED window's ratio is outside the row's tolerance band (the row's own
+`tolerance`, ±25% when unset): "last window paid <windowTotal> (<ratio>×)". It is the
+stamp's own figures as the verdict recorded them — no re-derivation, no change to the
+spec, no directional claim. Inside the band the line is absent (the mean already says it).
+Only CONFIRM stamps count; T+3 does not carry it (the retrospective line reports what
+moved). The watch state is loaded once per poll and the row's months map is handed to
+`verifiedMessage` / `renderFact` (ctx.months), so the builder stays pure. Fixture 81:
+ENA's real October stamp → "last window paid 207,259,731 (17.17×)" at every forward
+lead, 4 public lines; EIGEN's 0.976 inside ±13% → nothing; EIGEN at 1.14 would carry
+it from familyTotal; a later DEMOTE is not "the last window"; latest CONFIRM by month
+key, not object order. ENA's next forward stage is T-14 on 2026-10-23 for 2026-11-06.

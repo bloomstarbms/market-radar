@@ -351,8 +351,26 @@ function verifiedPublic(t, lead) {
   if (cc.scope === 'announcement') return 'Project-announced · amount not observed on-chain';
   return cc.public.join(' ');
 }
-export function verifiedMessage(t, lead, dateKey, retro = null) {
+// LAST WINDOW (2026-10-10): forward stages of a cadence row carry one fact from the
+// watch when the last CONFIRMED window landed outside the row's tolerance band:
+// "last window paid <total> (<ratio>×)". The stamp's own figures as the verdict
+// recorded them (windowTotal / familyTotal, ratio) — no re-derivation, no change to
+// the spec, no directional claim. Inside the band the line is absent: the mean
+// already says it. Only CONFIRM stamps count (a DEMOTE or ABSENT stamp has no
+// window paid). `months` is the watch state's months[sym] map, passed in so the
+// builder stays pure and a fixture can feed the real October stamp.
+export function lastWindowLine(t, months) {
+  if (!t?.cadence || !months || typeof months !== 'object') return null;
+  const key = Object.keys(months).filter((k) => months[k]?.action === 'CONFIRM').sort().at(-1);
+  const s = key ? months[key] : null;
+  const total = s?.windowTotal ?? s?.familyTotal ?? s?.amount;
+  if (!s || typeof s.ratio !== 'number' || typeof total !== 'number') return null;
+  if (Math.abs(s.ratio - 1) <= (t.cadence.tolerance ?? 0.25)) return null;
+  return `last window paid ${fmtN(total)} (${s.ratio.toFixed(2)}×)`;
+}
+export function verifiedMessage(t, lead, dateKey, retro = null, months = null) {
   const cc = claimCoverage(t, lead);
+  const lastWindow = lead >= 0 ? lastWindowLine(t, months) : null;
   const epistemics = lead >= 7
     ? 'Added supply reaches the market on this date. No directional claim — the drift around unlocks has not been measured on this corpus.'
     : lead < 0
@@ -363,6 +381,7 @@ export function verifiedMessage(t, lead, dateKey, retro = null) {
     title: lead < 0 ? `🔓 UNLOCK · ${t.sym} — T+${-lead} (event ${fmtDate(dateKey)})` : `🔓 UNLOCK · ${t.sym} — ${fmtDate(dateKey)} (${lead === 0 ? 'today' : `${lead}d`})`,
     lines: [
       ...(amt && lead >= 0 ? [amt] : []),
+      ...(lastWindow ? [lastWindow] : []),
       ...(retro ? [retro] : []),
       verifiedPublic(t, lead),
       ...(t.note ? [t.note] : []),
@@ -383,7 +402,7 @@ export function verifiedMessage(t, lead, dateKey, retro = null) {
 export function renderFact(t, audience, ctx = {}) {
   const msg = t?.provenance === 'sourced'
     ? sourcedMessage(t, ctx.ev ?? (t.sourceEvents || [])[0], ctx.lead ?? 7, ctx.now ?? new Date(), ctx.second ?? null)
-    : verifiedMessage(t, ctx.lead ?? 7, ctx.dateKey ?? '2026-01-01', ctx.retro ?? null);
+    : verifiedMessage(t, ctx.lead ?? 7, ctx.dateKey ?? '2026-01-01', ctx.retro ?? null, ctx.months ?? null);
   return renderMessage(msg, audience);
 }
 // PUBLIC BUDGET (Part 2): a seventh line means something is prose. Declared here,
@@ -454,7 +473,8 @@ export async function pollUnlocks() {
   // Cadence overlay: a behavioural row whose watch window passed empty is demoted by
   // OBSERVATION, recorded in bot-owned data/ — unlocks.json keeps its single human
   // writer. A demotion is superseded only by a re-promotion with newer evidence.
-  const demoted = activeDemotions(sched.tokens, loadWatchState());
+  const watch = loadWatchState(now);
+  const demoted = activeDemotions(sched.tokens, watch);
   const recheck = loadRecheckState();
   // Per-cycle counts from the pure classifier — never module state.
   const ctx = { demoted, recheck, now: now.getTime() };
@@ -506,7 +526,7 @@ export async function pollUnlocks() {
         const obs = addrs.length ? await observedAround(addrs, t.sym, dateKey, t.cadence?.graceDays ?? 3).catch(() => null) : null;
         retro = retrospectiveLine(obs, t.cadence);
       }
-      const msg = verifiedMessage(t, lead, dateKey, retro);
+      const msg = verifiedMessage(t, lead, dateKey, retro, watch.months?.[t.sym] ?? null);
       if (await dispatch({
         source: 'CAL', type: 'UNLOCK',
         severity: lead === 3 || lead === 0 ? 'HIGH' : lead < 0 ? 'LOW' : 'MEDIUM',

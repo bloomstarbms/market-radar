@@ -3052,6 +3052,36 @@ console.log('80. detect-cadence: the significance floor is a median of the large
   check('"the run must be current" is judged against the injected now, not the wall clock (fixtures built on real dates do not rot)', detectCadence(through('2026-09-30'), { now: new Date(Date.UTC(2027, 5, 1) ) }).verdict !== 'CADENCE');
 }
 
+console.log('81. forward stages of a cadence row carry "last window paid <total> (<ratio>×)" only when the last CONFIRMED window left the tolerance band');
+{
+  const { lastWindowLine, verifiedMessage, renderFact, PUBLIC_MAX_LINES, PUBLIC_MAX_CHARS } = await import('./src/sources/calendar/unlocks.js');
+  const { proseProblems } = await import('./src/core/prose-lint.js');
+  // ENA's live spec (no tolerance field → the ±25% default) and the REAL stamps the watch wrote.
+  const ena = { sym: 'ENA', name: 'Ethena', verified: true, events: [{ date: '2026-10-06', source: 'onchain-cadence' }], cadence: { wallet: '0x54B8' + 'c'.repeat(36), expectDay: 6, meanAmount: 12069436, monthsObserved: 13, roll: 'nextBusinessDay' }, note: 'x' };
+  const enaMonths = {
+    '2026-09': { action: 'CONFIRM', date: '2026-09-07', amount: 15539489, ratio: 1.288, window: '2026-09-06..2026-09-10', windowTotal: 15539489, peakDay: '2026-09-07', peakAmount: 5150163, peakRatio: 0.427, rule: 'window-total', at: '2026-10-07T18:11' },
+    '2026-10': { action: 'CONFIRM', date: '2026-10-06', amount: 207259731, ratio: 17.172, window: '2026-10-05..2026-10-09', windowTotal: 207259731, peakDay: '2026-10-06', peakAmount: 186387859, peakRatio: 15.443, days: { '2026-10-09': 887353, '2026-10-08': 6809879, '2026-10-07': 3542558, '2026-10-06': 186387859, '2026-10-05': 9632082 }, rule: 'window-total', at: '2026-10-09T03:59' },
+  };
+  check('ENA October stamp → "last window paid 207,259,731 (17.17×)" — the stamp\'s windowTotal and ratio, verbatim', lastWindowLine(ena, enaMonths) === 'last window paid 207,259,731 (17.17×)');
+  for (const lead of [14, 7, 3, 0]) {
+    const m = verifiedMessage(ena, lead, '2026-11-06', null, enaMonths);
+    check(`T-${lead}: the line is public, sits right after the amount, and the message stays within the cap (${m.lines.length} lines)`, m.lines[1] === 'last window paid 207,259,731 (17.17×)' && m.lines.length <= PUBLIC_MAX_LINES && m.lines.join('\n').length <= PUBLIC_MAX_CHARS);
+  }
+  check('T+3 (lead < 0) does not carry it — the retrospective line reports what moved', !verifiedMessage(ena, -3, '2026-10-06', 'retro', enaMonths).lines.some((l) => l.startsWith('last window paid')));
+  check('the line is a fact: no directional, frequency or evidence prose', proseProblems('last window paid 207,259,731 (17.17×)').length === 0);
+  // EIGEN's family: last CONFIRM 0.976 inside ±13% → no line.
+  const eig = { sym: 'EIGEN', name: 'EigenCloud', verified: true, events: [{ date: '2026-09-30', source: 'onchain-cadence' }], cadence: { wallets: [{ addr: '0x' + '1'.repeat(40), meanAmount: 7822556 }, { addr: '0x' + '2'.repeat(40), meanAmount: 1692519 }], familyMean: 9515075, tolerance: 0.13, toleranceBasis: 'b', monthsObserved: 11, expectDay: 30, monthEnd: true } };
+  const eigMonths = { '2026-08': { action: 'CONFIRM', date: '2026-08-30', familyTotal: 9284426, ratio: 0.976, perWallet: {}, at: '2026-09-10T06:00' } };
+  check('EIGEN 0.976 within ±13% → no line', lastWindowLine(eig, eigMonths) === null && !verifiedMessage(eig, 7, '2026-10-30', null, eigMonths).lines.some((l) => l.startsWith('last window paid')));
+  check('EIGEN at 1.14 (outside ±13%) WOULD carry it, reading familyTotal — the band is the row\'s, not a constant', lastWindowLine(eig, { '2026-08': { ...eigMonths['2026-08'], ratio: 1.14 } }) === 'last window paid 9,284,426 (1.14×)');
+  check('ENA September alone (1.288 vs the ±25% default) carries it; 1.20 would not', lastWindowLine(ena, { '2026-09': enaMonths['2026-09'] }) === 'last window paid 15,539,489 (1.29×)' && lastWindowLine(ena, { '2026-09': { ...enaMonths['2026-09'], ratio: 1.2 } }) === null);
+  check('only CONFIRM stamps count: a later DEMOTE does not become "the last window" and does not hide October', lastWindowLine(ena, { ...enaMonths, '2026-11': { action: 'DEMOTE', date: '2026-11-06', ratio: 0, at: '2026-11-10T06:00' } }) === 'last window paid 207,259,731 (17.17×)');
+  check('the latest CONFIRM wins by month key, whatever the object order', lastWindowLine(ena, { '2026-10': enaMonths['2026-10'], '2026-09': enaMonths['2026-09'] }) === 'last window paid 207,259,731 (17.17×)' && lastWindowLine(ena, { '2026-10': enaMonths['2026-09'], '2026-09': enaMonths['2026-10'] }) === 'last window paid 15,539,489 (1.29×)');
+  check('no watch state, no months for the symbol, a non-cadence row: silent, never a throw', lastWindowLine(ena, null) === null && lastWindowLine(ena, {}) === null && lastWindowLine({ sym: 'STK', reviewBy: '2026-11-30' }, enaMonths) === null);
+  check('renderFact threads ctx.months so the render-lint path sees the same line', renderFact(ena, 'public', { lead: 14, dateKey: '2026-11-06', months: enaMonths }).lines.includes('last window paid 207,259,731 (17.17×)') && !renderFact(ena, 'public', { lead: 14, dateKey: '2026-11-06' }).lines.some((l) => l.startsWith('last window paid')));
+  check('MUTATION: the line + amount + verification + note on a single-wallet row is 4 public lines (cap 6) — a 7th would fail', verifiedMessage(ena, 7, '2026-11-06', null, enaMonths).lines.length === 4);
+}
+
 console.error = origErr;
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
