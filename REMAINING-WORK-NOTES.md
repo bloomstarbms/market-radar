@@ -4640,3 +4640,33 @@ inside measurePrices ("billing not observable"); the poller validates BEFORE wri
 measurement records method: 2, and a refusal made under an older method does not hold off
 the retry. Fixture 82 now feeds the real my/info shape with the bonus pool draining, and
 freezes the regression (recharge_credits alone → refused, not written).
+
+## 2026-10-22 — v0.34.2: BILLING POSTS LATE (the second live measurement read zero too)
+
+v0.34.1 summed every credit pool and STILL read every price as 0 (refused correctly: no
+polling, meter at 0). A balance watch on the VPS, one /oapi/my/info read per minute,
+showed why: that measurement's charges landed after it had finished, in pieces.
+
+  18:31  bonus 119,408   (after measurement 1)
+  18:35  measurement 2 ends (8 calls), refused at 0
+  18:35:52  bonus 118,834   -574
+  18:36:52  bonus 118,816   -18
+  18:37:52  bonus 118,816   0  (settled; a balance read costs 0)
+
+Measurement 2 cost 592 credits, the same as measurement 1 (120,000 - 119,408, if the
+bonus pool started at +12% of 1,000,000). 592 = 2 x (18 user info + 60 followings@20 +
+200 followings@200 + 18 batch): the documented prices, in total. Not yet a per-type
+measurement.
+
+v0.34.2 measures in SETTLED WINDOWS: one call, then a balance read every 60 s until two
+consecutive reads agree at least 3 min after the call (never settled in 20 min →
+refused). Each type is measured in two windows that must agree; a 0 followings price is
+refused. A balance read costs 0, shown by the settle rule itself (consecutive reads
+could not agree otherwise). The measurement takes ~30 min, once, on the module's own
+timer. Fixture 82 now runs it against a lagging biller shaped on the watch above
+(charges post 45 s and 90 s after the call, into the bonus pool), and freezes v0.34.1's
+failure: the same biller read 2 s apart gives no price and is refused.
+
+Three measurements so far have cost 1,184 credits ($0.012) in total, all outside the
+module's meter, because no price was ever accepted to meter them at. The meter starts
+from the first accepted measurement, which charges its own spend.

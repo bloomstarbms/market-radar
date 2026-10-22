@@ -348,17 +348,22 @@ export async function followCycle(state, deps = {}) {
   return finish(out.failed.length ? 'partial' : 'ok');
 }
 
-// ---------------------------------------------------------------- price measurement (balance deltas)
-// Each call type is made TWICE with a balance read after each; both deltas must agree (each
-// = the call + one balance read). Disagreement means billing is not observable this way
-// (lagged, batched, or another user of the key) — refused, never averaged.
-//
+// ---------------------------------------------------------------- price measurement (settled balance deltas)
 // THE BALANCE IS EVERY POOL. /oapi/my/info answers {"recharge_credits":1000000,
 // "total_bonus_credits":119408} (2026-10-22): calls draw on the BONUS pool first, so
-// recharge_credits alone did not move and the first live measurement read every price as
-// 0 — "deltas equal" at 0 = 0. Two fixes: the balance is the sum of every *credits field,
-// and a zero followings price is refused as "billing not observable", never written.
-export const MEASURE_METHOD = 2; // 1 = recharge_credits only (v0.34.0, read zero); 2 = sum of every credit pool
+// recharge_credits alone never moves (v0.34.0 read every price as 0 = 0). The balance is
+// the sum of every *credits field.
+//
+// AND IT POSTS LATE. v0.34.1 read the sum 2 s after each call and still saw nothing move;
+// a balance watch then showed that measurement's 592 credits land 30 s to 90 s AFTER it
+// ended, in pieces (574, then 18). A delta read before billing settles is a reading of
+// nothing. So each measurement window is: one call, then balance reads every
+// settleEveryMs until two consecutive reads agree AND minSettleMs has passed since the
+// call; never settled within maxSettleMs -> refused. Each call type is measured in two
+// separate windows and the two must agree; a followings price of 0 is refused ("billing
+// not observable"), never written. The balance reads themselves are measured by the
+// settle rule: if a read cost anything, consecutive reads could never agree.
+export const MEASURE_METHOD = 3; // 1 recharge_credits only (read 0) · 2 every pool, 2 s gap (read 0: billing lags) · 3 every pool, settled windows
 export function balanceOf(j) {
   const pools = Object.entries(j ?? {}).filter(([k, v]) => /credits$/i.test(k) && typeof v === 'number' && Number.isFinite(v));
   return pools.length ? { total: pools.reduce((s, [, v]) => s + v, 0), pools: pools.map(([k]) => k).sort() } : null;
@@ -366,40 +371,52 @@ export function balanceOf(j) {
 export async function measurePrices(deps = {}) {
   const fetchJson = deps.fetchJson ?? defaultFetchJson, key = deps.key;
   const sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
-  const handle = deps.probeHandle ?? 'solana', gap = deps.gapMs ?? 2000;
+  const clock = deps.clock ?? (() => Date.now());
+  const handle = deps.probeHandle ?? 'solana';
+  const every = deps.settleEveryMs ?? 60e3, minSettle = deps.minSettleMs ?? 180e3, maxSettle = deps.maxSettleMs ?? 20 * 60e3;
   let pools = [];
-  const balance = async () => {
+  const read = async () => {
     const r = await fetchJson(`${API}/oapi/my/info`, key); const c = classifyResponse(r);
     if (!c.ok) throw new Error(`balance read failed: ${c.kind} ${c.msg}`);
-    const b = balanceOf(r.json);
-    if (!b) throw new Error('balance read returned no credit fields');
-    pools = b.pools;
-    await sleep(gap); return b.total;
+    const bal = balanceOf(r.json);
+    if (!bal) throw new Error('balance read returned no credit fields');
+    pools = bal.pools; return bal.total;
   };
-  const b0 = await balance(), b1 = await balance();
-  const myInfo = b0 - b1;
-  let last = b1, probeId = null;
-  const twice = async (name, url, onJson) => {
-    const d = [];
-    for (let i = 0; i < 2; i++) {
-      const r = await fetchJson(url, key); const c = classifyResponse(r);
-      if (!c.ok) throw new Error(`${name} failed: ${c.kind} ${c.msg}`);
-      onJson?.(r.json); await sleep(gap);
-      const b = await balance(); d.push(last - b); last = b;
+  // Reads until two consecutive readings agree and minSettle has passed since `since`.
+  const settle = async (since, label) => {
+    let prev = await read();
+    for (;;) {
+      await sleep(every);
+      const cur = await read();
+      if (cur === prev && clock() - since >= minSettle) return cur;
+      if (clock() - since > maxSettle) throw new Error(`${label}: the balance did not settle within ${Math.round(maxSettle / 60e3)} min — billing not observable this way`);
+      prev = cur;
     }
-    if (d[0] !== d[1]) throw new Error(`${name}: the two deltas disagree (${d.join(' vs ')} credits) — billing not observable this way`);
-    return d[0] - myInfo;
+  };
+  const b0 = await settle(clock() - minSettle, 'opening balance'); // charges still posting from earlier activity must land first
+  let last = b0, probeId = null;
+  const window = async (name, url, onJson) => {
+    const r = await fetchJson(url, key); const c = classifyResponse(r);
+    if (!c.ok) throw new Error(`${name} failed: ${c.kind} ${c.msg}`);
+    onJson?.(r.json);
+    const b = await settle(clock(), name);
+    const d = last - b; last = b; return d;
+  };
+  const twice = async (name, url, onJson) => {
+    const d1 = await window(name, url, onJson), d2 = await window(name, url, onJson);
+    if (d1 !== d2) throw new Error(`${name}: the two settled deltas disagree (${d1} vs ${d2} credits) — billing not observable this way`);
+    return d1;
   };
   const userInfo = await twice('userInfo', `${API}/twitter/user/info?userName=${handle}`, (j) => { probeId = j?.data?.id ?? probeId; });
   if (!probeId) throw new Error('userInfo returned no id');
   const followings20 = await twice('followings20', `${API}/twitter/user/followings?userName=${handle}&pageSize=20`);
   const followings200 = await twice('followings200', `${API}/twitter/user/followings?userName=${handle}&pageSize=200`);
   const batchPerUser = await twice('batchPerUser', `${API}/twitter/user/batch_info_by_ids?userIds=${probeId}`);
-  const credits = { followings20, followings200, userInfo, batchPerUser, myInfo };
+  const credits = { followings20, followings200, userInfo, batchPerUser, myInfo: 0 };
   if (Object.values(credits).some((x) => x < 0)) throw new Error(`negative cost measured (${JSON.stringify(credits)}) — the balance moved for another reason`);
   if (!(followings20 > 0)) throw new Error(`followings measured at ${followings20} credits — the balance (${pools.join(' + ')}) did not move, billing not observable this way`);
   return { measuredAt: new Date(deps.now ?? Date.now()).toISOString(), credits, spentCredits: b0 - last, method: MEASURE_METHOD,
-    basis: `credit-balance delta over ${pools.join(' + ')}, each call type twice, deltas equal; probe @${handle}; USD at the published 100,000 credits = $1` };
+    basis: `settled credit-balance delta over ${pools.join(' + ')}: one call per window, settled when two reads ${Math.round(every / 1000)} s apart agree at least ${Math.round(minSettle / 60e3)} min after the call; each type in two windows, equal; balance reads cost 0 (consecutive reads agree); probe @${handle}; USD at the published 100,000 credits = $1` };
 }
 
 // ---------------------------------------------------------------- heartbeat line, pure when deps are injected

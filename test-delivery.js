@@ -3239,24 +3239,35 @@ console.log('82. builder follows: baseline silent, one fresh follow one alert, a
     check('a fresh follow whose delivery failed stays "new" and is sent on the next look, once', sent6.length === 1 && sent6[0].dedupeKey === 'FOLLOW:4242');
   }
   {
-    let bal = 1000000; const seq = [];
-    const fake = (drift) => async (url) => {
-      const p = new URL(url).pathname; seq.push(p);
-      if (p === '/oapi/my/info') return { status: 200, json: { recharge_credits: 1000000, total_bonus_credits: bal } }; // the real shape: the bonus pool drains first
-      const c = p === '/twitter/user/info' ? 18 : p === '/twitter/user/batch_info_by_ids' ? 18 : /pageSize=200/.test(url) ? 200 : 60;
-      bal -= c + (drift && p === '/twitter/user/followings' && seq.filter((x) => x === p).length === 2 ? 5 : 0);
-      return { status: 200, json: { status: 'success', data: { id: '999' }, followings: [], users: [] } };
+    // A LAGGING BILLER, shaped on the real 2026-10-22 balance watch: a call's charge posts in
+    // two pieces, ~45 s and ~90 s after the call, to the bonus pool; recharge_credits never moves.
+    const mkBiller = ({ readCost = 0, drift = false, never = false } = {}) => {
+      let t = 0, bonus = 120000; const pending = []; let fcalls = 0;
+      const clock = () => t, sleep = async (ms) => { t += ms; };
+      const post = () => { for (const p of pending) if (!p.done && p.at <= t) { bonus -= p.c; p.done = true; } };
+      const fetchJson = async (url) => {
+        const p = new URL(url).pathname;
+        post();
+        if (p === '/oapi/my/info') { bonus -= readCost; return { status: 200, json: { recharge_credits: 1000000, total_bonus_credits: bonus } }; }
+        let c = p === '/twitter/user/info' ? 18 : p === '/twitter/user/batch_info_by_ids' ? 18 : /pageSize=200/.test(url) ? 200 : 60;
+        if (p === '/twitter/user/followings' && !/pageSize=200/.test(url) && ++fcalls === 2 && drift) c += 5;
+        if (!never) { const first = Math.ceil(c * 0.97); pending.push({ at: t + 45e3, c: first }, { at: t + 90e3, c: c - first }); }
+        return { status: 200, json: { status: 'success', data: { id: '999' }, followings: [], users: [] } };
+      };
+      return { fetchJson, sleep, clock };
     };
-    const m = await measurePrices({ key: 'k', fetchJson: fake(false), sleep: async () => {}, now: T0 });
-    check('price measurement: each call type by balance delta, twice, deltas equal → 60 / 200 / 18 / 18 / 0 credits', JSON.stringify(m.credits) === JSON.stringify({ followings20: 60, followings200: 200, userInfo: 18, batchPerUser: 18, myInfo: 0 }) && m.spentCredits === 2 * (18 + 60 + 200 + 18) && checkPrice(m));
-    bal = 1000000; seq.length = 0;
-    let refused = null; try { await measurePrices({ key: 'k', fetchJson: fake(true), sleep: async () => {} }); } catch (e) { refused = e.message; }
-    check('two readings that disagree are REFUSED, never averaged', /followings20: the two deltas disagree \(60 vs 65 credits\)/.test(refused ?? ''));
+    const m = await measurePrices({ key: 'k', now: T0, ...mkBiller() });
+    check('price measurement against a LAGGING biller (charges post 45 s and 90 s after the call): settled windows read 60 / 200 / 18 / 18 / 0', JSON.stringify(m.credits) === JSON.stringify({ followings20: 60, followings200: 200, userInfo: 18, batchPerUser: 18, myInfo: 0 }) && m.spentCredits === 2 * (18 + 60 + 200 + 18) && checkPrice(m));
+    const quick = await measurePrices({ key: 'k', ...mkBiller(), settleEveryMs: 2000, minSettleMs: 0 }).catch((e) => e.message);
+    check('REGRESSION (v0.34.1): read before billing lands, the same biller gives no price — refused, not written', typeof quick === 'string' && /followings measured at 0 credits/.test(quick));
+    const drift = await measurePrices({ key: 'k', ...mkBiller({ drift: true }) }).catch((e) => e.message);
+    check('two settled windows that disagree are REFUSED, never averaged', /followings20: the two settled deltas disagree \(60 vs 65 credits\)/.test(String(drift)));
+    const costly = await measurePrices({ key: 'k', ...mkBiller({ readCost: 1 }) }).catch((e) => e.message);
+    check('a balance that never stops moving (here: reads that cost) never settles, and is refused', /did not settle within 20 min/.test(String(costly)));
+    const dead = await measurePrices({ key: 'k', ...mkBiller({ never: true }) }).catch((e) => e.message);
+    check('a balance that never moves is refused ("billing not observable"), not written as a price of 0', /followings measured at 0 credits — the balance \(recharge_credits \+ total_bonus_credits\) did not move/.test(String(dead)));
     check('the balance is the sum of every credit pool (the real 2026-10-22 answer: 1,000,000 recharge + 119,408 bonus)', (() => { const b = BF.balanceOf({ recharge_credits: 1000000, total_bonus_credits: 119408 }); return b.total === 1119408 && b.pools.join(',') === 'recharge_credits,total_bonus_credits'; })() && BF.balanceOf({ error: 'x' }) === null);
-    // REGRESSION, the first live measurement: reading only the pool that does not move gives 0 = 0 for every type.
-    let still = null; try { await measurePrices({ key: 'k', sleep: async () => {}, fetchJson: async (url) => new URL(url).pathname === '/oapi/my/info' ? { status: 200, json: { recharge_credits: 1000000 } } : { status: 200, json: { status: 'success', data: { id: '9' }, followings: [], users: [] } } }); } catch (e) { still = e.message; }
-    check('a balance that never moves is REFUSED ("billing not observable"), not written as a price of 0', /followings measured at 0 credits — the balance \(recharge_credits\) did not move/.test(still ?? ''));
-    check('the measurement records its method, so a refusal under an older method does not hold off the retry', m.method === BF.MEASURE_METHOD && BF.MEASURE_METHOD === 2);
+    check('the measurement records its method, so a refusal under an older method does not hold off the retry', m.method === BF.MEASURE_METHOD && BF.MEASURE_METHOD === 3);
     check('at the documented figure, a page of 20 is $0.0006 and a month of hourly looks at 20 accounts is ~$8.93 of the $40 cap', usd(60).toFixed(4) === '0.0006' && usd(60 * 20 * 24 * 31).toFixed(2) === '8.93');
   }
 }
