@@ -352,16 +352,29 @@ export async function followCycle(state, deps = {}) {
 // Each call type is made TWICE with a balance read after each; both deltas must agree (each
 // = the call + one balance read). Disagreement means billing is not observable this way
 // (lagged, batched, or another user of the key) — refused, never averaged.
+//
+// THE BALANCE IS EVERY POOL. /oapi/my/info answers {"recharge_credits":1000000,
+// "total_bonus_credits":119408} (2026-10-22): calls draw on the BONUS pool first, so
+// recharge_credits alone did not move and the first live measurement read every price as
+// 0 — "deltas equal" at 0 = 0. Two fixes: the balance is the sum of every *credits field,
+// and a zero followings price is refused as "billing not observable", never written.
+export const MEASURE_METHOD = 2; // 1 = recharge_credits only (v0.34.0, read zero); 2 = sum of every credit pool
+export function balanceOf(j) {
+  const pools = Object.entries(j ?? {}).filter(([k, v]) => /credits$/i.test(k) && typeof v === 'number' && Number.isFinite(v));
+  return pools.length ? { total: pools.reduce((s, [, v]) => s + v, 0), pools: pools.map(([k]) => k).sort() } : null;
+}
 export async function measurePrices(deps = {}) {
   const fetchJson = deps.fetchJson ?? defaultFetchJson, key = deps.key;
   const sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   const handle = deps.probeHandle ?? 'solana', gap = deps.gapMs ?? 2000;
+  let pools = [];
   const balance = async () => {
     const r = await fetchJson(`${API}/oapi/my/info`, key); const c = classifyResponse(r);
     if (!c.ok) throw new Error(`balance read failed: ${c.kind} ${c.msg}`);
-    const b = Number(r.json?.recharge_credits);
-    if (!Number.isFinite(b)) throw new Error('balance read returned no recharge_credits');
-    await sleep(gap); return b;
+    const b = balanceOf(r.json);
+    if (!b) throw new Error('balance read returned no credit fields');
+    pools = b.pools;
+    await sleep(gap); return b.total;
   };
   const b0 = await balance(), b1 = await balance();
   const myInfo = b0 - b1;
@@ -384,8 +397,9 @@ export async function measurePrices(deps = {}) {
   const batchPerUser = await twice('batchPerUser', `${API}/twitter/user/batch_info_by_ids?userIds=${probeId}`);
   const credits = { followings20, followings200, userInfo, batchPerUser, myInfo };
   if (Object.values(credits).some((x) => x < 0)) throw new Error(`negative cost measured (${JSON.stringify(credits)}) — the balance moved for another reason`);
-  return { measuredAt: new Date(deps.now ?? Date.now()).toISOString(), credits, spentCredits: b0 - last,
-    basis: `credit-balance delta, each call type twice, deltas equal; probe @${handle}; USD at the published 100,000 credits = $1` };
+  if (!(followings20 > 0)) throw new Error(`followings measured at ${followings20} credits — the balance (${pools.join(' + ')}) did not move, billing not observable this way`);
+  return { measuredAt: new Date(deps.now ?? Date.now()).toISOString(), credits, spentCredits: b0 - last, method: MEASURE_METHOD,
+    basis: `credit-balance delta over ${pools.join(' + ')}, each call type twice, deltas equal; probe @${handle}; USD at the published 100,000 credits = $1` };
 }
 
 // ---------------------------------------------------------------- heartbeat line, pure when deps are injected
@@ -428,17 +442,17 @@ export async function pollFollows() {
   if (Date.now() - (f.lastCycleAt ?? 0) < POLL_EVERY_MS) return; // persisted: a restart does not re-poll (and re-pay) early
   let price = loadPrice();
   if (!price) {
-    if (Date.now() - (f.priceProblem?.at ?? 0) < 24 * 3600e3) return;
+    if (f.priceProblem?.method === MEASURE_METHOD && Date.now() - f.priceProblem.at < 24 * 3600e3) return;
     try {
       const p = await measurePrices({ key: config.twitterapiKey });
       charge(f, p.spentCredits, Date.now());
-      writeJsonAtomic(pricePath(), p); price = checkPrice(p); f.priceProblem = null;
+      if (!checkPrice(p)) throw new Error(`measured price failed validation (${JSON.stringify(p.credits)})`); // validated BEFORE it is written
+      writeJsonAtomic(pricePath(), p); price = p; f.priceProblem = null;
       console.log(`[follows] price MEASURED: ${JSON.stringify(p.credits)} credits per call (followings page of ${PAGE_SIZE}: ${p.credits.followings20} credits = $${usd(p.credits.followings20).toFixed(5)}) · the measurement spent ${p.spentCredits} credits`);
     } catch (e) {
-      f.priceProblem = { at: Date.now(), msg: String(e.message).slice(0, 120) }; save();
+      f.priceProblem = { at: Date.now(), method: MEASURE_METHOD, msg: String(e.message).slice(0, 160) }; save();
       console.error(`[OPERATOR][follows] price measurement refused: ${e.message} — no polling without a measured price`); return;
     }
-    if (!price) { f.priceProblem = { at: Date.now(), msg: 'measured price failed validation' }; save(); return; }
   }
   f.lastCycleAt = Date.now();
   const r = await followCycle(st, { cfg: c.cfg, price, key: config.twitterapiKey });

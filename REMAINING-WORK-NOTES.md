@@ -4617,3 +4617,26 @@ DOCUMENTED shape: replace them with a real response once the key exists.
 OPERATOR, to switch it on: add TWITTERAPI_KEY to /home/radar/market-radar/.env (fund
 the account first), then `systemctl restart market-radar`. The first cycle measures the
 price, resolves the twenty handles, and baselines; alerts start from the second cycle.
+
+## 2026-10-22 — v0.34.1: THE BALANCE IS EVERY POOL (the first live price measurement read zero)
+
+The operator added TWITTERAPI_KEY and restarted at 18:27 UTC. The first cycle's price
+measurement finished at 18:28:49 and reported every call type at 0 credits: "deltas
+equal" at 0 = 0. /oapi/my/info answers {"recharge_credits":1000000,
+"total_bonus_credits":119408}: calls draw on the BONUS pool first, and v0.34.0 read
+recharge_credits alone, which did not move. The module did NOT poll on the zero price
+(checkPrice refuses a zero followings price), so nothing was resolved, baselined or
+alerted and the meter stayed at 0 — but the invalid file was written to
+data/twitterapi-price.json before the refusal, and the refusal held the retry off for
+24 h. Same class as the gate that passes because it read nothing: an instrument reading
+the one pool that cannot move.
+
+Inference, NOT a measurement: if the bonus pool started at 120,000 (+12% on a 1,000,000
+recharge), the measurement spent 592 credits, exactly 2 x (18 userInfo + 60 followings@20
++ 200 followings@200 + 18 batch) at the documented prices.
+
+Fixed: the balance is the sum of every *credits field; a followings price of 0 is refused
+inside measurePrices ("billing not observable"); the poller validates BEFORE writing; the
+measurement records method: 2, and a refusal made under an older method does not hold off
+the retry. Fixture 82 now feeds the real my/info shape with the bonus pool draining, and
+freezes the regression (recharge_credits alone → refused, not written).

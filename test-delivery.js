@@ -3242,7 +3242,7 @@ console.log('82. builder follows: baseline silent, one fresh follow one alert, a
     let bal = 1000000; const seq = [];
     const fake = (drift) => async (url) => {
       const p = new URL(url).pathname; seq.push(p);
-      if (p === '/oapi/my/info') return { status: 200, json: { recharge_credits: bal } };
+      if (p === '/oapi/my/info') return { status: 200, json: { recharge_credits: 1000000, total_bonus_credits: bal } }; // the real shape: the bonus pool drains first
       const c = p === '/twitter/user/info' ? 18 : p === '/twitter/user/batch_info_by_ids' ? 18 : /pageSize=200/.test(url) ? 200 : 60;
       bal -= c + (drift && p === '/twitter/user/followings' && seq.filter((x) => x === p).length === 2 ? 5 : 0);
       return { status: 200, json: { status: 'success', data: { id: '999' }, followings: [], users: [] } };
@@ -3252,6 +3252,11 @@ console.log('82. builder follows: baseline silent, one fresh follow one alert, a
     bal = 1000000; seq.length = 0;
     let refused = null; try { await measurePrices({ key: 'k', fetchJson: fake(true), sleep: async () => {} }); } catch (e) { refused = e.message; }
     check('two readings that disagree are REFUSED, never averaged', /followings20: the two deltas disagree \(60 vs 65 credits\)/.test(refused ?? ''));
+    check('the balance is the sum of every credit pool (the real 2026-10-22 answer: 1,000,000 recharge + 119,408 bonus)', (() => { const b = BF.balanceOf({ recharge_credits: 1000000, total_bonus_credits: 119408 }); return b.total === 1119408 && b.pools.join(',') === 'recharge_credits,total_bonus_credits'; })() && BF.balanceOf({ error: 'x' }) === null);
+    // REGRESSION, the first live measurement: reading only the pool that does not move gives 0 = 0 for every type.
+    let still = null; try { await measurePrices({ key: 'k', sleep: async () => {}, fetchJson: async (url) => new URL(url).pathname === '/oapi/my/info' ? { status: 200, json: { recharge_credits: 1000000 } } : { status: 200, json: { status: 'success', data: { id: '9' }, followings: [], users: [] } } }); } catch (e) { still = e.message; }
+    check('a balance that never moves is REFUSED ("billing not observable"), not written as a price of 0', /followings measured at 0 credits — the balance \(recharge_credits\) did not move/.test(still ?? ''));
+    check('the measurement records its method, so a refusal under an older method does not hold off the retry', m.method === BF.MEASURE_METHOD && BF.MEASURE_METHOD === 2);
     check('at the documented figure, a page of 20 is $0.0006 and a month of hourly looks at 20 accounts is ~$8.93 of the $40 cap', usd(60).toFixed(4) === '0.0006' && usd(60 * 20 * 24 * 31).toFixed(2) === '8.93');
   }
 }
