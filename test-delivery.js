@@ -3257,5 +3257,96 @@ console.log('82. builder follows: baseline silent, one fresh follow one alert, a
 }
 
 console.error = origErr;
+console.log('83. MESSAGE DIET, CALL remainder — pump/dump/volume, cascade, multi-exchange, whale, confluence, calendar events, provisional footer');
+{
+  // The v0.32.x diet gave every FACT type two renderings. CALL-path builders still put
+  // mechanism and readings in public: the corpus behind the pump base rate, "direction
+  // unmeasured", the FACT/CALL architecture note, wash-trading rationale, whale "hints"
+  // ("possible incoming SELL-OFF"), the confluence rule, event glosses, and the
+  // three-clause PROVISIONAL footer. Same discipline: nothing deleted, it moves.
+  const pumpMod = await import('./src/sources/cex/pump.js');
+  const { checkPump, PUMP_FADE_OPERATOR, VOLUME_READING } = pumpMod;
+  const { cascadeMessage } = await import('./src/sources/cex/cascade.js');
+  const { multiexMessage } = await import('./src/sources/cex/monitor.js');
+  const { whaleMessage, classifyDirection } = await import('./src/sources/chain/whale.js');
+  const { confluenceMessage } = await import('./src/core/confluence.js');
+  const { eventMessage } = await import('./src/sources/calendar/events.js');
+  const { renderMessage, formatAlert, gateLine, PROVISIONAL_PUBLIC, PROVISIONAL_OPERATOR } = await import('./src/core/dispatcher.js');
+  const { PUBLIC_MAX_LINES, PUBLIC_MAX_CHARS } = await import('./src/sources/calendar/unlocks.js');
+  const { proseProblems } = await import('./src/core/prose-lint.js');
+
+  // Drive the REAL detector (module state is per-key; these symbols exist only here).
+  const feed = (sym, ticks) => { let out = null; for (const [price, vol] of ticks) out = checkPump('mexc', { symbol: sym, price, quoteVol24h: vol, change24hPct: 0 }) || out; return out; };
+  const pump = feed('DIETPUMPUSDT', [[1, 1_000_000], [1.001, 1_001_000], [1.002, 1_002_000], [1.10, 1_300_000]]);
+  const dump = feed('DIETDUMPUSDT', [[1, 1_000_000], [1.001, 1_001_000], [1.002, 1_002_000], [0.75, 1_300_000]]);
+  const vol = feed('DIETVOLUSDT', [[1, 10_000_000], [1.0001, 10_001_000], [1.0002, 10_006_000], [1.0003, 10_500_000], [1.0004, 13_000_000]]);
+  check('the real detector produced PUMP, DUMP and VOLUME for the driven ticks', pump?.type === 'PUMP' && dump?.type === 'DUMP' && vol?.type === 'VOLUME', `${pump?.type}/${dump?.type}/${vol?.type}`);
+
+  const dep = classifyDirection('0xnotalabel', '0x28c6c06298d514db089934071355e5743bf21d60');
+  const pair = { chainId: 'ethereum', priceUsd: '0.4211', liquidity: { usd: 1_250_000 }, baseToken: { symbol: 'TKN', address: '0xabc' } };
+  // Worst-case decoration, as the dispatcher would add it: executable line + provisional footer.
+  const decorate = (m) => ({ ...m, lines: [...m.lines, gateLine({ executableUsd: 41000, spreadBps: 3.1, pass: true }), PROVISIONAL_PUBLIC], operatorLines: [...(m.operatorLines || []), PROVISIONAL_OPERATOR] });
+  const msgs = {
+    pump: decorate(pump || { title: '', lines: [] }),
+    dump: decorate(dump || { title: '', lines: [] }),
+    volume: decorate(vol || { title: '', lines: [] }),
+    cascadeLongs: decorate(cascadeMessage({ sym: 'SOLUSDT', oiDrop: 9.4, priceMove: -6.2, p: 141.22 })),
+    cascadeShorts: decorate(cascadeMessage({ sym: 'ETHUSDT', oiDrop: 7.1, priceMove: 4.8, p: 3480.5 })),
+    multiex: decorate(multiexMessage('PEPE', 'up', ['binance', 'mexc', 'bybit', 'gate'])),
+    whale: decorate(whaleMessage({ symbol: 'TKN', chainId: 'ethereum', usd: 812_000, amount: 1_928_000, dir: dep.dir, hint: dep.hint, threshold: 250_000, liq: 1_250_000, explorer: 'https://etherscan.io/tx/0x1' })),
+    confluence: confluenceMessage(pair, { exchange: 'Binance', usd: 420_000 }, { volH1: 310_000, volRatio: 4.2, priceH1: 9.1, hoursAgo: '3.5' }),
+    eventUnlock: { title: 'X', ...eventMessage('UNLOCK', { impact: 8, description: 'Team and investor tranche' }, 'ARB') },
+    eventTge: { title: 'X', ...eventMessage('TGE', { impact: 6 }, 'NEW') },
+    eventMilestone: { title: 'X', ...eventMessage('EVENT', {}, 'OP') },
+  };
+  const pub = Object.fromEntries(Object.entries(msgs).map(([k, m]) => [k, renderMessage(m, 'public')]));
+  const op = Object.fromEntries(Object.entries(msgs).map(([k, m]) => [k, renderMessage(m, 'operator')]));
+
+  // Fixture-66 vocabulary plus the CALL-path architecture words this diet moved.
+  const BANNED = /\b(bucket [A-D]|falsifier|cadence spec|cluster spec|by construction|demot(e|es|ed|ion)|promot(e|es|ed|ion)|dead-man|provenance tier|overlay|quarantine|claim coverage|chance rate|binomial|replay series|enumerated by us|tierHistory|margin bar|detector|squeeze|precursor|expect wider swings|real money|lead time|violent|reversals?|catalysts?|surge rule|velocity|corpus|sub-gate|gate-passing|gated|step \d+|CALL|wash trading|independent signals|reading|accumulation|sell-off|unmeasured|alpha|cuts both ways|added supply)\b/i;
+  const DIRECTION = /(close now|exit here|buy now|sell now|take profit|dump hard|sell off sharply|capitulation|blow-off|reversal risk|front-run|bleeds into|watch for (a )?follow-up|bearish|bullish|about to)/i;
+  const problems = (r) => r.lines.concat(r.title).filter((l) => BANNED.test(l) || DIRECTION.test(l) || proseProblems(l).length);
+  for (const [k, r] of Object.entries(pub)) {
+    check(`${k}: public is lint-clean, ≤${PUBLIC_MAX_LINES} lines and ≤${PUBLIC_MAX_CHARS} chars at full decoration (${r.lines.length}/${r.text.length})`,
+      !problems(r).length && r.lines.length <= PUBLIC_MAX_LINES && r.text.length <= PUBLIC_MAX_CHARS, problems(r).join(' | '));
+    check(`${k}: operator ⊇ public`, r.lines.every((l) => op[k].lines.includes(l)) && op[k].lines.length >= r.lines.length);
+  }
+  // SELF-TEST: the lint catches the pre-diet lines it exists to keep out.
+  const planted = [
+    '⚠️ PROVISIONAL: single-factor signal on a gate-passing symbol. Pushed to collect gated-population data; no measured edge claim. Auto-expires when gated n>=100 decides.',
+    'Fact: liquidation volume and its skew. The exhaustion/reversal READ is a CALL and has not been built or earned (step 7 splits them).',
+    '1.9M TKN wallet → Binance (DEPOSIT) — coins moving onto exchange — possible incoming SELL-OFF',
+    '⚠️ Fade measured on this corpus: 22 of 30 PUMP-HIGH reverted within 24h, median alpha −13.5% (n=30, sub-gate population — provisional)',
+    "A move on 3+ venues at once is real market-wide flow, not one exchange's wash trading",
+    'Two independent signals aligned — accumulation followed by real activity',
+    'wallet → wallet — unknown parties — watch for follow-up',
+  ];
+  check('SELF-TEST: every planted pre-diet line FAILS the public lint', planted.every((l) => problems({ title: '', lines: [l] }).length > 0), planted.filter((l) => !problems({ title: '', lines: [l] }).length).join(' | '));
+  // FIELD PRESERVATION: every sentence that left the channel is in the operator rendering.
+  const moved = {
+    pump: [PUMP_FADE_OPERATOR, PROVISIONAL_OPERATOR],
+    volume: [VOLUME_READING],
+    cascadeLongs: ['Direction from here: unmeasured', 'step 7 splits them'],
+    multiex: ["not one exchange's wash trading"],
+    whale: [`Reading: ${dep.hint}`, 'Threshold: $250.0K'],
+    confluence: ['Two independent signals aligned'],
+    eventUnlock: ['Added supply reaches the market'],
+    eventTge: ['Early volatility cuts both ways'],
+  };
+  for (const [k, needles] of Object.entries(moved)) check(`${k}: every moved sentence survives in the operator rendering`, needles.every((n) => op[k].text.includes(n)), needles.filter((n) => !op[k].text.includes(n)).join(' | '));
+  check('the public pump keeps the measured base rate, with its sample size', pub.pump.lines.some((l) => /22 of 30/.test(l) && /n=30/.test(l)));
+  check('the public whale keeps the DEPOSIT label (the fact) and drops the hint (the reading)', pub.whale.lines.some((l) => /\(DEPOSIT\)/.test(l)) && !pub.whale.text.includes(dep.hint));
+  check('a milestone with no gloss carries no operator lines', msgs.eventMilestone.operatorLines.length === 0);
+  // formatAlert routes operatorLines for CALL alerts too: channel never sees them.
+  const callAlert = { source: 'CEX', type: 'CASCADE', severity: 'HIGH', key: 'x', ...msgs.cascadeLongs };
+  const tPub = formatAlert(callAlert, { kind: 'CALL', tier: 'B', score: 71 }, 'public');
+  const tOp = formatAlert(callAlert, { kind: 'CALL', tier: 'B', score: 71 }, 'operator');
+  check('formatAlert: public CALL text carries no operator line; operator text carries all of them after the separator',
+    !tPub.includes('— operator —') && !tPub.includes('step 7') && tOp.includes('— operator —') && msgs.cascadeLongs.operatorLines.every((l) => tOp.includes(l)));
+  // SOURCE: the dispatcher's provisional footer is the constant pair, not a public literal.
+  const dsrc = readFileSync('src/core/dispatcher.js', 'utf8');
+  check('dispatcher appends PROVISIONAL_PUBLIC to lines and PROVISIONAL_OPERATOR to operatorLines', /alert\.lines = \[\.\.\.alert\.lines, PROVISIONAL_PUBLIC\]/.test(dsrc) && /PROVISIONAL_OPERATOR\]/.test(dsrc) && !/alert\.lines = \[\.\.\.alert\.lines,\s*\n\s*'⚠️ PROVISIONAL/.test(dsrc));
+}
+
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

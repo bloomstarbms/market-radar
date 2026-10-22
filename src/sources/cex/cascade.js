@@ -32,6 +32,25 @@ async function markPrice(symbol) {
 
 const priceHist = new Map(); // symbol -> [{p, ts}]
 
+// CASCADE MESSAGE, pure (message diet, CALL remainder). Public: the OI drop, which
+// side was force-closed, the mark. Operator: "direction unmeasured" and the FACT/CALL
+// architecture note — true, and about the system, not the market.
+export function cascadeMessage({ sym, oiDrop, priceMove, p }) {
+  const longsHit = priceMove < 0; // price down + OI down = longs liquidated
+  return {
+    title: `${sym.replace('USDT', '')} deleveraging: OI −${oiDrop.toFixed(1)}%, price ${priceMove >= 0 ? '+' : ''}${priceMove.toFixed(1)}%`,
+    lines: [
+      `Open interest −${oiDrop.toFixed(1)}% — leveraged positions force-closed`,
+      longsHit ? 'Longs liquidated into the drop (forced selling)' : 'Shorts liquidated on the way up (forced buying)',
+      `Mark price: $${p}`,
+    ],
+    operatorLines: [
+      'Direction from here: unmeasured',
+      'Fact: liquidation volume and its skew. The exhaustion/reversal READ is a CALL and has not been built or earned (step 7 splits them).',
+    ],
+  };
+}
+
 export async function pollCascade() {
   if (Date.now() - lastPoll < RULES.intervalSec * 1000) return;
   lastPoll = Date.now();
@@ -51,19 +70,10 @@ export async function pollCascade() {
 
     if (oiDrop < RULES.oiDropPct || Math.abs(priceMove) < RULES.priceMovePct) continue;
 
-    const longsHit = priceMove < 0; // price down + OI down = longs liquidated
     await dispatch({
       source: 'CEX', type: 'CASCADE', severity: oiDrop >= RULES.oiDropPct * 2 ? 'HIGH' : 'MEDIUM',
       key: sym, cooldownMin: RULES.cooldownMin,
-      title: `${sym.replace('USDT', '')} deleveraging: OI −${oiDrop.toFixed(1)}%, price ${priceMove >= 0 ? '+' : ''}${priceMove.toFixed(1)}%`,
-      lines: [
-        `Open interest collapsed ${oiDrop.toFixed(1)}% — leveraged positions force-closed`,
-        longsHit
-          ? `Longs liquidated into the drop — forced selling, direction from here unmeasured`
-          : `Shorts squeezed out on the way up — forced buying, direction from here unmeasured`,
-        `Fact: liquidation volume and its skew. The exhaustion/reversal READ is a CALL and has not been built or earned (step 7 splits them).`,
-        `Mark price: $${p}`,
-      ],
+      ...cascadeMessage({ sym, oiDrop, priceMove, p }),
       url: `https://www.binance.com/en/futures/${sym}`,
       track: { kind: 'cex', exchange: 'binance', symbol: sym, price: p },
     }) && n++;

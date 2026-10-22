@@ -8,6 +8,16 @@ import { notePulse } from '../../core/pulse.js';
 
 const lastFingerprint = new Map(); // exchange -> sum of all 24h volumes last poll
 
+// MULTIEX MESSAGE, pure (message diet, CALL remainder). Public: which venues. Operator:
+// why 3+ venues is the rule.
+export function multiexMessage(base, dir, venues) {
+  return {
+    title: `${base} moving ${dir === 'up' ? 'UP' : 'DOWN'} on ${venues.length} exchanges at once`,
+    lines: [`Confirmed across: ${venues.join(', ')}`],
+    operatorLines: [`A move on 3+ venues at once is real market-wide flow, not one exchange's wash trading`],
+  };
+}
+
 export async function pollCex() {
   const moves = new Map();
   for (const name of config.cexExchanges) {
@@ -57,11 +67,7 @@ export async function pollCex() {
     await dispatch({
       source: 'SIG', type: 'MULTIEX', severity: venues.length >= 4 ? 'HIGH' : 'MEDIUM',
       key: base, cooldownMin: 60,
-      title: `${base} moving ${dir === 'up' ? 'UP' : 'DOWN'} on ${venues.length} exchanges at once`,
-      lines: [
-        `Confirmed across: ${venues.join(', ')}`,
-        `A move on 3+ venues at once is real market-wide flow, not one exchange's wash trading`,
-      ],
+      ...multiexMessage(base, dir, venues),
     });
   }
 }

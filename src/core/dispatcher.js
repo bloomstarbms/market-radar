@@ -181,6 +181,10 @@ export function gateLine(gate) {
 // operator audience, appended after the public lines so operator ⊇ public.
 // Nothing is deleted from the system; it is deleted from the channel.
 export const AUDIENCES = ['public', 'operator'];
+// PROVISIONAL footer (message diet, CALL remainder): the reader needs "this has no
+// track record yet"; the gate/population/expiry mechanics are the operator's.
+export const PROVISIONAL_PUBLIC = '⚠️ Provisional: single signal, no measured edge yet';
+export const PROVISIONAL_OPERATOR = 'PROVISIONAL: single-factor signal on a gate-passing symbol. Pushed to collect gated-population data; no measured edge claim. Auto-expires when gated n>=100 decides.';
 // The lines an audience sees, from a message object {title, lines, operatorLines,
 // url}. One function for every builder (unlocks, funding, listings, announcements,
 // upbit) so the render-lint has one entry point per audience.
@@ -376,8 +380,10 @@ async function dispatchInner(alert) {
     }
   }
 
-  if (verdict.provisional) alert.lines = [...alert.lines,
-    '⚠️ PROVISIONAL: single-factor signal on a gate-passing symbol. Pushed to collect gated-population data; no measured edge claim. Auto-expires when gated n>=100 decides.'];
+  if (verdict.provisional) {
+    alert.lines = [...alert.lines, PROVISIONAL_PUBLIC];
+    alert.operatorLines = [...(alert.operatorLines || []), PROVISIONAL_OPERATOR];
+  }
   const text = formatAlert(alert, verdict, 'public');
   // The operator DM gets the superset rendering; the channel gets the public one.
   // Absent operatorLines, both audiences see the same text (CEX types, calls).

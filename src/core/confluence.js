@@ -19,6 +19,21 @@ export function noteWhale(key, { direction, exchange, usd, symbol, isWithdrawal 
 
 // Called by the DEX poll with live market state for a watchlist token.
 // Fires only when a recent WITHDRAWAL is paired with genuine market activity.
+// CONFLUENCE MESSAGE, pure (message diet, CALL remainder). Public: the withdrawal, the
+// activity now, the price. Operator: "two independent signals aligned" — the rule that
+// fired, not a market fact. Title states the two events, not the "accumulation" reading.
+export function confluenceMessage(pair, w, { volH1, volRatio, priceH1, hoursAgo }) {
+  return {
+    title: `${pair.baseToken.symbol}: exchange withdrawal, then volume (${pair.chainId})`,
+    lines: [
+      `🔻 ${w.exchange} withdrawal $${fmt(w.usd)} — ${hoursAgo}h ago (coins left the exchange)`,
+      `📊 Now moving: volume $${fmt(volH1)}/h (${volRatio.toFixed(1)}x avg)${priceH1 ? ` · price ${priceH1 >= 0 ? '+' : ''}${priceH1}% 1h` : ''}`,
+      `Price: $${pair.priceUsd} · Liq: $${fmt(pair.liquidity?.usd || 0)}`,
+    ],
+    operatorLines: ['Two independent signals aligned — accumulation followed by real activity'],
+  };
+}
+
 export async function checkConfluence(pair, { volH1, volAvgH1, priceH1 }) {
   const key = `${pair.chainId}:${pair.baseToken.address}`;
   const w = whaleEvents.get(key);
@@ -32,13 +47,7 @@ export async function checkConfluence(pair, { volH1, volAvgH1, priceH1 }) {
   const hoursAgo = ((Date.now() - w.ts) / 3600e3).toFixed(1);
   const fired = await dispatch({
     source: 'SIG', type: 'CONFLUENCE', severity: 'HIGH', key, cooldownMin: 720,
-    title: `${pair.baseToken.symbol}: accumulation + activity (${pair.chainId})`,
-    lines: [
-      `🔻 ${w.exchange} withdrawal $${fmt(w.usd)} — ${hoursAgo}h ago (coins left the exchange)`,
-      `📊 Now moving: volume $${fmt(volH1)}/h (${volRatio.toFixed(1)}x avg)${priceH1 ? ` · price ${priceH1 >= 0 ? '+' : ''}${priceH1}% 1h` : ''}`,
-      `Two independent signals aligned — accumulation followed by real activity`,
-      `Price: $${pair.priceUsd} · Liq: $${fmt(pair.liquidity?.usd || 0)}`,
-    ],
+    ...confluenceMessage(pair, w, { volH1, volRatio, priceH1, hoursAgo }),
     url: pair.url,
     track: { kind: 'dex', chainId: pair.chainId, address: pair.baseToken.address, price: Number(pair.priceUsd) || 0 },
   });

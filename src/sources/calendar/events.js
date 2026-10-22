@@ -21,6 +21,21 @@ const classify = (title) => {
   return null;
 };
 
+// EVENT LINES, pure (message diet, CALL remainder). Public: what kind of event, the
+// listed impact, the description. Operator: the gloss on what the event does to a
+// market ("added supply reaches the market", "volatility cuts both ways").
+const EVENT_LABEL = { UNLOCK: 'Token unlock', TGE: 'Token generation event (first distribution)', EVENT: 'Project milestone, not a token launch' };
+const EVENT_GLOSS = { UNLOCK: 'Added supply reaches the market', TGE: 'Early volatility cuts both ways', EVENT: null };
+export function eventMessage(type, ev, coins) {
+  const impact = ev.impact != null ? ` · impact ${ev.impact}/10` : '';
+  const label = EVENT_LABEL[type] ?? EVENT_LABEL.EVENT;
+  const gloss = type in EVENT_GLOSS ? EVENT_GLOSS[type] : null;
+  return {
+    lines: [`${label}${impact}`, ev.description ? String(ev.description).slice(0, 150) : `Coins: ${coins}`],
+    operatorLines: gloss ? [gloss] : [],
+  };
+}
+
 export async function pollEvents() {
   if (!config.coinmarketcalKey || disabled) return;
   if (Date.now() - lastPoll < POLL_EVERY) return;
@@ -45,20 +60,13 @@ export async function pollEvents() {
     if (!t || t < Date.now() - 86400e3) continue; // skip long-running/past events
     const daysOut = Math.max(0, Math.round((t - Date.now()) / 86400e3));
     const coins = (ev.coins || []).map((c) => (c.symbol || c.name || '').toUpperCase()).filter(Boolean).slice(0, 3).join(', ') || '?';
-    const impact = ev.impact != null ? ` · impact ${ev.impact}/10` : '';
-    const blurb = type === 'UNLOCK'
-      ? `Token unlock ahead — added supply reaches the market${impact}`
-      : type === 'TGE'
-        ? `Token generation / first distribution — early volatility cuts both ways${impact}`
-        : `Scheduled project milestone (product/protocol event, NOT a token launch)${impact}`;
+    const msg = eventMessage(type, ev, coins);
     await dispatch({
       source: 'CAL', type, severity: type === 'EVENT' ? 'LOW' : (daysOut <= 1 ? 'HIGH' : (ev.impact >= 7 ? 'HIGH' : 'MEDIUM')),
       key: `${ev.id}:${ev.date?.slice(0, 10)}`, cooldownMin: 6 * 24 * 60,
       title: `${coins}: ${ev.title} — ${ev.displayedDate || ev.date?.slice(0, 10)} (${daysOut}d)`,
-      lines: [
-        blurb,
-        ev.description ? String(ev.description).slice(0, 150) : `Coins: ${coins}`,
-      ],
+      lines: msg.lines,
+      ...(msg.operatorLines.length ? { operatorLines: msg.operatorLines } : {}),
       url: ev.sourceUrl || `https://coinmarketcal.com/en/event/${ev.slug || ''}`,
     });
     n++;
