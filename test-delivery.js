@@ -3228,8 +3228,8 @@ console.log('82. builder follows: baseline silent, one fresh follow one alert, a
   check('a bio that says "backed by" is withheld, not quoted (the operator is told why); the message passes the lint', !bk.lines.some((l) => /backed/i.test(l)) && bk.lines[1] === 'https://newproject.xyz' && bk.operatorLines.some((l) => /Bio withheld: it contains "Backed by"/.test(l)) && followProblems(renderMessage(bk, 'public').text).length === 0);
   check('bio text is HTML-escaped and cut at 100 characters', (() => { const m = followMessage('toly', accountFacts(U(6, 'amp', { bio: 'A&B <beta> ' + 'x'.repeat(200), url: null }), T0)); return m.lines[1].startsWith('A&amp;B &lt;beta&gt; ') && m.lines[1].length < 130; })());
   check("X's classic created_at format and ISO both parse to an age", accountFacts({ id: '1', created_at: 'Wed Oct 10 20:19:24 +0000 2018' }, T0).ageDays > 2900 && accountFacts({ id: '1', createdAt: '2026-10-18T12:00:00.000000Z' }, T0).ageDays === 3);
-  check('no key → OFF with zero calls; no measured price → OFF with zero calls', (await followCycle({}, { cfg, price, key: '' })).status === 'off' && (await followCycle({}, { cfg, price: null, key: 'k' })).status === 'off'
-    && /OFF \(no TWITTERAPI_KEY in \.env\)/.test(followStatus({}, T0, { cfgResult: { ok: true, cfg }, key: '' }).line) && /price unmeasured/.test(followStatus({}, T0, { cfgResult: { ok: true, cfg }, key: 'k', price: null }).line));
+  check('no key → OFF with zero calls; a cycle handed no price refuses, and the poller always hands it one (priceInEffect is never null)', (await followCycle({}, { cfg, price, key: '' })).status === 'off' && (await followCycle({}, { cfg, price: null, key: 'k' })).status === 'off' && BF.priceInEffect(null) === BF.PUBLISHED_PRICE
+    && /OFF \(no TWITTERAPI_KEY in \.env\)/.test(followStatus({}, T0, { cfgResult: { ok: true, cfg }, key: '' }).line));
   {
     const st6 = JSON.parse(JSON.stringify(st)); const api6 = mkApi({ ...api.pages, mert: [U(4242, 'fresh2'), ...api.pages.mert] }, ids);
     let fails = 1; const sent6 = [];
@@ -3239,36 +3239,72 @@ console.log('82. builder follows: baseline silent, one fresh follow one alert, a
     check('a fresh follow whose delivery failed stays "new" and is sent on the next look, once', sent6.length === 1 && sent6[0].dedupeKey === 'FOLLOW:4242');
   }
   {
+    // ZERO PRICE ON DISK AT BOOT: the v0.34.0 file, byte-for-byte in shape. It is "no price", never "free".
+    const { mkdtempSync, writeFileSync: wf } = await import('node:fs');
+    const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+    const dir = mkdtempSync(join(tmpdir(), 'bf-price-'));
+    const zero = join(dir, 'zero.json');
+    wf(zero, JSON.stringify({ measuredAt: '2026-10-22T18:28:49.946Z', credits: { followings20: 0, followings200: 0, userInfo: 0, batchPerUser: 0, myInfo: 0 }, spentCredits: 0, basis: 'credit-balance delta, each call type twice, deltas equal; probe @solana' }));
+    check('the v0.34.0 zero-price file does not load (every stored price must be > 0)', BF.loadPrice(zero) === null);
+    const bad = (credits) => BF.checkPrice({ measuredAt: 'x', basis: 'b', credits: { followings20: 60, followings200: 200, userInfo: 18, batchPerUser: 18, ...credits } });
+    check('any one entry ≤ 0, negative, NaN, a string or missing is "no price", never "free"', [{ userInfo: 0 }, { batchPerUser: -18 }, { followings200: NaN }, { followings20: '60' }, { followings200: undefined }].every((c) => bad(c) === null) && bad({}) !== null);
+    const atBoot = BF.priceInEffect(BF.loadPrice(zero));
+    check('at boot with that file the meter uses the PUBLISHED price (60 / 200 / 18 / 18), labelled unverified', atBoot === BF.PUBLISHED_PRICE && atBoot.source === 'published' && JSON.stringify(atBoot.credits) === JSON.stringify({ followings20: 60, followings200: 200, userInfo: 18, batchPerUser: 18 })
+      && /price 60 credits\/call \(published, unverified\)/.test(followStatus({}, T0, { cfgResult: { ok: true, cfg }, key: 'k', price: BF.loadPrice(zero) }).line));
+    const st7 = {}; const api7 = mkApi({ toly: filler(20000, 5), mert: filler(21000, 5) }, ids);
+    const r7 = await followCycle(st7, { cfg, price: atBoot, key: 'k', now: T0, fetchJson: api7.fetchJson, sleep: async () => {}, record: () => {}, dispatch: async () => true, edit: async () => true, warn: async () => {} });
+    check('and the module refuses to meter with the zero file: the first cycle is charged at the published price, from the first call', r7.status === 'ok' && st7.follows.spend.credits === api7.billed && st7.follows.spend.credits > 0 && st7.follows.meterTotal === api7.billed && st7.follows.lastCallAt === T0);
+    check('no measurement gate: polling is not held for a price (measurePrices is gone)', BF.measurePrices === undefined && !/measurePrices|priceProblem\.method/.test(readFileSync('src/sources/social/builder-follows.js', 'utf8').replace(/delete f\.priceProblem/, '')));
+  }
+  {
     // A LAGGING BILLER, shaped on the real 2026-10-22 balance watch: a call's charge posts in
     // two pieces, ~45 s and ~90 s after the call, to the bonus pool; recharge_credits never moves.
-    const mkBiller = ({ readCost = 0, drift = false, never = false } = {}) => {
-      let t = 0, bonus = 120000; const pending = []; let fcalls = 0;
+    const mkBiller = ({ readCost = 0 } = {}) => {
+      let t = 0, bonus = 120000; const pending = [];
       const clock = () => t, sleep = async (ms) => { t += ms; };
       const post = () => { for (const p of pending) if (!p.done && p.at <= t) { bonus -= p.c; p.done = true; } };
-      const fetchJson = async (url) => {
-        const p = new URL(url).pathname;
-        post();
-        if (p === '/oapi/my/info') { bonus -= readCost; return { status: 200, json: { recharge_credits: 1000000, total_bonus_credits: bonus } }; }
-        let c = p === '/twitter/user/info' ? 18 : p === '/twitter/user/batch_info_by_ids' ? 18 : /pageSize=200/.test(url) ? 200 : 60;
-        if (p === '/twitter/user/followings' && !/pageSize=200/.test(url) && ++fcalls === 2 && drift) c += 5;
-        if (!never) { const first = Math.ceil(c * 0.97); pending.push({ at: t + 45e3, c: first }, { at: t + 90e3, c: c - first }); }
-        return { status: 200, json: { status: 'success', data: { id: '999' }, followings: [], users: [] } };
-      };
-      return { fetchJson, sleep, clock };
+      const spend = (c) => { const first = Math.ceil(c * 0.97); pending.push({ at: t + 45e3, c: first }, { at: t + 90e3, c: c - first }); };
+      const fetchJson = async (url) => { post(); if (new URL(url).pathname === '/oapi/my/info') { bonus -= readCost; return { status: 200, json: { recharge_credits: 1000000, total_bonus_credits: bonus } }; } return { status: 404, json: null }; };
+      return { fetchJson, sleep, clock, spend, now: () => t, bonus: () => bonus };
     };
-    const m = await measurePrices({ key: 'k', now: T0, ...mkBiller() });
-    check('price measurement against a LAGGING biller (charges post 45 s and 90 s after the call): settled windows read 60 / 200 / 18 / 18 / 0', JSON.stringify(m.credits) === JSON.stringify({ followings20: 60, followings200: 200, userInfo: 18, batchPerUser: 18, myInfo: 0 }) && m.spentCredits === 2 * (18 + 60 + 200 + 18) && checkPrice(m));
-    const quick = await measurePrices({ key: 'k', ...mkBiller(), settleEveryMs: 2000, minSettleMs: 0 }).catch((e) => e.message);
-    check('REGRESSION (v0.34.1): read before billing lands, the same biller gives no price — refused, not written', typeof quick === 'string' && /followings measured at 0 credits/.test(quick));
-    const drift = await measurePrices({ key: 'k', ...mkBiller({ drift: true }) }).catch((e) => e.message);
-    check('two settled windows that disagree are REFUSED, never averaged', /followings20: the two settled deltas disagree \(60 vs 65 credits\)/.test(String(drift)));
-    const costly = await measurePrices({ key: 'k', ...mkBiller({ readCost: 1 }) }).catch((e) => e.message);
-    check('a balance that never stops moving (here: reads that cost) never settles, and is refused', /did not settle within 20 min/.test(String(costly)));
-    const dead = await measurePrices({ key: 'k', ...mkBiller({ never: true }) }).catch((e) => e.message);
-    check('a balance that never moves is refused ("billing not observable"), not written as a price of 0', /followings measured at 0 credits — the balance \(recharge_credits \+ total_bonus_credits\) did not move/.test(String(dead)));
-    check('the balance is the sum of every credit pool (the real 2026-10-22 answer: 1,000,000 recharge + 119,408 bonus)', (() => { const b = BF.balanceOf({ recharge_credits: 1000000, total_bonus_credits: 119408 }); return b.total === 1119408 && b.pools.join(',') === 'recharge_credits,total_bonus_credits'; })() && BF.balanceOf({ error: 'x' }) === null);
-    check('the measurement records its method, so a refusal under an older method does not hold off the retry', m.method === BF.MEASURE_METHOD && BF.MEASURE_METHOD === 3);
-    check('at the documented figure, a page of 20 is $0.0006 and a month of hourly looks at 20 accounts is ~$8.93 of the $40 cap', usd(60).toFixed(4) === '0.0006' && usd(60 * 20 * 24 * 31).toFixed(2) === '8.93');
+    const lb = mkBiller(); lb.spend(592);
+    const settled = await BF.settledBalance({ key: 'k', fetchJson: lb.fetchJson, sleep: lb.sleep, clock: lb.clock, since: 0 });
+    check('settled read against a lagging biller: waits until the 592 credits have posted (1,000,000 + 119,408)', settled.total === 1119408 && settled.pools.join(',') === 'recharge_credits,total_bonus_credits');
+    const lb2 = mkBiller(); lb2.spend(592);
+    const early = await BF.settledBalance({ key: 'k', fetchJson: lb2.fetchJson, sleep: lb2.sleep, clock: lb2.clock, since: 0, settleEveryMs: 2000, minSettleMs: 0 });
+    check('REGRESSION (v0.34.1): reads 2 s apart "settle" before billing lands and see nothing spent — why the 3-minute floor exists', early.total === 1120000);
+    const costly = await BF.settledBalance({ key: 'k', ...mkBiller({ readCost: 1 }), since: 0 }).catch((e) => e.message);
+    check('a balance that never stops moving never settles, and says so (bounded at 10 min)', /did not settle within 10 min/.test(String(costly)));
+    check('the balance is the sum of every credit pool (the real 2026-10-22 answer)', BF.balanceOf({ recharge_credits: 1000000, total_bonus_credits: 119408 }).total === 1119408 && BF.balanceOf({ error: 'x' }) === null);
+
+    // RECONCILIATION DECISIONS, pure
+    const P = BF.PUBLISHED_PRICE, A = { at: 0, balance: 1100000, metered: 1000 };
+    const dec = (drop, metered) => BF.reconcileDecision(A, A.balance - drop, A.metered + metered, P);
+    check('no anchor yet → anchor (the first reading only sets the baseline)', BF.reconcileDecision(null, 1, 1, P).kind === 'anchor');
+    check('within 20% → agree; the meter is corrected UP by the shortfall only', (() => { const d = dec(31500, 30000); return d.kind === 'agree' && d.correction === 1500; })() && dec(27000, 30000).correction === 0);
+    check('more than 20% → ADOPT, every price scaled by drop/metered (×1.25 → 75 / 250 / 23 / 23)', (() => { const d = dec(37500, 30000); return d.kind === 'adopt' && JSON.stringify(d.credits) === JSON.stringify({ followings20: 75, followings200: 250, userInfo: 23, batchPerUser: 23 }) && d.correction === 7500; })()
+      && dec(21000, 30000).kind === 'adopt');
+    check('a drop over 3× the meter (bonus expiry, another key user) is ANOMALOUS: corrected, never adopted', (() => { const d = dec(120000, 30000); return d.kind === 'anomalous' && !d.credits && d.correction === 90000; })());
+    check('a balance that ROSE (recharge, bonus) is unreadable → re-anchor; under 5,000 metered credits → too small to judge', dec(-50000, 30000).kind === 'recharged' && dec(4000, 4000).kind === 'too-small');
+
+    // RECONCILE, end to end: anchor, a day of traffic billed 30% over the meter, adopt + DM once
+    const lb3 = mkBiller();
+    const st8 = { follows: { meterTotal: 0, lastCallAt: 0 } };
+    const dms = [], written = [];
+    const deps8 = (price) => ({ key: 'k', price, fetchJson: lb3.fetchJson, sleep: lb3.sleep, clock: lb3.clock, dm: async (t, l) => dms.push({ t, l }), writePrice: (p) => written.push(p) });
+    const r8a = await BF.reconcile(st8, { ...deps8(P), now: T0 });
+    lb3.spend(39000); st8.follows.meterTotal = 30000; st8.follows.spend = { month: '2026-10', credits: 30000, byDay: {}, warned80: false };
+    st8.follows.lastCallAt = lb3.now();
+    const r8b = await BF.reconcile(st8, { ...deps8(P), now: T0 + 86400e3 });
+    check('reconcile: anchors first, then a 30% disagreement DMs the operator once and ADOPTS the observed price', r8a.status === 'anchor' && r8b.status === 'adopt' && dms.length === 1 && /ADOPTED from the balance: ×1\.30/.test(dms[0].t)
+      && written.length === 1 && written[0].source === 'reconciled' && written[0].credits.followings20 === 78 && BF.checkPrice(written[0]) !== null);
+    check('the month-to-date meter is corrected up to what the balance says was spent (30,000 → 39,000 credits)', st8.follows.spend.credits === 39000 && st8.follows.recon.anchor.metered === 39000);
+    check('the heartbeat names the adopted price', /price 78 credits\/call \(adopted from the balance 2026-10-22, ×1\.3\)/.test(followStatus(st8, T0 + 86400e3, { cfgResult: { ok: true, cfg }, key: 'k', price: written[0] }).line));
+    const st9 = { follows: { meterTotal: 30000, lastCallAt: 0, recon: { anchor: { at: T0, balance: 1120000, metered: 0 } } } };
+    const lb4 = mkBiller(); lb4.spend(31000);
+    const r9 = await BF.reconcile(st9, { key: 'k', price: P, now: T0 + 86400e3, fetchJson: lb4.fetchJson, sleep: lb4.sleep, clock: lb4.clock, dm: async () => { throw new Error('no DM expected'); }, writePrice: () => { throw new Error('no write expected'); } });
+    check('within the band: no DM, no new price, and the published price reads "reconciled"', r9.status === 'agree' && /price 60 credits\/call \(published, reconciled \+3% on 2026-10-22\)/.test(followStatus(st9, T0 + 86400e3, { cfgResult: { ok: true, cfg }, key: 'k', price: null }).line));
+    check('at the published figure, a page of 20 is $0.0006 and a month of hourly looks at 20 accounts is ~$8.93 of the $40 cap', usd(60).toFixed(4) === '0.0006' && usd(60 * 20 * 24 * 31).toFixed(2) === '8.93');
   }
 }
 

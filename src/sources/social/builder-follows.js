@@ -2,22 +2,23 @@
 //
 // FIRST PAID DEPENDENCY. Operator-approved 2026-10-21, cap $40/month (builder-follows.json,
 // REMAINING-WORK-NOTES.md 2026-10-21). The cap is STRUCTURAL: every call is metered at the
-// MEASURED price before it is made, a call that would cross the cap is not made, and the
+// price in effect before it is made, a call that would cross the cap is not made, and the
 // module says so on the heartbeat. Nothing here relies on someone remembering the bill.
 //
 // Source: twitterapi.io (scrapes X, so expect breakage — degrading to silent IS the design).
 //   GET /twitter/user/followings?userName=…&pageSize=20   newest follows first; handle only
 //   GET /twitter/user/info?userName=…                      handle -> numeric ID, once
 //   GET /twitter/user/batch_info_by_ids?userIds=…          daily ID -> current handle
-//   GET /oapi/my/info                                      credit balance (price measurement)
+//   GET /oapi/my/info                                      credit balance (daily reconciliation)
 // Followings takes only a HANDLE, while handles change. So accounts are keyed by numeric
 // ID; the handle is refreshed from the ID daily; and a saturated page (every ID new — also
 // the signature of a handle now pointing at a different account) is checked against the
 // ID before anything alerts.
 //
-// PRICE: measured, never assumed. With a key and no data/twitterapi-price.json, the first
-// cycle measures each call type by credit-balance delta (two readings per type, which must
-// agree, or the measurement is refused) and writes the file. No price file -> no polling.
+// PRICE: metered from the first call at the published price (labelled unverified), and
+// reconciled daily against the settled credit balance; a disagreement over 20% DMs the
+// operator and the observed price is adopted (data/twitterapi-price.json). Polling never
+// waits for a price.
 //
 // FAILURE: a failed look changes nothing (no diff, no baseline, no "no new follows") and is
 // flagged on the heartbeat — feedWasLooking's rule: a zero is evidence only when we looked.
@@ -67,15 +68,32 @@ export function loadFollowConfig(file = cfgPath()) {
   try { return checkFollowConfig(JSON.parse(readFileSync(file, 'utf8'))); }
   catch (e) { return { ok: false, why: `builder-follows.json does not parse (${e.message})` }; }
 }
+// PRICE (v0.34.3). Metered from the FIRST call at the PUBLISHED price, labelled
+// unverified; reconciled daily against the credit balance (see reconcile()); a
+// disagreement over 20% DMs the operator and the observed price is adopted. Polling is
+// never gated on a measurement: v0.34.0-v0.34.2 refused to poll until one succeeded, and
+// every restart before it did restarted a ~30-minute blind window.
+// A STORED price is a price only if every metered entry is a finite number > 0. Zero,
+// negative, NaN, missing: "no price" (the published one applies), never "free". The
+// v0.34.0 file on the VPS (every entry 0) is exactly that case.
+export const PRICE_KEYS = ['followings20', 'followings200', 'userInfo', 'batchPerUser'];
+export const PUBLISHED_PRICE = Object.freeze({
+  source: 'published', measuredAt: '2026-10-21',
+  credits: Object.freeze({ followings20: 60, followings200: 200, userInfo: 18, batchPerUser: 18 }),
+  basis: 'twitterapi.io pricing and endpoint docs, read 2026-10-21: followings 3 credits each at 20-99 per call (60 for a page of 20) and 1 each at 200; user profiles 18 each under 100. Unverified against the balance until a reconciliation agrees. Supporting, not proof: two 8-call measurements on 2026-10-22 each drew 592 credits in total, the documented sum',
+});
 export function checkPrice(p) {
-  const k = p?.credits ?? {};
-  for (const n of ['followings20', 'followings200', 'userInfo', 'batchPerUser', 'myInfo']) if (!(typeof k[n] === 'number' && k[n] >= 0)) return null;
-  if (!(k.followings20 > 0) || !p.measuredAt || !p.basis) return null; // a zero or unstated price is not a measurement
+  const k = p?.credits;
+  if (!k || typeof k !== 'object') return null;
+  for (const n of PRICE_KEYS) if (!(typeof k[n] === 'number' && Number.isFinite(k[n]) && k[n] > 0)) return null;
+  if (!p.measuredAt || !p.basis) return null;
   return p;
 }
 export function loadPrice(file = pricePath()) {
   try { return existsSync(file) ? checkPrice(JSON.parse(readFileSync(file, 'utf8'))) : null; } catch { return null; }
 }
+// The price the meter uses: a valid stored (reconciled) price, else the published one. Never null.
+export function priceInEffect(stored) { return checkPrice(stored) ?? PUBLISHED_PRICE; }
 function writeJsonAtomic(file, obj) { const tmp = `${file}.${process.pid}.tmp`; writeFileSync(tmp, JSON.stringify(obj, null, 1)); renameSync(tmp, file); }
 
 // ---------------------------------------------------------------- spend meter
@@ -93,6 +111,7 @@ function charge(f, credits, now) {
   s.credits += credits;
   s.byDay[dayKey(now)] = (s.byDay[dayKey(now)] || 0) + credits;
   f.spend = s;
+  f.meterTotal = (f.meterTotal || 0) + credits; // never resets: the reconciliation compares windows of it
   return s;
 }
 export function callCost(price, kind, n = 1) {
@@ -100,7 +119,6 @@ export function callCost(price, kind, n = 1) {
   if (kind === 'followings') return n >= 200 ? k.followings200 : k.followings20;
   if (kind === 'userInfo') return k.userInfo;
   if (kind === 'batch') return k.batchPerUser * n;
-  if (kind === 'myInfo') return k.myInfo;
   throw new TypeError(`callCost: unknown kind ${kind}`);
 }
 
@@ -130,6 +148,7 @@ async function meteredCall(ctx, kind, url, n = 1) {
   if (ctx.calls++ > 0) await ctx.sleep(CALL_SPACING_MS);
   // Metered when MADE: a failed call is assumed billed — the conservative side of a cap.
   const s = charge(ctx.f, credits, ctx.now());
+  ctx.f.lastCallAt = ctx.now(); // the reconciliation's settle clock starts here
   if (!s.warned80 && usd(s.credits) >= WARN_AT * ctx.cfg.capUsd) { s.warned80 = true; ctx.warn.push(s); }
   let r;
   try { r = await ctx.fetchJson(url, ctx.key); } catch (e) { return { ok: false, kind: 'network', msg: String(e.message || e).slice(0, 80) }; }
@@ -348,75 +367,103 @@ export async function followCycle(state, deps = {}) {
   return finish(out.failed.length ? 'partial' : 'ok');
 }
 
-// ---------------------------------------------------------------- price measurement (settled balance deltas)
+// ---------------------------------------------------------------- daily reconciliation (settled balance)
 // THE BALANCE IS EVERY POOL. /oapi/my/info answers {"recharge_credits":1000000,
 // "total_bonus_credits":119408} (2026-10-22): calls draw on the BONUS pool first, so
-// recharge_credits alone never moves (v0.34.0 read every price as 0 = 0). The balance is
-// the sum of every *credits field.
+// recharge_credits alone never moves. The balance is the sum of every *credits field.
+// AND IT POSTS LATE: a balance watch showed 592 credits of calls land 30-90 s after the
+// last call, in pieces (574, then 18). So a balance is read only once SETTLED: reads
+// every 60 s until two consecutive reads agree, at least 3 min after the last metered
+// call. Reconciliation runs at the start of a cycle, ~1 h after the last call, so it
+// settles in about a minute, once a day. A balance read costs 0 credits (consecutive
+// reads agreed for minutes on 2026-10-22) and is not metered.
 //
-// AND IT POSTS LATE. v0.34.1 read the sum 2 s after each call and still saw nothing move;
-// a balance watch then showed that measurement's 592 credits land 30 s to 90 s AFTER it
-// ended, in pieces (574, then 18). A delta read before billing settles is a reading of
-// nothing. So each measurement window is: one call, then balance reads every
-// settleEveryMs until two consecutive reads agree AND minSettleMs has passed since the
-// call; never settled within maxSettleMs -> refused. Each call type is measured in two
-// separate windows and the two must agree; a followings price of 0 is refused ("billing
-// not observable"), never written. The balance reads themselves are measured by the
-// settle rule: if a read cost anything, consecutive reads could never agree.
-export const MEASURE_METHOD = 3; // 1 recharge_credits only (read 0) · 2 every pool, 2 s gap (read 0: billing lags) · 3 every pool, settled windows
+// Per window (anchor -> now): drop = balance fall, metered = what the meter charged.
+//   drop < 0           recharged or bonus added: the window is unreadable, re-anchor
+//   metered < 5,000    too little traffic to judge a 20% band, keep the anchor
+//   drop > 3x metered  ANOMALOUS (bonus expiry, another user of the key): DM, NOT adopted
+//   |drop/metered - 1| > 20%  DM + ADOPT: every price scaled by drop/metered
+//   otherwise          agree: the published price is now "reconciled"
+// In every readable case the meter is corrected UP by drop - metered when positive: the
+// month's figure never reads less than the balance says was spent.
+export const RECONCILE_EVERY_MS = 24 * 3600e3;
+export const RECONCILE_TOLERANCE = 0.2;
+export const RECONCILE_MIN_CREDITS = 5000;
+export const RECONCILE_ANOMALY_RATIO = 3;
 export function balanceOf(j) {
   const pools = Object.entries(j ?? {}).filter(([k, v]) => /credits$/i.test(k) && typeof v === 'number' && Number.isFinite(v));
   return pools.length ? { total: pools.reduce((s, [, v]) => s + v, 0), pools: pools.map(([k]) => k).sort() } : null;
 }
-export async function measurePrices(deps = {}) {
+// Reads until two consecutive readings agree and minSettle has passed since `since` (the last call).
+export async function settledBalance(deps = {}) {
   const fetchJson = deps.fetchJson ?? defaultFetchJson, key = deps.key;
   const sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   const clock = deps.clock ?? (() => Date.now());
-  const handle = deps.probeHandle ?? 'solana';
-  const every = deps.settleEveryMs ?? 60e3, minSettle = deps.minSettleMs ?? 180e3, maxSettle = deps.maxSettleMs ?? 20 * 60e3;
-  let pools = [];
+  const since = deps.since ?? 0, every = deps.settleEveryMs ?? 60e3, minSettle = deps.minSettleMs ?? 180e3, maxSettle = deps.maxSettleMs ?? 10 * 60e3;
+  const start = clock();
   const read = async () => {
     const r = await fetchJson(`${API}/oapi/my/info`, key); const c = classifyResponse(r);
     if (!c.ok) throw new Error(`balance read failed: ${c.kind} ${c.msg}`);
-    const bal = balanceOf(r.json);
-    if (!bal) throw new Error('balance read returned no credit fields');
-    pools = bal.pools; return bal.total;
+    const b = balanceOf(r.json);
+    if (!b) throw new Error('balance read returned no credit fields');
+    return b;
   };
-  // Reads until two consecutive readings agree and minSettle has passed since `since`.
-  const settle = async (since, label) => {
-    let prev = await read();
-    for (;;) {
-      await sleep(every);
-      const cur = await read();
-      if (cur === prev && clock() - since >= minSettle) return cur;
-      if (clock() - since > maxSettle) throw new Error(`${label}: the balance did not settle within ${Math.round(maxSettle / 60e3)} min — billing not observable this way`);
-      prev = cur;
-    }
-  };
-  const b0 = await settle(clock() - minSettle, 'opening balance'); // charges still posting from earlier activity must land first
-  let last = b0, probeId = null;
-  const window = async (name, url, onJson) => {
-    const r = await fetchJson(url, key); const c = classifyResponse(r);
-    if (!c.ok) throw new Error(`${name} failed: ${c.kind} ${c.msg}`);
-    onJson?.(r.json);
-    const b = await settle(clock(), name);
-    const d = last - b; last = b; return d;
-  };
-  const twice = async (name, url, onJson) => {
-    const d1 = await window(name, url, onJson), d2 = await window(name, url, onJson);
-    if (d1 !== d2) throw new Error(`${name}: the two settled deltas disagree (${d1} vs ${d2} credits) — billing not observable this way`);
-    return d1;
-  };
-  const userInfo = await twice('userInfo', `${API}/twitter/user/info?userName=${handle}`, (j) => { probeId = j?.data?.id ?? probeId; });
-  if (!probeId) throw new Error('userInfo returned no id');
-  const followings20 = await twice('followings20', `${API}/twitter/user/followings?userName=${handle}&pageSize=20`);
-  const followings200 = await twice('followings200', `${API}/twitter/user/followings?userName=${handle}&pageSize=200`);
-  const batchPerUser = await twice('batchPerUser', `${API}/twitter/user/batch_info_by_ids?userIds=${probeId}`);
-  const credits = { followings20, followings200, userInfo, batchPerUser, myInfo: 0 };
-  if (Object.values(credits).some((x) => x < 0)) throw new Error(`negative cost measured (${JSON.stringify(credits)}) — the balance moved for another reason`);
-  if (!(followings20 > 0)) throw new Error(`followings measured at ${followings20} credits — the balance (${pools.join(' + ')}) did not move, billing not observable this way`);
-  return { measuredAt: new Date(deps.now ?? Date.now()).toISOString(), credits, spentCredits: b0 - last, method: MEASURE_METHOD,
-    basis: `settled credit-balance delta over ${pools.join(' + ')}: one call per window, settled when two reads ${Math.round(every / 1000)} s apart agree at least ${Math.round(minSettle / 60e3)} min after the call; each type in two windows, equal; balance reads cost 0 (consecutive reads agree); probe @${handle}; USD at the published 100,000 credits = $1` };
+  let prev = await read();
+  for (;;) {
+    await sleep(every);
+    const cur = await read();
+    if (cur.total === prev.total && clock() - since >= minSettle) return cur;
+    if (clock() - start > maxSettle) throw new Error(`the balance did not settle within ${Math.round(maxSettle / 60e3)} min`);
+    prev = cur;
+  }
+}
+// Pure: what a reconciliation window says.
+export function reconcileDecision(anchor, balanceNow, meterTotal, price) {
+  if (!anchor) return { kind: 'anchor' };
+  const drop = anchor.balance - balanceNow, metered = meterTotal - anchor.metered;
+  if (drop < 0) return { kind: 'recharged', drop, metered };
+  if (metered < RECONCILE_MIN_CREDITS) return { kind: 'too-small', drop, metered };
+  const ratio = drop / metered, correction = Math.max(0, drop - metered);
+  if (ratio > RECONCILE_ANOMALY_RATIO) return { kind: 'anomalous', drop, metered, ratio, correction };
+  if (Math.abs(ratio - 1) > RECONCILE_TOLERANCE) {
+    const credits = Object.fromEntries(PRICE_KEYS.map((n) => [n, Math.max(1, Math.round(price.credits[n] * ratio))]));
+    return { kind: 'adopt', drop, metered, ratio, correction, credits };
+  }
+  return { kind: 'agree', drop, metered, ratio, correction };
+}
+async function defaultDm(title, lines) {
+  await broadcast(formatAlert({ source: 'SYS', type: 'FOLLOWS', severity: 'MEDIUM', title, lines }), { toChannel: false }).catch(() => []);
+}
+// deps: { key, price, now, fetchJson, sleep, clock, dm(title, lines), writePrice(p), settle opts }
+export async function reconcile(state, deps = {}) {
+  const f = (state.follows ??= {});
+  f.recon ??= {};
+  const now = deps.now ?? Date.now();
+  let b;
+  try { b = await settledBalance({ ...deps, since: f.lastCallAt ?? 0 }); }
+  catch (e) { f.recon.lastError = { at: now, msg: String(e.message).slice(0, 120) }; return { status: 'unsettled', msg: e.message }; }
+  const total = f.meterTotal || 0;
+  const d = reconcileDecision(f.recon.anchor, b.total, total, deps.price);
+  const dm = deps.dm ?? defaultDm, writePrice = deps.writePrice ?? ((p) => writeJsonAtomic(pricePath(), p));
+  const window = f.recon.anchor ? `${new Date(f.recon.anchor.at).toISOString().slice(0, 16)}Z..${new Date(now).toISOString().slice(0, 16)}Z` : null;
+  let adopted = null;
+  if (d.correction > 0) charge(f, d.correction, now); // the meter never reads less than the balance says was spent
+  if (d.kind === 'adopt') {
+    adopted = { source: 'reconciled', measuredAt: new Date(now).toISOString(), credits: d.credits, factor: Number(d.ratio.toFixed(3)), window,
+      basis: `daily reconciliation ${window}: balance (${b.pools.join(' + ')}) fell ${d.drop} credits while the meter charged ${d.metered} at the ${deps.price.source} price; every price scaled by ${d.ratio.toFixed(3)}` };
+    writePrice(adopted);
+    await dm(`Builder-follows price ADOPTED from the balance: ×${d.ratio.toFixed(2)}`,
+      [`Window ${window}: balance fell ${d.drop.toLocaleString('en-US')} credits, meter charged ${d.metered.toLocaleString('en-US')} at the ${deps.price.source} price (${Math.round(100 * (d.ratio - 1))}%).`,
+        `Now metering ${JSON.stringify(d.credits)} credits per call; month-to-date corrected up by ${d.correction.toLocaleString('en-US')} credits.`]);
+  } else if (d.kind === 'anomalous') {
+    await dm(`Builder-follows reconciliation ANOMALOUS: balance fell ${d.ratio.toFixed(1)}× what was metered`,
+      [`Window ${window}: ${d.drop.toLocaleString('en-US')} credits gone vs ${d.metered.toLocaleString('en-US')} metered. Bonus-credit expiry or another user of the key would do this; the price is NOT adopted. The meter was corrected up by ${d.correction.toLocaleString('en-US')} credits.`]);
+  }
+  if (d.kind === 'agree') f.recon.agreedAt = now;
+  if (d.kind !== 'too-small') f.recon.anchor = { at: now, balance: b.total, metered: f.meterTotal || 0 };
+  f.recon.last = { at: now, kind: d.kind, drop: d.drop ?? null, metered: d.metered ?? null, ratio: d.ratio === undefined ? null : Number(d.ratio.toFixed(3)), correction: d.correction ?? 0, window };
+  f.recon.lastError = null;
+  return { status: d.kind, decision: d, price: adopted };
 }
 
 // ---------------------------------------------------------------- heartbeat line, pure when deps are injected
@@ -426,8 +473,11 @@ export function followStatus(state, now = Date.now(), deps = {}) {
   const key = deps.key ?? config.twitterapiKey;
   if (!key) return { line: 'Builder follows: OFF (no TWITTERAPI_KEY in .env)' };
   const f = state.follows ?? {};
-  const price = deps.price === undefined ? loadPrice() : deps.price;
-  if (!price) return { line: `Builder follows: ⚠️ OFF — price unmeasured${f.priceProblem ? ` (${f.priceProblem.msg})` : ' (measures on the next cycle)'}; no calls without a measured price` };
+  const price = priceInEffect(deps.price === undefined ? loadPrice() : deps.price);
+  const rl = f.recon?.last;
+  const priceLabel = price.source === 'reconciled' ? `adopted from the balance ${String(price.measuredAt).slice(0, 10)}, ×${price.factor}`
+    : f.recon?.agreedAt && rl?.ratio !== null && rl?.ratio !== undefined ? `published, reconciled ${rl.ratio >= 1 ? '+' : ''}${Math.round(100 * (rl.ratio - 1))}% on ${dayKey(f.recon.agreedAt)}`
+    : 'published, unverified';
   const s = spendOf(f, now), cap = c.cfg.capUsd;
   const today = s.byDay[dayKey(now)] || 0, yday = s.byDay[dayKey(now - 86400e3)] || 0;
   const resolved = c.cfg.handles.filter((h) => f.byHandle?.[h.toLowerCase()]).length;
@@ -440,11 +490,13 @@ export function followStatus(state, now = Date.now(), deps = {}) {
     `last good look ${age === null ? 'never' : age < 120 ? `${age}m` : `${(age / 60).toFixed(1)}h`} ago`,
     looking ? `today ${d.new} new · ${d.fresh} fresh · ${d.alerted} alerted · ${d.edited} edits` : 'today: not looking — a zero here is not "no new follows"',
     `spend today $${usd(today).toFixed(2)} · yesterday $${usd(yday).toFixed(2)} · month $${usd(s.credits).toFixed(2)} of $${cap}`,
-    `price ${price.credits.followings20} credits/call (measured ${String(price.measuredAt).slice(0, 10)})`];
+    `price ${price.credits.followings20} credits/call (${priceLabel})`];
   const flags = [];
   if (!canSpend(f, price.credits.followings20, cap, now)) flags.push(`⛔ CAP REACHED — no calls until ${next}`);
   if (f.failingSince) flags.push(`🚨 source failing since ${new Date(f.failingSince).toISOString().slice(0, 16)}Z (${f.lastError?.kind}: ${f.lastError?.msg}) — silent by design`);
   if (sat.length) flags.push(`⚠️ ${sat.length} saturated page(s) 24h: ${[...new Set(sat.map((x) => '@' + x.handle))].join(', ')} — follows beyond the newest ${PAGE_SIZE} may have been missed`);
+  if (f.recon?.lastError && now - f.recon.lastError.at < 2 * 86400e3) flags.push(`⚠️ reconciliation unsettled (${f.recon.lastError.msg})`);
+  if (rl?.kind === 'anomalous' && now - rl.at < 7 * 86400e3) flags.push(`⚠️ reconciliation anomalous ${dayKey(rl.at)}: balance fell ${rl.ratio}× the meter (not adopted)`);
   const un = Object.keys(f.unresolved ?? {});
   if (un.length) flags.push(`⚠️ unresolved: ${un.map((h) => '@' + h).join(', ')}`);
   return { line: [...parts, ...flags].join(' · ') };
@@ -457,24 +509,22 @@ export async function pollFollows() {
   const c = loadFollowConfig();
   if (!c.ok || !config.twitterapiKey) return;
   if (Date.now() - (f.lastCycleAt ?? 0) < POLL_EVERY_MS) return; // persisted: a restart does not re-poll (and re-pay) early
-  let price = loadPrice();
-  if (!price) {
-    if (f.priceProblem?.method === MEASURE_METHOD && Date.now() - f.priceProblem.at < 24 * 3600e3) return;
-    try {
-      const p = await measurePrices({ key: config.twitterapiKey });
-      charge(f, p.spentCredits, Date.now());
-      if (!checkPrice(p)) throw new Error(`measured price failed validation (${JSON.stringify(p.credits)})`); // validated BEFORE it is written
-      writeJsonAtomic(pricePath(), p); price = p; f.priceProblem = null;
-      console.log(`[follows] price MEASURED: ${JSON.stringify(p.credits)} credits per call (followings page of ${PAGE_SIZE}: ${p.credits.followings20} credits = $${usd(p.credits.followings20).toFixed(5)}) · the measurement spent ${p.spentCredits} credits`);
-    } catch (e) {
-      f.priceProblem = { at: Date.now(), method: MEASURE_METHOD, msg: String(e.message).slice(0, 160) }; save();
-      console.error(`[OPERATOR][follows] price measurement refused: ${e.message} — no polling without a measured price`); return;
-    }
-  }
+  delete f.priceProblem; // v0.34.0-v0.34.2 state: there is no measurement gate any more
   f.lastCycleAt = Date.now();
+  let price = priceInEffect(loadPrice());
+  // Daily reconciliation BEFORE the cycle, never gating it: with no traffic metered yet there
+  // is nothing to anchor, so the first cycle after a deploy polls at once and the anchor is
+  // taken an hour later, when the balance has long settled (~1 minute of reads).
+  if (f.meterTotal > 0 && (!f.recon?.anchor || Date.now() - f.recon.anchor.at >= RECONCILE_EVERY_MS)) {
+    const rr = await reconcile(st, { key: config.twitterapiKey, price });
+    save();
+    const d = rr.decision;
+    console.log(`[follows] reconciliation: ${rr.status}${d?.drop !== undefined ? ` · balance fell ${d.drop} · metered ${d.metered}${d.ratio !== undefined ? ` · ratio ${d.ratio.toFixed(3)}` : ''}${d.correction ? ` · meter corrected +${d.correction}` : ''}` : ''}${rr.msg ? ` · ${rr.msg}` : ''}`);
+    if (rr.price) price = rr.price;
+  }
   const r = await followCycle(st, { cfg: c.cfg, price, key: config.twitterapiKey });
   save();
-  console.log(`[follows] ${r.status}: ${r.polled} polled · ${r.baseline.length ? `baseline ${r.baseline.length} · ` : ''}${r.newFollows} new · ${r.sent} alert(s) · ${r.edited} edit(s) · ${r.calls} call(s)${r.failed.length ? ` · failed ${r.failed.join(', ')}` : ''}${r.saturated.length ? ` · SATURATED ${r.saturated.join(', ')}` : ''}`);
+  console.log(`[follows] ${r.status}: ${r.polled} polled · ${r.baseline.length ? `baseline ${r.baseline.length} · ` : ''}${r.newFollows} new · ${r.sent} alert(s) · ${r.edited} edit(s) · ${r.calls} call(s) · price ${price.source}${r.failed.length ? ` · failed ${r.failed.join(', ')}` : ''}${r.saturated.length ? ` · SATURATED ${r.saturated.join(', ')}` : ''}`);
 }
 export function startBuilderFollows(checkEveryMs = 5 * 60e3) {
   if (timer) return timer;

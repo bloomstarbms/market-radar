@@ -4670,3 +4670,36 @@ failure: the same biller read 2 s apart gives no price and is refused.
 Three measurements so far have cost 1,184 credits ($0.012) in total, all outside the
 module's meter, because no price was ever accepted to meter them at. The meter starts
 from the first accepted measurement, which charges its own spend.
+
+## 2026-10-22 — v0.34.3: METER FROM THE FIRST CALL, RECONCILE DAILY (operator review of v0.34.2)
+
+Two checks the operator asked for before the first cycle:
+
+1. A stored price of 0 must never load. v0.34.2's checkPrice already refused the v0.34.0
+   zero file (it required followings20 > 0), but only that entry: a file with a valid
+   page price and userInfo 0 would have loaded and metered user lookups as free. Now
+   every metered entry (followings20, followings200, userInfo, batchPerUser) must be a
+   finite number > 0, or the file is "no price". Fixture: the v0.34.0 file on disk at
+   boot does not load, the published price applies, and the first cycle is charged at
+   it from the first call.
+
+2. The measurement gated polling, and every restart before it completed restarted a
+   ~30-minute blind window (three restarts on 2026-10-22, zero polls). Replaced:
+   - The meter starts at the PUBLISHED price (60 / 200 / 18 / 18 credits), labelled
+     "published, unverified" on the heartbeat, from the first call.
+   - Once a day, before a cycle (~1 h after the last call, so it settles in ~1 minute),
+     a SETTLED balance read (v0.34.2's logic, kept: reads 60 s apart until two agree,
+     at least 3 min after the last metered call, bounded at 10 min) is compared with the
+     meter over the window since the last anchor.
+   - More than 20% apart: operator DM, every price scaled by drop/metered and written to
+     data/twitterapi-price.json as "reconciled". Within 20%: the label becomes
+     "published, reconciled ±N%". A drop over 3x the meter (bonus-credit expiry, another
+     user of the key) is ANOMALOUS: DM, not adopted. A balance that rose (recharge) makes
+     the window unreadable: re-anchor. Under 5,000 metered credits: too small, keep the
+     anchor. In every readable window the meter is corrected UP by any shortfall.
+   - measurePrices and the per-type windows are gone. The first anchor is taken at the
+     second cycle, so the first cycle after a deploy polls at once.
+
+The v0.34.0 zero file stays on the VPS and is ignored (it fails checkPrice); the first
+adoption overwrites it. The three measurements of 2026-10-22 drew ~1,776 credits ($0.018)
+outside the meter; the first anchor is taken after they settled, so they are in no window.
