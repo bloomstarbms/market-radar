@@ -18,6 +18,12 @@ const RULES = {
   volOnlyPctOf24h: 0.005,  // window vol must also be >= 0.5% of 24h volume
 };
 
+// Message diet (CALL remainder). Public carries the figure; operator carries the
+// corpus it came from and the detector's reading. Exported for fixture 82.
+export const PUMP_FADE_PUBLIC = '22 of 30 past HIGH pump alerts reverted within 24h (n=30, provisional)';
+export const PUMP_FADE_OPERATOR = 'Fade measured on this corpus: 22 of 30 PUMP-HIGH reverted within 24h, median alpha −13.5% (n=30, sub-gate population — provisional)';
+export const VOLUME_READING = 'Reading: possible quiet accumulation or distribution before a move';
+
 const MAJORS = /^(BTC|ETH|SOL|WBTC|WETH)USDT$/;
 const LEVERAGED = /\d+[LS]USDT$/;               // 3L/5L/3S/5S leveraged tokens move 10% by design
 const STABLES = /^(USDC|USDE|USD1|DAI|FDUSD|TUSD|BUSD|USDD|PYUSD|USDP)USDT$/; // pinned at $1
@@ -78,12 +84,18 @@ export function checkPump(exchange, t) {
     if (up && !volSurging) return null;
     const signals = [`Price ${up ? '+' : ''}${movePct.toFixed(1)}% in ${windowMin}m${absMove >= RULES.bigMovePct ? ' (BIG)' : ''}`];
     if (volSurging) signals.push(`Volume surge: $${fmt(windowVol)} in ${windowMin}m (${volRatio.toFixed(1)}x normal)`);
-    if (up) signals.push(`⚠️ Fade measured on this corpus: 22 of 30 PUMP-HIGH reverted within 24h, median alpha −13.5% (n=30, sub-gate population — provisional)`);
+    // Message diet (CALL remainder): the measured base rate stays public in the
+    // reader's terms; the corpus vocabulary moves to the operator rendering.
+    const operatorLines = [];
+    if (up) {
+      signals.push(`⚠️ ${PUMP_FADE_PUBLIC}`);
+      operatorLines.push(PUMP_FADE_OPERATOR);
+    }
     const severity = (absMove >= RULES.bigMovePct && volSurging) ? 'HIGH'
       : (absMove >= RULES.bigMovePct || volSurging) ? 'MEDIUM' : 'LOW';
     return { source: 'CEX', type: up ? 'PUMP' : 'DUMP', severity, key, dedupeKey: `MOVE:${t.symbol}`,
       title: `${t.symbol} ${up ? 'pumping' : 'selling off'} on ${exchange.toUpperCase()}`,
-      lines: [...signals, ctx], url: CHART_URLS[exchange]?.(t.symbol), track };
+      lines: [...signals, ctx], ...(operatorLines.length ? { operatorLines } : {}), url: CHART_URLS[exchange]?.(t.symbol), track };
   }
 
   // 2) Slow grind vs 1h anchor
@@ -111,8 +123,8 @@ export function checkPump(exchange, t) {
   if (windowVol >= volFloor && volRatio >= RULES.volOnlyRatio && wasElevated) {
     return { source: 'CEX', type: 'VOLUME', severity: volRatio >= RULES.volOnlyRatio * 2 ? 'MEDIUM' : 'LOW', key, dedupeKey: `VOL:${t.symbol}`,
       title: `${t.symbol} unusual volume on ${exchange.toUpperCase()} (price flat)`,
-      lines: [`$${fmt(windowVol)} traded in ${windowMin}m (${volRatio.toFixed(1)}x normal), price only ${movePct >= 0 ? '+' : ''}${movePct.toFixed(1)}%`,
-        `Possible quiet accumulation or distribution before a move`, ctx],
+      lines: [`$${fmt(windowVol)} traded in ${windowMin}m (${volRatio.toFixed(1)}x normal), price only ${movePct >= 0 ? '+' : ''}${movePct.toFixed(1)}%`, ctx],
+      operatorLines: [VOLUME_READING],
       url: CHART_URLS[exchange]?.(t.symbol), track };
   }
   return null;

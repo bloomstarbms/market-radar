@@ -4617,3 +4617,53 @@ DOCUMENTED shape: replace them with a real response once the key exists.
 OPERATOR, to switch it on: add TWITTERAPI_KEY to /home/radar/market-radar/.env (fund
 the account first), then `systemctl restart market-radar`. The first cycle measures the
 price, resolves the twenty handles, and baselines; alerts start from the second cycle.
+
+
+## 2026-10-22 — v0.34.1: THE DIET, CALL REMAINDER — mechanism and readings leave the channel
+
+The v0.32.x diet gave the unlock and CEX-announcement FACT types two renderings; the
+market-move builders (calls, plus CASCADE and the coinmarketcal events, which are FACT
+types that were never dieted) still put mechanism in public. Same discipline, nothing
+deleted — each line below moved to `operatorLines` (DM only, after `— operator —`):
+
+- PUMP: corpus vocabulary ("Fade measured on this corpus … median alpha … sub-gate
+  population") → operator. The base rate stays public in the reader's terms:
+  "⚠️ 22 of 30 past HIGH pump alerts reverted within 24h (n=30, provisional)".
+- VOLUME: "possible quiet accumulation or distribution before a move" → operator as
+  a Reading.
+- CASCADE: "direction from here unmeasured" and the FACT/CALL architecture note
+  (step 7) → operator. "Shorts squeezed" reworded to "Shorts liquidated" (squeeze is
+  fixture-66 vocabulary).
+- MULTIEX: the wash-trading rationale → operator.
+- WHALE: the hint ("possible incoming SELL-OFF", "likely accumulation") — a reading of
+  the transfer — and the threshold mechanics → operator. The DEPOSIT / WITHDRAWAL
+  label stays public; it is the fact.
+- CONFLUENCE: "two independent signals aligned" → operator; title states the two
+  events ("exchange withdrawal, then volume") instead of the accumulation reading.
+- CAL events (coinmarketcal): glosses ("added supply reaches the market", "early
+  volatility cuts both ways") → operator; public keeps the label + impact.
+- PROVISIONAL footer: public "⚠️ Provisional: single signal, no measured edge yet";
+  the gate/population/expiry clause → operator (PROVISIONAL_PUBLIC / _OPERATOR in
+  dispatcher.js).
+
+Builders are pure and exported (cascadeMessage, multiexMessage, whaleMessage,
+confluenceMessage, eventMessage; pump keeps checkPump with exported constants).
+Fixture 83 drives the REAL checkPump for PUMP/DUMP/VOLUME plus every builder at
+full decoration (executable line + provisional footer): public ≤6 lines / ≤420
+chars, fixture-66 vocabulary + the CALL-path words, prose lint; operator ⊇ public;
+field preservation for every moved sentence; formatAlert routes CALL operatorLines;
+SELF-TEST plants seven pre-diet lines and the lint catches each.
+
+Behaviour unchanged: no threshold, severity, key, cooldown or routing touched. The
+whale `sev` still keys on the classified direction whose hint no longer renders
+publicly — behaviour, not rendering; recorded, out of scope.
+
+Not touched: `src/sources/calendar/cpi.js` is imported by nothing (macro.js carries
+CPI); left as is. RUG's "if you hold this, check it NOW" stays — a safety
+instruction on a liquidity pull, not a market call.
+
+Verified in a cloud session WITHOUT `data/` (VPS runtime state): every section 1–82
+run in isolation on boot-check copies of main (v0.34.0) and of this branch gives
+identical PASS/FAIL counts; section 83 37/37; console-only `--once` boot banner telegram OFF.
+The full suite is NOT verified green here — sections that read data/ crash in the
+cloud. Operator to run `node boot-check.js` on the VPS before restart.

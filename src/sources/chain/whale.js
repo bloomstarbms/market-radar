@@ -157,6 +157,24 @@ export function classifyDirection(from, to) {
   return { dir: 'wallet \u2192 wallet', hint: 'unknown parties \u2014 watch for follow-up', sev: 'LOW' };
 }
 
+// WHALE MESSAGE, pure (message diet, CALL remainder). Public: the amount, who moved it
+// where (the DEPOSIT / WITHDRAWAL label is the fact), the transaction. Operator: the
+// hint ("possible incoming SELL-OFF", "likely accumulation") — a reading of the
+// transfer, not the transfer — and the threshold mechanics.
+export function whaleMessage({ symbol, chainId, usd, amount, dir, hint, threshold, liq, explorer }) {
+  return {
+    title: `${symbol}: $${fmt(usd)} moved (${chainId})`,
+    lines: [
+      `${fmt(amount)} ${symbol} ${dir}`,
+      `<a href="${explorer}">view transaction</a>`,
+    ],
+    operatorLines: [
+      `Reading: ${hint}`,
+      `Threshold: $${fmt(threshold)} (min of $${fmt(RULES.whaleUsd)} / ${RULES.liqPct}% of $${fmt(liq)} liquidity)`,
+    ],
+  };
+}
+
 export function effectiveThreshold(liqUsd) {
   if (!liqUsd || liqUsd <= 0) return RULES.whaleUsd;
   return Math.max(RULES.minUsd, Math.min(RULES.whaleUsd, liqUsd * (RULES.liqPct / 100)));
@@ -390,12 +408,7 @@ export async function checkWhales(pair) {
       // step 10 would ship blind — 954 historical whale alerts produced zero outcome
       // rows for exactly this reason.
       track: { kind: 'dex', chainId, address: pair.baseToken.address, symbol: pair.baseToken.symbol, price },
-      title: `${pair.baseToken.symbol}: $${fmt(usd)} moved (${chainId})`,
-      lines: [
-        `${fmt(tx.amount)} ${pair.baseToken.symbol} ${dir} — ${hint}`,
-        `Threshold: $${fmt(threshold)} (min of $${fmt(RULES.whaleUsd)} / ${RULES.liqPct}% of $${fmt(liq)} liquidity)`,
-        `<a href="${tx.explorer}">view transaction</a>`,
-      ],
+      ...whaleMessage({ symbol: pair.baseToken.symbol, chainId, usd, amount: tx.amount, dir, hint, threshold, liq, explorer: tx.explorer }),
       url: pair.url,
     });
   }
