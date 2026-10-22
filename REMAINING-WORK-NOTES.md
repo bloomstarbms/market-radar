@@ -4703,3 +4703,18 @@ Two checks the operator asked for before the first cycle:
 The v0.34.0 zero file stays on the VPS and is ignored (it fails checkPrice); the first
 adoption overwrites it. The three measurements of 2026-10-22 drew ~1,776 credits ($0.018)
 outside the meter; the first anchor is taken after they settled, so they are in no window.
+
+## 2026-10-22 — v0.34.4: FIRST LIVE CYCLE; A PAGE IS SATURATED ONLY IF IT CAME BACK FULL
+
+v0.34.3 deployed 18:56 UTC; the first cycle ran 18:57:20-19:02:25: 20/20 handles resolved
+to IDs, 20/20 baselined, 41 calls, 0 failures, 0 alerts. Metered 4,720 credits at the
+published price (20 x 18 user info + 20 x 18 batch + 20 x 200 baseline pages), $0.05.
+Heartbeat: "price 60 credits/call (published, unverified)". The reconciliation anchor is
+taken at the second cycle (~19:57), the first reconciliation ~24 h after it.
+
+The baseline showed a real shape the saturation rule had not met: @ethereum follows
+nobody (0 IDs), @Pumpfun 3, @HyperliquidX 9. Their first new follow is a page where
+every ID is new, which v0.34.3 would have called "saturated" (a false flag plus a
+verification call). Saturation now requires a full page (at least 20 IDs).
+Fixture 82: an empty baseline that makes one follow alerts once, no saturation, no
+verification call.

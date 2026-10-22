@@ -3189,6 +3189,16 @@ console.log('82. builder follows: baseline silent, one fresh follow one alert, a
   check('all 20 returned IDs new → saturated: verified against the ID, logged, and shown on the heartbeat', r.saturated.includes('toly') && api.log.slice(b5).some((u) => /batch_info_by_ids\?userIds=1001$/.test(u))
     && /⚠️ 1 saturated page\(s\) 24h: @toly — follows beyond the newest 20 may have been missed/.test(line5));
   check('the window is not pretended complete, and the fresh follow inside it still alerts', h.sent.length === 1 && h.sent[0].title === '👀 FOLLOW · @toly followed @freshbuild');
+  {
+    // REAL BASELINE SHAPE (2026-10-22): @ethereum follows nobody, so its baseline is empty.
+    const stE = {}; const apiE = mkApi({ toly: filler(30000, 20), mert: [] }, ids);
+    await harness(apiE, stE, T0).run();
+    apiE.pages.mert = [U(31337, 'firstfollow', { age: 5, followers: 80 })];
+    const hE = harness(apiE, stE, T0 + 3600e3); const bE = apiE.log.length;
+    const rE = await hE.run();
+    check('an account with an EMPTY baseline that makes one follow: one alert, not "saturated", no verification call', stE.follows.accounts['1002'].seen.length === 1 && rE.sent === 1 && rE.saturated.length === 0
+      && !apiE.log.slice(bE).some((u) => /batch_info/.test(u)) && (stE.follows.saturated ?? []).length === 0);
+  }
   // the same saturation caused by a handle that moved to another account: no alerts, re-baseline
   const st2 = JSON.parse(JSON.stringify(st));
   const api2 = mkApi({ ...api.pages, toly: filler(12000, 20).map((u) => ({ ...u, created_at: classic(T0 - 5 * 86400e3), followers_count: 20 })) }, ids);

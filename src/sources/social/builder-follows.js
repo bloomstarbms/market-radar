@@ -309,7 +309,10 @@ export async function followCycle(state, deps = {}) {
     const seen = new Set(a.seen);
     const fresh = users.filter((u) => !seen.has(String(u.id ?? u.id_str)));
     if (!fresh.length) continue;
-    if (fresh.length === ids.length) {
+    // A page can only be saturated if it came back FULL. @ethereum follows nobody (baseline
+    // 2026-10-22: 0 IDs) and @Pumpfun 3: their first new follow is a page where every ID is
+    // new, and that is one follow, not a saturated window.
+    if (fresh.length === ids.length && ids.length >= PAGE_SIZE) {
       // SATURATED: every returned ID is new. Either more follows since the last look than the
       // page holds (some may be missed — said, not hidden), or the handle now belongs to a
       // different account. The ID decides which, before anything alerts.
