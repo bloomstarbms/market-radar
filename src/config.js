@@ -13,7 +13,7 @@ if (existsSync(envPath)) {
   }
 }
 
-export const VERSION = '0.33.13';
+export const VERSION = '0.34.0';
 
 // A COPY OF THE TREE MUST NOT SEND. Twice (2026-09-15, 2026-09-17) a boot check on a
 // tree copy carried .env and pushed "cliff today" reminders that the live bot then
@@ -66,6 +66,7 @@ export const config = {
   moralisKey: process.env.MORALIS_API_KEY || '',
   coinmarketcalKey: process.env.COINMARKETCAL_API_KEY || '',
   cryptorankKey: process.env.CRYPTORANK_API_KEY || '',
+  twitterapiKey: process.env.TWITTERAPI_KEY || '', // builder-follows; PAID (cap in builder-follows.json)
   // Tier delivery declarations — read by the boot assertion in core/routes.js.
   // A tier with no reader is a CONFIG BUG unless it is DECLARED recorded-only here;
   // that distinction (intent vs accident) is the entire value of the guard, and

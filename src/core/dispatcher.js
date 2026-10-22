@@ -62,6 +62,8 @@ const TAG = {
   'PERPDEX:PERP': '⚔️ PERP LISTING',
   'PERPDEX:FUNDING': '⚡ FUNDING EXTREME',
   'PERPDEX:OI': '📊 OPEN INTEREST MOVE',
+  // Builder follows (v0.34.0): a watched X account followed a fresh account. A fact about a follow, nothing more.
+  'SOCIAL:FOLLOW': '👀 BUILDER FOLLOW',
   'SYS:HEARTBEAT': '💓 HEARTBEAT',
   'SYS:DIGEST': '📋 DAILY DIGEST',
 };
@@ -201,7 +203,7 @@ export function formatAlert(a, meta = {}, audience = 'public') {
   const lines = audience === 'operator' && a.operatorLines?.length ? [...a.lines, '— operator —', ...a.operatorLines] : a.lines;
   const body = lines.map((l) => `• ${l}`).join('\n');
   const upd = meta.updates ? `\n<i>updated ${meta.updates}x — same setup, not a new event</i>` : '';
-  const link = a.url ? `\n<a href="${a.url}">chart</a>` : '';
+  const link = a.url ? `\n<a href="${a.url}">${a.linkLabel ?? 'chart'}</a>` : '';
   const age = ageLine(a);
   return `${head}${sub}\n${body}${upd}${link}${age ? `\n<i>${age}</i>` : ''}`;
 }

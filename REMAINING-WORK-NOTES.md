@@ -4537,3 +4537,83 @@ MOVE's real September stamp as the refusal and the same stamp with the rule's fi
 as the carry. MOVE's October verdict (expectDay 9, scored by ~13 Oct) will be the
 first stamp that can produce the line for it. Live after 0.33.13: ENA carries
 207,259,731 (17.17×); EIGEN (last CONFIRM 0.925, inside ±13%) and MOVE do not.
+
+## 2026-10-21 — DECISION: FIRST PAID DEPENDENCY (twitterapi.io, cap $40/month)
+
+Operator-approved 2026-10-21: twitterapi.io for the builder-follows module, capped at
+$40 per month. The first paid dependency in the project. The cap lives in
+builder-follows.json (capUsd, approved) and is enforced in code, not by reminder:
+every call is metered at the MEASURED price before it is made, a call that would cross
+the cap is never made, 80% sends one operator DM per month, and at 100% the module stops
+until the month rolls and the heartbeat says so with the resume date. A config without
+capUsd or approved does not run. Raising the cap is an operator decision recorded here.
+
+## 2026-10-22 — v0.34.0: BUILDER FOLLOWS (deployed dormant: no key on the VPS yet)
+
+When a watched X account follows a FRESH account (≤90 days old OR ≤5,000 followers,
+declared constants with basis lines), post it as a FACT:
+"👀 FOLLOW · @toly followed @newproject" / "Account 3 days old · 412 followers" /
+"<bio, 100 chars> · <website>". Everything else is recorded only
+(data/builder-follows.jsonl). A second watched account following the same fresh account
+within 7 days EDITS the original ("also followed by @mert, seen 2h later"); never a
+second alert. Lint adds "backed by", "backing", "endorsed", "invested"
+(prose-lint.js followProblems, wired as the module's classifier in routes.js EMITTERS).
+
+MEASURED FROM THE VPS, 2026-10-21: api.twitterapi.io answers on IPv4 (188.114.96.3) and
+IPv6 (2a06:98c1:3120::3) in ~0.11 s, Cloudflare-fronted. No key: HTTP 403 "API key
+required". A rejected key: HTTP 401 {"error":"Unauthorized","message":"API key is
+invalid"} (fixture 82's 401 case is that body). NOT MEASURED: the per-call cost.
+TWITTERAPI_KEY is not in the VPS .env, so no billed call could be made. Documented
+figures: followings at pageSize 20 = 3 credits each = 60 credits = $0.0006 (the
+per-call minimum); 200 = 1 credit each = 200 credits; batch_info_by_ids 18 credits per
+user under 100; 100,000 credits = $1. At 60 credits, hourly looks at 20 accounts are
+~$8.93 for a 31-day month. The pricing page also lists "List function calls: 150
+credits per call (effective October 1st)"; if that applies to followings, ~$22.3/month.
+Both under the cap; the measurement decides which.
+
+PRICE IS MEASURED, NOT TYPED IN. With a key and no data/twitterapi-price.json, the first
+cycle reads the credit balance, makes each call type twice with a balance read after
+each, and requires both deltas to agree (each delta = the call + one balance read; the
+balance read's own cost is measured first). Disagreement refuses the measurement
+(retried daily) rather than averaging it; no price file means no polling. The
+measurement's own spend is metered. The log line "[follows] price MEASURED: …" and the
+heartbeat's "price N credits/call (measured DATE)" report the figures.
+
+Design calls the spec left open, made and stated:
+- Handles change; followings takes only a handle. Accounts are keyed by numeric ID
+  (resolved once via /twitter/user/info), the handle is refreshed from the ID daily
+  (one batch call), and a SATURATED page is checked against the ID before anything
+  alerts: a handle that now belongs to another account would otherwise show twenty
+  "new" follows and alert on them. Moved handle: zero alerts, re-baseline.
+- Saturated (every returned ID new) is logged, shown on the heartbeat for 24h, and the
+  page is still processed. The window is not pretended complete.
+- The first look per account reads 200, not 20 (once, ~200 credits each): a deeper
+  baseline is what makes "re-follows: ignore" true for an account that was further down
+  the list. The seen set is a union of every ID ever seen, so unfollow/re-follow of a
+  known account is nothing.
+- Convergence says "seen 2h later": the times are hourly detection times. X does not
+  publish when a follow happened.
+- An account bio that trips the lint is WITHHELD (the operator line says why), not
+  quoted. A bio saying "backed by X" next to a follow would read as backing.
+- A failed call is metered as billed: the conservative side of a cap.
+- A fresh follow whose delivery failed stays "new" and is retried on the next look.
+- Own timer (5-minute check, hourly cycle, 6 s between calls). Twenty spaced calls take
+  ~2 minutes and must not stall the 60 s poll loop. lastCycleAt is persisted, so a
+  restart does not re-poll and re-pay early.
+- Failure (401/403 key, 429, network, every account failing): nothing committed, no
+  baseline touched, flagged on the heartbeat ("🚨 source failing since …, silent by
+  design"; the day's counts read "not looking", never "no new follows").
+
+Fixture 82 (37 checks): baseline silent; one fresh follow, one alert in the spec's
+words; a second watcher edits, no new alert; a position change is nothing;
+established recorded only; unfollow/re-follow ignored; saturated flagged after the ID
+check; a moved handle re-baselines with zero alerts; cap reached means zero requests;
+a call that would cross the cap is not made; 80% DMs once; the month rolls; 401 (the
+real VPS body) silent, flagged, cleared on the next good look; lint words; bio withheld;
+escaping; classic and ISO dates; send failure retried once; measurement agrees →
+60/200/18/18/0, disagrees → refused. The followings user objects in the fixture are the
+DOCUMENTED shape: replace them with a real response once the key exists.
+
+OPERATOR, to switch it on: add TWITTERAPI_KEY to /home/radar/market-radar/.env (fund
+the account first), then `systemctl restart market-radar`. The first cycle measures the
+price, resolves the twenty handles, and baselines; alerts start from the second cycle.

@@ -32,7 +32,7 @@ const MAX_SCORE = 100;
 // fix — never a cap on facts, which would reintroduce the queue by another name.
 export const FACT_TYPES = new Set([
   'LISTING', 'ANNOUNCE', 'PERP', 'UPBIT', 'DELIST_SCHEDULED', 'SUSPENSION',
-  'UNLOCK', 'TGE', 'CPI', 'MACRO', 'DEPEG', 'RUG', 'FUNDING', 'CASCADE', 'OI',
+  'UNLOCK', 'TGE', 'CPI', 'MACRO', 'DEPEG', 'RUG', 'FUNDING', 'CASCADE', 'OI', 'FOLLOW',
 ]);
 export function isFact(alert) {
   if (alert.kind === 'CALL') return false;      // explicit call wins

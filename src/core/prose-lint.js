@@ -23,3 +23,15 @@ export function proseProblems(text) {
   if (FREQ.test(t) && !EVIDENCE.test(t)) p.push('frequency claim without evidence');
   return p;
 }
+
+// FOLLOW CLAIM (v0.34.0, builder-follows). A follow is a follow: nothing in a follow
+// message may say or imply that the watcher backs, endorses or invested in the account.
+// The module runs this over its whole public rendering and refuses to send on a hit; an
+// account bio that trips it is withheld rather than quoted.
+export const FOLLOW_CLAIM = /\b(backed by|backing|endorsed|invested)\b/i;
+export function followProblems(text) {
+  const p = proseProblems(text);
+  const m = String(text ?? '').match(FOLLOW_CLAIM);
+  if (m) p.push(`follow claim ("${m[0]}")`);
+  return p;
+}

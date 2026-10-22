@@ -1,0 +1,27 @@
+{
+  "_about": "Builder follows watch list (v0.34.0). Handles are resolved to numeric IDs once and stored in data/state.json; the handle is refreshed from the ID daily. Edit the list here; capUsd is the operator-approved monthly cap for the paid source.",
+  "approved": "2026-10-21",
+  "capUsd": 40,
+  "handles": [
+    "solana",
+    "base",
+    "HyperliquidX",
+    "RobinhoodApp",
+    "ethereum",
+    "arbitrum",
+    "inkonchain",
+    "JupiterExchange",
+    "phantom",
+    "coinbase",
+    "toly",
+    "rajgokal",
+    "jessepollak",
+    "VitalikButerin",
+    "chameleon_jeff",
+    "brian_armstrong",
+    "Pumpfun",
+    "mert",
+    "MeteoraAG",
+    "helius"
+  ]
+}

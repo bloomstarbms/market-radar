@@ -16,6 +16,7 @@ import { pollCex } from './sources/cex/monitor.js';
 import { pollFunding } from './sources/cex/funding.js';
 import { pollAnnouncements } from './sources/cex/announcements.js';
 import { pollUpbit, startUpbitNoticeWatch } from './sources/cex/upbit.js';
+import { startBuilderFollows } from './sources/social/builder-follows.js';
 import { pollCoinbase } from './sources/cex/coinbase.js';
 import { pollCascade } from './sources/cex/cascade.js';
 import { pollHyperliquid } from './sources/perp/hyperliquid.js';
@@ -219,6 +220,8 @@ async function main() {
   setInterval(pollAll, config.pollIntervalSec * 1000);
   // Upbit notices on their own cadence: the one source where seconds of lead time matter.
   startUpbitNoticeWatch();
+  // Builder follows: hourly, on its own timer (20 spaced calls must not stall the 60 s loop).
+  startBuilderFollows();
 }
 
 main();

@@ -3088,6 +3088,174 @@ console.log('81. forward stages of a cadence row carry "last window paid <total>
   check('MUTATION: the line + amount + verification + note on a single-wallet row is 4 public lines (cap 6) — a 7th would fail', verifiedMessage(ena, 7, '2026-11-06', null, enaMonths).lines.length === 4);
 }
 
+console.log('82. builder follows: baseline silent, one fresh follow one alert, a second watcher edits, established recorded only, saturation flagged, cap stops calls, 401 silent and flagged');
+{
+  const BF = await import('./src/sources/social/builder-follows.js');
+  const { followCycle, followStatus, measurePrices, accountFacts, freshness, followMessage, checkFollowConfig, checkPrice, usd, FRESH_MAX_AGE_DAYS, FRESH_MAX_FOLLOWERS, FRESH_MAX_AGE_BASIS, FRESH_MAX_FOLLOWERS_BASIS } = BF;
+  const { followProblems } = await import('./src/core/prose-lint.js');
+  const { formatAlert, renderMessage } = await import('./src/core/dispatcher.js');
+  const { checkTierRoutes, checkClassifiersWired } = await import('./src/core/routes.js');
+  const T0 = Date.UTC(2026, 9, 21, 12, 0, 0);
+  const D = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const p2 = (x) => String(x).padStart(2, '0');
+  const classic = (ms) => { const d = new Date(ms); return `${D[d.getUTCDay()]} ${M[d.getUTCMonth()]} ${p2(d.getUTCDate())} ${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}:${p2(d.getUTCSeconds())} +0000 ${d.getUTCFullYear()}`; };
+  // Followings user objects in the documented snake_case shape, created_at in X's classic format.
+  const U = (id, h, o = {}) => ({ id: String(id), screen_name: h, userName: h, created_at: classic(T0 - (o.age ?? 3) * 86400e3 - 3600e3),
+    followers_count: o.followers ?? 412, description: o.bio ?? 'Onchain perps for everyone', url: o.url === undefined ? 'https://newproject.xyz' : o.url });
+  const filler = (base, n) => Array.from({ length: n }, (_, i) => U(base + i, `old${base + i}`, { age: 3000, followers: 90000 }));
+  const cfg = checkFollowConfig({ handles: ['toly', 'mert'], capUsd: 40, approved: '2026-10-21' }).cfg;
+  const price = { measuredAt: '2026-10-21T12:00:00Z', basis: 'fixture', credits: { followings20: 60, followings200: 200, userInfo: 18, batchPerUser: 18, myInfo: 0 } };
+  const cost = { followings: (u) => (/pageSize=200/.test(u) ? 200 : 60), info: () => 18, batch: (u) => 18 * new URL(u).searchParams.get('userIds').split(',').length };
+  // A fake twitterapi.io: pages per handle (newest first), an ID per handle, a log of every request.
+  const mkApi = (pages, ids, over = {}) => {
+    const api = { pages, ids, handleOf: { ...Object.fromEntries(Object.entries(ids).map(([h, id]) => [id, h])) }, log: [], billed: 0 };
+    api.fetchJson = async (url) => {
+      api.log.push(url);
+      if (over.status) return { status: over.status, json: over.json };
+      const u = new URL(url), path = u.pathname;
+      if (path === '/twitter/user/info') { api.billed += cost.info(); const h = u.searchParams.get('userName'); return { status: 200, json: { status: 'success', data: { id: api.ids[h], userName: h } } }; }
+      if (path === '/twitter/user/batch_info_by_ids') { api.billed += cost.batch(url); return { status: 200, json: { status: 'success', users: u.searchParams.get('userIds').split(',').map((id) => ({ id, userName: api.handleOf[id] })) } }; }
+      if (path === '/twitter/user/followings') { api.billed += cost.followings(url); const h = u.searchParams.get('userName'); return { status: 200, json: { status: 'success', followings: (api.pages[h] ?? []).slice(0, Number(u.searchParams.get('pageSize'))) } }; }
+      return { status: 404, json: null };
+    };
+    return api;
+  };
+  const harness = (api, state, now) => {
+    const sent = [], edits = [], rows = [], warns = [];
+    return { sent, edits, rows, warns, run: () => followCycle(state, { cfg, price, key: 'test-key', now, fetchJson: api.fetchJson, sleep: async () => {},
+      dispatch: async (a) => { sent.push(a); return true; }, edit: async (k, line) => { edits.push({ k, line }); return true; }, record: (r) => rows.push(r), warn: async (s) => warns.push(s) }) };
+  };
+
+  check('freshness constants are declared with a basis line (≤90 days OR ≤5,000 followers)', FRESH_MAX_AGE_DAYS === 90 && FRESH_MAX_FOLLOWERS === 5000 && /operator spec 2026-10-21/.test(FRESH_MAX_AGE_BASIS) && /operator spec 2026-10-21/.test(FRESH_MAX_FOLLOWERS_BASIS));
+  check('the tier-route gate holds with FOLLOW as a fact type, and the classifiers-wired gate requires the module to call followProblems()', checkTierRoutes({ calendarEvents: [], tokens: [] }).ok && checkClassifiersWired().ok
+    && !checkClassifiersWired({ readFile: (f) => (f === 'sources/social/builder-follows.js' ? '// no lint here' : readFileSync('src/' + f, 'utf8')) }).ok);
+  check('a paid source with no cap, no approval date or a bad handle does not run', !checkFollowConfig({ handles: ['toly'], approved: '2026-10-21' }).ok && !checkFollowConfig({ handles: ['toly'], capUsd: 40 }).ok && !checkFollowConfig({ handles: ['to ly'], capUsd: 40, approved: '2026-10-21' }).ok);
+  check('the shipped watch list is the twenty handles, cap $40, approved 2026-10-21', (() => { const c = checkFollowConfig(JSON.parse(readFileSync('builder-follows.json', 'utf8'))); return c.ok && c.cfg.handles.length === 20 && c.cfg.capUsd === 40 && c.cfg.approved === '2026-10-21' && c.cfg.handles.includes('chameleon_jeff'); })());
+  check('a price with a zero or unstated per-call figure is not a measurement', checkPrice(price) && !checkPrice({ ...price, credits: { ...price.credits, followings20: 0 } }) && !checkPrice({ ...price, basis: '' }));
+
+  // 1. BASELINE
+  const ids = { toly: '1001', mert: '1002' };
+  const api = mkApi({ toly: filler(5000, 30), mert: filler(6000, 30) }, ids);
+  const st = {};
+  let h = harness(api, st, T0);
+  let r = await h.run();
+  check('baseline: first poll per account sends nothing and records nothing', r.status === 'ok' && r.baseline.length === 2 && h.sent.length === 0 && h.rows.length === 0 && h.edits.length === 0);
+  check('baseline: handles resolved to numeric IDs once and stored; the first look reads 200 so an older re-follow is known', st.follows.byHandle.toly === '1001' && st.follows.accounts['1001'].seen.length === 30 && api.log.filter((u) => /followings/.test(u)).every((u) => /pageSize=200/.test(u)));
+  check('every call is metered at the price before it is made (meter = what the fake billed)', st.follows.spend.credits === api.billed && api.billed === 2 * 18 + 2 * 18 + 2 * 200);
+
+  // 2. ONE NEW FRESH FOLLOW -> ONE ALERT
+  api.pages.toly = [U(777, 'newproject'), ...api.pages.toly];
+  h = harness(api, st, T0 + 3600e3);
+  const before = api.log.length;
+  r = await h.run();
+  const a = h.sent[0];
+  check('one new fresh follow → exactly one alert, a FACT from SOCIAL/FOLLOW keyed to the target ID', r.sent === 1 && h.sent.length === 1 && a.source === 'SOCIAL' && a.type === 'FOLLOW' && a.kind === 'FACT' && a.dedupeKey === 'FOLLOW:777');
+  check('the message is the spec: "👀 FOLLOW · @toly followed @newproject" / "Account 3 days old · 412 followers" / bio · website', a.title === '👀 FOLLOW · @toly followed @newproject' && a.lines[0] === 'Account 3 days old · 412 followers' && a.lines[1] === 'Onchain perps for everyone · https://newproject.xyz' && a.url === 'https://x.com/newproject');
+  check('after the baseline the newest page is 20 per call and no ID refresh repeats within the day', api.log.slice(before).filter((u) => /followings/.test(u)).every((u) => /pageSize=20$/.test(u)) && !api.log.slice(before).some((u) => /batch_info/.test(u)));
+  check('rendered, it carries the follow tag and links the profile, not a "chart"', (() => { const t = formatAlert(a, { kind: 'FACT' }); return /\[👀 BUILDER FOLLOW\]/.test(t) && /<a href="https:\/\/x\.com\/newproject">profile<\/a>/.test(t) && !/conviction/.test(t); })());
+  check('and the follow is recorded as alerted', h.rows.length === 1 && h.rows[0].action === 'alerted' && h.rows[0].fresh === true);
+
+  // 3. A SECOND WATCHER FOLLOWS THE SAME ACCOUNT -> ONE EDIT, NO NEW ALERT
+  api.pages.mert = [U(777, 'newproject'), ...api.pages.mert];
+  h = harness(api, st, T0 + 3 * 3600e3);
+  r = await h.run();
+  check('second watcher within 7 days → one EDIT of the original, no new alert', r.sent === 0 && h.sent.length === 0 && h.edits.length === 1 && h.edits[0].k === 'FOLLOW:777' && h.edits[0].line === 'also followed by @mert, seen 2h later');
+  h = harness(api, st, T0 + 4 * 3600e3);
+  api.pages.mert = [api.pages.mert[1], api.pages.mert[0], ...api.pages.mert.slice(2)]; // position change only
+  r = await h.run();
+  check('a position change alone is nothing (diff by ID, never by position), and a third look at the same pair edits nothing again', r.newFollows === 0 && h.sent.length === 0 && h.edits.length === 0);
+
+  // 4. ESTABLISHED ACCOUNT -> RECORDED, NO ALERT
+  api.pages.toly = [U(888, 'bigco', { age: 2000, followers: 1200000 }), ...api.pages.toly];
+  h = harness(api, st, T0 + 5 * 3600e3);
+  r = await h.run();
+  check('a builder following an established account → recorded only, no alert, no edit', r.sent === 0 && h.edits.length === 0 && h.rows.length === 1 && h.rows[0].fresh === false && h.rows[0].action === 'recorded');
+  check('an old account with few followers IS fresh (OR, not AND); an account listing neither age nor followers is never alerted', freshness(accountFacts(U(1, 'x', { age: 2000, followers: 300 }), T0)).fresh === true
+    && freshness(accountFacts({ id: '2', screen_name: 'y' }, T0)).fresh === null);
+  // unfollow then re-follow: ignored
+  const back = api.pages.toly.find((u) => u.id === '5003');
+  api.pages.toly = api.pages.toly.filter((u) => u.id !== '5003');
+  await harness(api, st, T0 + 6 * 3600e3).run();
+  api.pages.toly = [back, ...api.pages.toly];
+  h = harness(api, st, T0 + 7 * 3600e3); r = await h.run();
+  check('unfollow then re-follow of a known account → nothing (the seen set is a union, not the last page)', r.newFollows === 0 && h.sent.length === 0);
+
+  // 5. SATURATED PAGE -> FLAGGED (after the ID confirms the handle still points at the same account)
+  api.pages.toly = [...filler(9000, 19), U(999, 'freshbuild', { age: 10, followers: 50 })].reverse();
+  h = harness(api, st, T0 + 8 * 3600e3);
+  const b5 = api.log.length;
+  r = await h.run();
+  const line5 = followStatus(st, T0 + 8 * 3600e3, { cfgResult: { ok: true, cfg }, key: 'k', price }).line;
+  check('all 20 returned IDs new → saturated: verified against the ID, logged, and shown on the heartbeat', r.saturated.includes('toly') && api.log.slice(b5).some((u) => /batch_info_by_ids\?userIds=1001$/.test(u))
+    && /⚠️ 1 saturated page\(s\) 24h: @toly — follows beyond the newest 20 may have been missed/.test(line5));
+  check('the window is not pretended complete, and the fresh follow inside it still alerts', h.sent.length === 1 && h.sent[0].title === '👀 FOLLOW · @toly followed @freshbuild');
+  // the same saturation caused by a handle that moved to another account: no alerts, re-baseline
+  const st2 = JSON.parse(JSON.stringify(st));
+  const api2 = mkApi({ ...api.pages, toly: filler(12000, 20).map((u) => ({ ...u, created_at: classic(T0 - 5 * 86400e3), followers_count: 20 })) }, ids);
+  api2.handleOf['1001'] = 'toly_new';
+  h = harness(api2, st2, T0 + 9 * 3600e3); r = await h.run();
+  check('a saturated page whose ID now answers to another handle is a moved handle: zero alerts, re-baselined under the new handle', h.sent.length === 0 && st2.follows.accounts['1001'].handle === 'toly_new' && st2.follows.accounts['1001'].seen === null);
+
+  // 6. CAP REACHED -> NO CALLS
+  const st3 = JSON.parse(JSON.stringify(st));
+  st3.follows.spend = { ...st3.follows.spend, credits: 40 * 100000 - 59 };
+  const api3 = mkApi(api.pages, ids);
+  h = harness(api3, st3, T0 + 10 * 3600e3); r = await h.run();
+  check('cap reached → no calls at all (a call that would cross the cap is never made)', r.status === 'capped' && api3.log.length === 0 && h.sent.length === 0);
+  check('and the heartbeat says so with the date it resumes', /⛔ CAP REACHED — no calls until 2026-11-01/.test(followStatus(st3, T0 + 10 * 3600e3, { cfgResult: { ok: true, cfg }, key: 'k', price }).line));
+  check('the month rolls: on 1 November the meter starts at zero and calls resume', (() => { const s = BF.spendOf(st3.follows, Date.UTC(2026, 10, 1, 0, 5)); return s.credits === 0 && s.month === '2026-11'; })());
+  const st4 = JSON.parse(JSON.stringify(st));
+  st4.follows.spend = { ...st4.follows.spend, credits: Math.round(0.8 * 40 * 100000) - 100, warned80: false };
+  h = harness(mkApi(api.pages, ids), st4, T0 + 10 * 3600e3); await h.run();
+  const w1 = h.warns.length;
+  h = harness(mkApi(api.pages, ids), st4, T0 + 11 * 3600e3); await h.run();
+  check('crossing 80% sends the operator DM exactly once per month', w1 === 1 && h.warns.length === 0 && st4.follows.spend.warned80 === true);
+
+  // 7. 401 -> SILENT + FLAG (the real response from the VPS, 2026-10-21)
+  const st5 = JSON.parse(JSON.stringify(st));
+  const seenBefore = JSON.stringify(st5.follows.accounts);
+  h = harness(mkApi(api.pages, ids, { status: 401, json: { error: 'Unauthorized', message: 'API key is invalid' } }), st5, T0 + 12 * 3600e3);
+  r = await h.run();
+  const line7 = followStatus(st5, T0 + 12 * 3600e3, { cfgResult: { ok: true, cfg }, key: 'k', price }).line;
+  check('401 key rejected → silent: no alert, no edit, no record, no baseline touched', r.status === 'failed' && h.sent.length === 0 && h.edits.length === 0 && h.rows.length === 0 && JSON.stringify(st5.follows.accounts) === seenBefore);
+  check('and flagged on the heartbeat, never a false "no new follows"', /🚨 source failing since 2026-10-22T00:00Z \(key: HTTP 401 API key is invalid\) — silent by design/.test(line7) && /not looking — a zero here is not "no new follows"/.test(line7));
+  h = harness(mkApi(api.pages, ids), st5, T0 + 13 * 3600e3); await h.run();
+  check('the next good look clears the flag', !st5.follows.failingSince && !/source failing/.test(followStatus(st5, T0 + 13 * 3600e3, { cfgResult: { ok: true, cfg }, key: 'k', price }).line));
+
+  // LINT, OFF STATES, SEND FAILURE, MEASUREMENT
+  check('lint adds "backed by", "backing", "endorsed", "invested" — a follow is a follow', ['backed by a16z', 'backing builders', 'endorsed by toly', 'toly invested'].every((t) => followProblems(t).length === 1) && followProblems('👀 FOLLOW · @toly followed @newproject').length === 0);
+  const bk = followMessage('toly', accountFacts(U(5, 'vc', { bio: 'Backed by Multicoin & friends' }), T0));
+  check('a bio that says "backed by" is withheld, not quoted (the operator is told why); the message passes the lint', !bk.lines.some((l) => /backed/i.test(l)) && bk.lines[1] === 'https://newproject.xyz' && bk.operatorLines.some((l) => /Bio withheld: it contains "Backed by"/.test(l)) && followProblems(renderMessage(bk, 'public').text).length === 0);
+  check('bio text is HTML-escaped and cut at 100 characters', (() => { const m = followMessage('toly', accountFacts(U(6, 'amp', { bio: 'A&B <beta> ' + 'x'.repeat(200), url: null }), T0)); return m.lines[1].startsWith('A&amp;B &lt;beta&gt; ') && m.lines[1].length < 130; })());
+  check("X's classic created_at format and ISO both parse to an age", accountFacts({ id: '1', created_at: 'Wed Oct 10 20:19:24 +0000 2018' }, T0).ageDays > 2900 && accountFacts({ id: '1', createdAt: '2026-10-18T12:00:00.000000Z' }, T0).ageDays === 3);
+  check('no key → OFF with zero calls; no measured price → OFF with zero calls', (await followCycle({}, { cfg, price, key: '' })).status === 'off' && (await followCycle({}, { cfg, price: null, key: 'k' })).status === 'off'
+    && /OFF \(no TWITTERAPI_KEY in \.env\)/.test(followStatus({}, T0, { cfgResult: { ok: true, cfg }, key: '' }).line) && /price unmeasured/.test(followStatus({}, T0, { cfgResult: { ok: true, cfg }, key: 'k', price: null }).line));
+  {
+    const st6 = JSON.parse(JSON.stringify(st)); const api6 = mkApi({ ...api.pages, mert: [U(4242, 'fresh2'), ...api.pages.mert] }, ids);
+    let fails = 1; const sent6 = [];
+    const run6 = (t) => followCycle(st6, { cfg, price, key: 'k', now: t, fetchJson: api6.fetchJson, sleep: async () => {}, record: () => {}, edit: async () => true, warn: async () => {},
+      dispatch: async (x) => { if (fails-- > 0) return false; sent6.push(x); return true; } });
+    await run6(T0 + 14 * 3600e3); await run6(T0 + 15 * 3600e3);
+    check('a fresh follow whose delivery failed stays "new" and is sent on the next look, once', sent6.length === 1 && sent6[0].dedupeKey === 'FOLLOW:4242');
+  }
+  {
+    let bal = 1000000; const seq = [];
+    const fake = (drift) => async (url) => {
+      const p = new URL(url).pathname; seq.push(p);
+      if (p === '/oapi/my/info') return { status: 200, json: { recharge_credits: bal } };
+      const c = p === '/twitter/user/info' ? 18 : p === '/twitter/user/batch_info_by_ids' ? 18 : /pageSize=200/.test(url) ? 200 : 60;
+      bal -= c + (drift && p === '/twitter/user/followings' && seq.filter((x) => x === p).length === 2 ? 5 : 0);
+      return { status: 200, json: { status: 'success', data: { id: '999' }, followings: [], users: [] } };
+    };
+    const m = await measurePrices({ key: 'k', fetchJson: fake(false), sleep: async () => {}, now: T0 });
+    check('price measurement: each call type by balance delta, twice, deltas equal → 60 / 200 / 18 / 18 / 0 credits', JSON.stringify(m.credits) === JSON.stringify({ followings20: 60, followings200: 200, userInfo: 18, batchPerUser: 18, myInfo: 0 }) && m.spentCredits === 2 * (18 + 60 + 200 + 18) && checkPrice(m));
+    bal = 1000000; seq.length = 0;
+    let refused = null; try { await measurePrices({ key: 'k', fetchJson: fake(true), sleep: async () => {} }); } catch (e) { refused = e.message; }
+    check('two readings that disagree are REFUSED, never averaged', /followings20: the two deltas disagree \(60 vs 65 credits\)/.test(refused ?? ''));
+    check('at the documented figure, a page of 20 is $0.0006 and a month of hourly looks at 20 accounts is ~$8.93 of the $40 cap', usd(60).toFixed(4) === '0.0006' && usd(60 * 20 * 24 * 31).toFixed(2) === '8.93');
+  }
+}
+
 console.error = origErr;
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

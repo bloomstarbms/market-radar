@@ -21,6 +21,7 @@ import { getState, save } from './store.js';
 import { formatPulse, feedWasLooking } from './pulse.js';
 import { unclassifiedStats, excludedStats } from './unclassified.js';
 import { whaleCoverage } from '../sources/chain/whale.js';
+import { followStatus } from '../sources/social/builder-follows.js';
 import { cadenceStatus } from '../sources/calendar/cadence-watch.js';
 import { unlockCoverage, sourcedFiring } from '../sources/calendar/unlocks.js';
 import { verdictCorrections } from '../sources/calendar/cadence-watch.js';
@@ -277,6 +278,8 @@ export function buildHeartbeat(now = Date.now(), deps = {}) {
       // On-chain coverage is a fact about what is being watched; a dark chain must not
       // hide behind one boot-time log line (Moralis was dark for weeks before anyone read it).
       (deps.whale ?? whaleCoverage()).line,
+      // The first PAID source: spend, cap, and whether it was looking, every heartbeat.
+      (deps.follows ?? followStatus(getState(), now)).line,
       ...(() => { const c = deps.corrections ?? verdictCorrections(); return c.line ? [c.line] : []; })(),
       (() => { const g = deps.pagination ?? checkPaginationGuards();
         const ex = g.readers.filter((r) => r.exempt);

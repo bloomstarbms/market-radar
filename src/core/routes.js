@@ -48,6 +48,7 @@ const FACT_ROUTES = {
   FUNDING: 'push at detection (fact: rate + OI, no direction)',
   CASCADE: 'push at detection (producer lands in step 7)',
   OI: 'push at detection once the market holds 7d of its own hourly OI samples; digest pool before (perp/hyperliquid.js)',
+  FOLLOW: 'push at detection, fresh accounts only; a second watcher within 7d EDITS the original (social/builder-follows.js)',
 };
 
 // Returns { ok, problems[] }. calendarEvents / tiers injectable for tests.
@@ -132,6 +133,7 @@ const EMITTERS = {
   'sources/cex/listings.js': { emits: 'LISTING (symbol-set diff)', mustCall: ['classifySymbol'] },
   'sources/cex/announcements.js': { emits: 'LISTING/PERP/SUSPENSION/DELIST (titles)', mustCall: ['classifyAnnouncementText'] },
   'sources/perp/hyperliquid.js': { emits: 'PERP (market-list diff)', mustCall: ['classifySymbol'] },
+  'sources/social/builder-follows.js': { emits: 'FOLLOW (followings diff)', mustCall: ['followProblems'] },
   'core/dispatcher.js': { emits: 'all pushes', mustCall: ['allowPriceDetector'] },
 };
 
