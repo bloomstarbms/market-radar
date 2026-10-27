@@ -1,0 +1,191 @@
+{
+ "capturedAt": "2026-10-27T09:05:16.878Z",
+ "endpoint": "https://api.twitterapi.io/twitter/user/followings?userName=solana&pageSize=20",
+ "http": 200,
+ "note": "Real response, trimmed to the fields builder-follows reads. Of the documented user fields: present id, screen_name, userName, created_at, followers_count, description, url; absent entities. All top-level keys: followings, has_next_page, next_cursor, status, msg, code. All keys on the first record: id, name, screen_name, userName, location, url, description, email, protected, verified, followers_count, following_count, friends_count, favourites_count, statuses_count, media_tweets_count, created_at, profile_banner_url, profile_image_url_https, can_dm.",
+ "status": "success",
+ "has_next_page": true,
+ "next_cursor_type": "string",
+ "followings": [
+  {
+   "id": "981790169450926080",
+   "screen_name": "iamlizendary",
+   "userName": "iamlizendary",
+   "created_at": "Thu Apr 05 07:06:31 +0000 2018",
+   "followers_count": 2872,
+   "description": "all things solana 🟣 @alchemy     prev @celo @kernel0x @magiceden",
+   "url": "https://t.co/XkkfgJ4tMu"
+  },
+  {
+   "id": "1092519108921290752",
+   "screen_name": "toritrades",
+   "userName": "toritrades",
+   "created_at": "Mon Feb 04 20:23:48 +0000 2019",
+   "followers_count": 88257,
+   "description": "💻 +10 year Trendline Trader",
+   "url": null
+  },
+  {
+   "id": "2111131025849921536",
+   "screen_name": "JoinHarmonia",
+   "userName": "JoinHarmonia",
+   "created_at": "Fri Oct 16 16:31:05 +0000 2026",
+   "followers_count": 38,
+   "description": "Tokenization meets distribution. Connecting regulated tokenized funds to Allfunds’ institutional network and @Solana. Quarterly RFP rounds. Apply now ↓",
+   "url": "https://t.co/1b69G0pkmg"
+  },
+  {
+   "id": "1621876518040526848",
+   "screen_name": "0xMeow0130",
+   "userName": "0xMeow0130",
+   "created_at": "Sat Feb 04 14:21:23 +0000 2023",
+   "followers_count": 12622,
+   "description": "I do marketing for fun",
+   "url": null
+  },
+  {
+   "id": "2070903841764061184",
+   "screen_name": "SatRush",
+   "userName": "SatRush",
+   "created_at": "Sat Jun 27 16:16:41 +0000 2026",
+   "followers_count": 7105,
+   "description": "Gamified Bitcoin Mining on Solana.",
+   "url": "https://t.co/MxR2KIWxpr"
+  },
+  {
+   "id": "2105429016983244800",
+   "screen_name": "LyberAI",
+   "userName": "LyberAI",
+   "created_at": "Wed Sep 30 22:49:08 +0000 2026",
+   "followers_count": 579,
+   "description": "Abliterated Model Router. Building tools to set you free.",
+   "url": "https://t.co/UBeKHklDTI"
+  },
+  {
+   "id": "1846544896754438145",
+   "screen_name": "Bad_Bikers_",
+   "userName": "Bad_Bikers_",
+   "created_at": "Wed Oct 16 13:34:26 +0000 2024",
+   "followers_count": 7873,
+   "description": "Building Death Race, a violent racing and shooting game,\nand Los Primos, our genesis NFT collection.\nhttps://t.co/G5fTbuo6lY\n\nhttps://t.co/G5fTbuo6lY",
+   "url": "https://t.co/B3321sdtzM"
+  },
+  {
+   "id": "2080487786294239233",
+   "screen_name": "listendotmoney",
+   "userName": "listendotmoney",
+   "created_at": "Fri Jul 24 03:00:17 +0000 2026",
+   "followers_count": 1535,
+   "description": "The first real agentic trading platform",
+   "url": "https://t.co/6krbI3Vfou"
+  },
+  {
+   "id": "1855768180561432576",
+   "screen_name": "usebido",
+   "userName": "usebido",
+   "created_at": "Mon Nov 11 00:23:14 +0000 2024",
+   "followers_count": 601,
+   "description": "building the next decacorn 🪼\n\n❌ we do not a have a token",
+   "url": "https://t.co/fIHskVYtaq"
+  },
+  {
+   "id": "1776199082719297536",
+   "screen_name": "sue_xbt",
+   "userName": "sue_xbt",
+   "created_at": "Fri Apr 05 10:44:02 +0000 2024",
+   "followers_count": 34932,
+   "description": "1st runner up Miss Universe TH⋆｡°✩\nEx @lighter_xyz \nContributor @inkonchain | @nadohq | Advisor @fun \nAll opinions are my own\nTG →https://t.co/KLEvCl6oBD...",
+   "url": "https://t.co/bOXj4eJ663"
+  },
+  {
+   "id": "1135018867833671690",
+   "screen_name": "leadinginds",
+   "userName": "leadinginds",
+   "created_at": "Sun Jun 02 03:02:40 +0000 2019",
+   "followers_count": 436,
+   "description": "The data behind tomorrow’s business headlines. \nPowered by transaction data from 70k+ companies on @tryramp",
+   "url": "https://t.co/xVA0mNU6s3"
+  },
+  {
+   "id": "1725926083826966528",
+   "screen_name": "NysaFinance",
+   "userName": "NysaFinance",
+   "created_at": "Sat Nov 18 17:17:10 +0000 2023",
+   "followers_count": 3159,
+   "description": "Open-Source Credit Market Curator on @solana\nEarn with RWA Prime Vault: https://t.co/4fvNDDVabQ",
+   "url": "https://t.co/lCAfIwV0gg"
+  },
+  {
+   "id": "1410669056206655489",
+   "screen_name": "0xanmol",
+   "userName": "0xanmol",
+   "created_at": "Thu Jul 01 18:38:22 +0000 2021",
+   "followers_count": 8943,
+   "description": "“why is the api not working” engg @JupiterExchange • https://t.co/wJCfMLqrY2",
+   "url": null
+  },
+  {
+   "id": "1676298815748337685",
+   "screen_name": "OperatorUplift",
+   "userName": "OperatorUplift",
+   "created_at": "Tue Jul 04 18:36:07 +0000 2023",
+   "followers_count": 1128,
+   "description": "Keep your word. Bet on yourself.",
+   "url": "https://t.co/olk1PmmdES"
+  },
+  {
+   "id": "2053732615115399168",
+   "screen_name": "stickets_ge",
+   "userName": "stickets_ge",
+   "created_at": "Mon May 11 07:03:17 +0000 2026",
+   "followers_count": 109,
+   "description": "",
+   "url": "https://t.co/IGBdJAae3e"
+  },
+  {
+   "id": "1445836758575304715",
+   "screen_name": "richardkingxyz",
+   "userName": "richardkingxyz",
+   "created_at": "Wed Oct 06 19:42:11 +0000 2021",
+   "followers_count": 2805,
+   "description": "building options on Solana 期权交易\n\ncofounder @leaps_finance | @orangeDAOxyz",
+   "url": "https://t.co/C7kcxlEYFl"
+  },
+  {
+   "id": "2046514352610512896",
+   "screen_name": "ownit_xyz",
+   "userName": "ownit_xyz",
+   "created_at": "Tue Apr 21 09:00:36 +0000 2026",
+   "followers_count": 599,
+   "description": "@ownit_xyz for traders who can actually prove their edge.\n\nPart of Solana @incubator.\n\nThere is no token. Join the waitlist ↓",
+   "url": "https://t.co/wi91C1Cig5"
+  },
+  {
+   "id": "2096206574226194433",
+   "screen_name": "kurate_finance",
+   "userName": "kurate_finance",
+   "created_at": "Sat Sep 05 12:00:59 +0000 2026",
+   "followers_count": 269,
+   "description": "The DeFi Layer for Euro Stablecoins 🇪🇺\n\n🏆 1st place, Superteam NL Demo Day\n\nSupported by @SuperteamNL",
+   "url": "https://t.co/yfpDmEvqGr"
+  },
+  {
+   "id": "1450335406860357635",
+   "screen_name": "Blairwassup",
+   "userName": "Blairwassup",
+   "created_at": "Tue Oct 19 05:38:15 +0000 2021",
+   "followers_count": 1268,
+   "description": "ex OKX @Wallet partnerships | @LCFLondon Alumni",
+   "url": null
+  },
+  {
+   "id": "579137159",
+   "screen_name": "gouthamciti",
+   "userName": "gouthamciti",
+   "created_at": "Sun May 13 17:36:00 +0000 2012",
+   "followers_count": 1682,
+   "description": "blr IT cell | CTO - Chief Taste Officer @relorexyz | member @superteam | GX10",
+   "url": null
+  }
+ ]
+}

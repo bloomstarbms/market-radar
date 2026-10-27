@@ -63,7 +63,7 @@ const TAG = {
   'PERPDEX:FUNDING': '⚡ FUNDING EXTREME',
   'PERPDEX:OI': '📊 OPEN INTEREST MOVE',
   // Builder follows (v0.34.0): a watched X account followed a fresh account. A fact about a follow, nothing more.
-  'SOCIAL:FOLLOW': '👀 BUILDER FOLLOW',
+  'SOCIAL:FOLLOW': '👀 BUILDER FOLLOWS',
   'SYS:HEARTBEAT': '💓 HEARTBEAT',
   'SYS:DIGEST': '📋 DAILY DIGEST',
 };
