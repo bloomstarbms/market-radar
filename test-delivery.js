@@ -3088,7 +3088,7 @@ console.log('81. forward stages of a cadence row carry "last window paid <total>
   check('MUTATION: the line + amount + verification + note on a single-wallet row is 4 public lines (cap 6) — a 7th would fail', verifiedMessage(ena, 7, '2026-11-06', null, enaMonths).lines.length === 4);
 }
 
-console.log('82. builder follows: baseline silent, one fresh follow one alert, a second watcher edits, established recorded only, saturation flagged, cap stops calls, 401 silent and flagged');
+console.log('82. builder follows: baseline silent, ONE daily message (convergence first, capped), established recorded only, overflow by cursor, cap stops calls, 401 silent and flagged');
 {
   const BF = await import('./src/sources/social/builder-follows.js');
   const { followCycle, followStatus, measurePrices, accountFacts, freshness, followMessage, checkFollowConfig, checkPrice, usd, FRESH_MAX_AGE_DAYS, FRESH_MAX_FOLLOWERS, FRESH_MAX_AGE_BASIS, FRESH_MAX_FOLLOWERS_BASIS } = BF;
@@ -3099,8 +3099,10 @@ console.log('82. builder follows: baseline silent, one fresh follow one alert, a
   const D = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], M = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const p2 = (x) => String(x).padStart(2, '0');
   const classic = (ms) => { const d = new Date(ms); return `${D[d.getUTCDay()]} ${M[d.getUTCMonth()]} ${p2(d.getUTCDate())} ${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}:${p2(d.getUTCSeconds())} +0000 ${d.getUTCFullYear()}`; };
-  // Followings user objects in the documented snake_case shape, created_at in X's classic format.
-  const U = (id, h, o = {}) => ({ id: String(id), screen_name: h, userName: h, created_at: classic(T0 - (o.age ?? 3) * 86400e3 - 3600e3),
+  // Followings user objects built FROM A REAL RECORD (fixtures/twitterapi-followings-2026-10-27.json, captured from the
+  // VPS): the real field names and formats, with id / handle / age / followers / bio / url overridden per test.
+  const REAL = JSON.parse(readFileSync('fixtures/twitterapi-followings-2026-10-27.json', 'utf8'));
+  const U = (id, h, o = {}) => ({ ...REAL.followings[0], id: String(id), screen_name: h, userName: h, created_at: classic(T0 - (o.age ?? 3) * 86400e3 - 3600e3),
     followers_count: o.followers ?? 412, description: o.bio ?? 'Onchain perps for everyone', url: o.url === undefined ? 'https://newproject.xyz' : o.url });
   const filler = (base, n) => Array.from({ length: n }, (_, i) => U(base + i, `old${base + i}`, { age: 3000, followers: 90000 }));
   const cfg = checkFollowConfig({ accounts: [{ handle: 'toly', kind: 'founder', id: '1001' }, { handle: 'mert', kind: 'founder', id: '1002' }], capUsd: 40, approved: '2026-10-21' }).cfg;
@@ -3125,10 +3127,19 @@ console.log('82. builder follows: baseline silent, one fresh follow one alert, a
     return api;
   };
   const harness = (api, state, now) => {
-    const sent = [], edits = [], rows = [], warns = [];
-    return { sent, edits, rows, warns, run: () => followCycle(state, { cfg, price, key: 'test-key', now, fetchJson: api.fetchJson, sleep: async () => {},
-      dispatch: async (a) => { sent.push(a); return true; }, edit: async (k, line) => { edits.push({ k, line }); return true; }, record: (r) => rows.push(r), warn: async (s) => warns.push(s) }) };
+    const sent = [], dms = [], rows = [], warns = [];
+    return { sent, dms, rows, warns, run: () => followCycle(state, { cfg, price, key: 'test-key', now, fetchJson: api.fetchJson, sleep: async () => {},
+      dispatch: async (a) => { sent.push(a); return true; }, dm: async (t, l) => { dms.push({ t, l }); return true; }, record: (r) => rows.push(r), warn: async (s) => warns.push(s) }) };
   };
+  const IDX = BF.buildMentionIndex(checkFollowConfig(JSON.parse(readFileSync('builder-follows.json', 'utf8'))).cfg.accounts);
+  const entry = (u, watchers, now = T0) => { const t = accountFacts(u, now); return { t, fr: freshness(t), watchers, earlier: [] }; };
+  {
+    const atCapture = Date.parse(REAL.capturedAt);
+    check('the REAL response: a followings array, a boolean has_next_page and a string cursor (the shape overflow paging reads)', Array.isArray(REAL.followings) && REAL.followings.length === 20 && typeof REAL.has_next_page === 'boolean' && REAL.next_cursor_type === 'string');
+    check('every real record reads: numeric id, a handle, an age from X\'s classic created_at, a numeric follower count', REAL.followings.every((u) => { const t = accountFacts(u, atCapture); return /^\d+$/.test(t.id) && t.handle && t.ageDays !== null && Number.isInteger(t.followers); }));
+    check('a real record renders as a daily entry and passes the lint (a listed website is the t.co link the API returns; there is no entities field)', (() => { const u = REAL.followings[0], m = followMessage(entry(u, [{ handle: 'solana', kind: 'chain' }], atCapture), { mentionIndex: IDX });
+      return followProblems([m.title, ...m.lines].join('\n')).length === 0 && m.title === `@${u.screen_name} — followed by @solana (chain)` && !('entities' in u); })());
+  }
 
   check('freshness constants are declared with a basis line (≤90 days OR ≤5,000 followers)', FRESH_MAX_AGE_DAYS === 90 && FRESH_MAX_FOLLOWERS === 5000 && /operator spec 2026-10-21/.test(FRESH_MAX_AGE_BASIS) && /operator spec 2026-10-21/.test(FRESH_MAX_FOLLOWERS_BASIS));
   check('the tier-route gate holds with FOLLOW as a fact type, and the classifiers-wired gate requires the module to call followProblems()', checkTierRoutes({ calendarEvents: [], tokens: [] }).ok && checkClassifiersWired().ok
@@ -3149,7 +3160,11 @@ console.log('82. builder follows: baseline silent, one fresh follow one alert, a
     check('the rejected and replaced handles are recorded, never watched: Drift (suspended), the @a16zcrypto squatter, @leptokurtic_, @AptosFndn, @BaseEcosystem', ['Drift', 'a16zcrypto', 'leptokurtic_', 'AptosFndn', 'BaseEcosystem', 'Arbitrum Foundation'].every((w) => JSON.stringify(raw.rejected).includes(w))
       && !c.cfg.handles.some((h) => ['DriftProtocol', 'a16zcrypto', 'leptokurtic_', 'AptosFndn', 'BaseEcosystem'].includes(h)));
   }
-  check('interval: every 3 hours; overflow cap 10 pages per account per check', BF.POLL_EVERY_MS === 3 * 3600e3 && BF.MAX_PAGES === 10);
+  check('schedule: once daily at 13:00 UTC, handle-ID refresh weekly; overflow cap 10 pages per account per check', BF.POLL_EVERY_MS === 24 * 3600e3 && BF.DAILY_AT_UTC_HOUR === 13 && BF.REFRESH_IDS_EVERY_MS === 7 * 86400e3 && BF.MAX_PAGES === 10);
+  {
+    const at = (d, hh, mm = 0) => Date.UTC(2026, 9, d, hh, mm);
+    check('the daily slot: due at 13:05 when the last look was yesterday; not at 12:59 after yesterday\'s look; not twice the same day; due after downtime', BF.dailyDue(at(27, 13, 5), at(26, 13, 1)) && !BF.dailyDue(at(27, 12, 59), at(26, 13, 1)) && !BF.dailyDue(at(27, 18), at(27, 13, 1)) && BF.dailyDue(at(29, 9), at(27, 13, 1)));
+  }
   check('a price with a zero or unstated per-call figure is not a measurement', checkPrice(price) && !checkPrice({ ...price, credits: { ...price.credits, followings20: 0 } }) && !checkPrice({ ...price, basis: '' }));
 
   // 1. BASELINE
@@ -3158,7 +3173,7 @@ console.log('82. builder follows: baseline silent, one fresh follow one alert, a
   const st = {};
   let h = harness(api, st, T0);
   let r = await h.run();
-  check('baseline: first poll per account sends nothing and records nothing', r.status === 'ok' && r.baseline.length === 2 && h.sent.length === 0 && h.rows.length === 0 && h.edits.length === 0);
+  check('baseline: first poll per account sends nothing and records nothing', r.status === 'ok' && r.baseline.length === 2 && h.sent.length === 0 && h.rows.length === 0 && h.dms.length === 0);
   check('baseline: the pinned verified IDs are used with NO handle lookup; the first look reads 200 so an older re-follow is known', st.follows.byHandle.toly === '1001' && st.follows.accounts['1001'].seen.length === 30 && !api.log.some((u) => /user\/info/.test(u)) && api.log.filter((u) => /followings/.test(u)).every((u) => /pageSize=200/.test(u)));
   check('every call is metered at the price before it is made (meter = what the fake billed)', st.follows.spend.credits === api.billed && api.billed === 2 * 18 + 2 * 200);
   {
@@ -3167,33 +3182,47 @@ console.log('82. builder follows: baseline silent, one fresh follow one alert, a
     check('an UNPINNED account is still resolved once by handle (and metered)', sU.follows.byHandle.toly === '1001' && aU.log.filter((u) => /user\/info/.test(u)).length === 1 && sU.follows.spend.credits === aU.billed);
   }
 
-  // 2. ONE NEW FRESH FOLLOW -> ONE ALERT
+  // 2. ONE NEW FRESH FOLLOW -> ONE DAILY MESSAGE WITH ONE ENTRY
   api.pages.toly = [U(777, 'newproject'), ...api.pages.toly];
-  h = harness(api, st, T0 + 3600e3);
+  h = harness(api, st, T0 + 86400e3);
   const before = api.log.length;
   r = await h.run();
   const a = h.sent[0];
-  check('one new fresh follow → exactly one alert, a FACT from SOCIAL/FOLLOW keyed to the target ID', r.sent === 1 && h.sent.length === 1 && a.source === 'SOCIAL' && a.type === 'FOLLOW' && a.kind === 'FACT' && a.dedupeKey === 'FOLLOW:777');
-  check('the message is the spec, with the watcher\'s KIND: "👀 FOLLOW · @toly (founder) followed @newproject" / "Account 3 days old · 412 followers" / bio · website', a.title === '👀 FOLLOW · @toly (founder) followed @newproject' && a.lines[0] === 'Account 3 days old · 412 followers' && a.lines[1] === 'Onchain perps for everyone · https://newproject.xyz' && a.url === 'https://x.com/newproject');
-  check('after the baseline the newest page is 20 per call and no ID refresh repeats within the day', api.log.slice(before).filter((u) => /followings/.test(u)).every((u) => /pageSize=20$/.test(u)) && !api.log.slice(before).some((u) => /batch_info/.test(u)));
-  check('rendered, it carries the follow tag and links the profile, not a "chart"', (() => { const t = formatAlert(a, { kind: 'FACT' }); return /\[👀 BUILDER FOLLOW\]/.test(t) && /<a href="https:\/\/x\.com\/newproject">profile<\/a>/.test(t) && !/conviction/.test(t); })());
-  check('and the follow is recorded as alerted', h.rows.length === 1 && h.rows[0].action === 'alerted' && h.rows[0].fresh === true);
+  check('one new fresh follow → ONE daily message, a FACT from SOCIAL/FOLLOW keyed to the day, with one entry', r.sent === 1 && h.sent.length === 1 && a.source === 'SOCIAL' && a.type === 'FOLLOW' && a.kind === 'FACT' && a.dedupeKey === 'FOLLOWS:2026-10-22' && r.listed === 1);
+  check('the entry, facts only: "@newproject — followed by @toly (founder)" / "Account 4 days old · 412 followers" / bio · website', a.title === '22 Oct · 1 new account followed' && a.lines[0] === '<b>@newproject — followed by @toly (founder)</b>' && a.lines[1] === 'Account 4 days old · 412 followers' && a.lines[2] === 'Onchain perps for everyone · https://newproject.xyz' && a.lines.length === 3);
+  check('after the baseline the newest page is 20 per call, and no handle-ID refresh repeats within the week', api.log.slice(before).filter((u) => /followings/.test(u)).every((u) => /pageSize=20$/.test(u)) && !api.log.slice(before).some((u) => /batch_info/.test(u)));
+  check('rendered, it carries the follow tag, no "chart" link and no conviction', (() => { const t = formatAlert(a, { kind: 'FACT' }); return /\[👀 BUILDER FOLLOWS\]<\/b> 22 Oct · 1 new account followed/.test(t) && !/chart<\/a>/.test(t) && !/conviction/.test(t); })());
+  check('and the follow is recorded as queued for that message', h.rows.length === 1 && h.rows[0].action === 'queued for the daily message' && h.rows[0].fresh === true);
 
-  // 3. A SECOND WATCHER FOLLOWS THE SAME ACCOUNT -> ONE EDIT, NO NEW ALERT
+  // 3. A SECOND WATCHER THE NEXT DAY -> A CONVERGENCE ENTRY, FIRST IN THAT DAY'S MESSAGE
   api.pages.mert = [U(777, 'newproject'), ...api.pages.mert];
-  h = harness(api, st, T0 + 3 * 3600e3);
+  api.pages.toly = [U(778, 'solo'), ...api.pages.toly];
+  h = harness(api, st, T0 + 2 * 86400e3);
   r = await h.run();
-  check('second watcher within 7 days → one EDIT of the original, no new alert', r.sent === 0 && h.sent.length === 0 && h.edits.length === 1 && h.edits[0].k === 'FOLLOW:777' && h.edits[0].line === 'also followed by @mert (founder), seen 2h later');
-  h = harness(api, st, T0 + 4 * 3600e3);
+  {
+    const L = h.sent[0]?.lines ?? [];
+    check('a second watcher within 7 days → a CONVERGENCE entry listed first, naming the earlier watcher with its date; the single follow after it', h.sent.length === 1 && L[0] === '<b>@newproject — followed by @mert (founder), @toly (founder, 22 Oct)</b>'
+      && L.indexOf('<b>@solo — followed by @toly (founder)</b>') > 0 && h.sent[0].title === '23 Oct · 2 new accounts followed · 1 by more than one watched account');
+  }
+  {
+    const stC = {}, apiC = mkApi({ toly: filler(5000, 30), mert: filler(6000, 30) }, ids);
+    await harness(apiC, stC, T0).run();
+    apiC.pages.toly = [U(900, 'single1'), U(901, 'both'), ...apiC.pages.toly];
+    apiC.pages.mert = [U(901, 'both'), ...apiC.pages.mert];
+    const hC = harness(apiC, stC, T0 + 86400e3); await hC.run();
+    const L = hC.sent[0]?.lines ?? [];
+    check('two watchers the SAME day → one entry naming both, listed before the single follows', hC.sent.length === 1 && L[0] === '<b>@both — followed by @toly (founder), @mert (founder)</b>' && L.indexOf('<b>@single1 — followed by @toly (founder)</b>') > 0);
+  }
+  h = harness(api, st, T0 + 3 * 86400e3);
   api.pages.mert = [api.pages.mert[1], api.pages.mert[0], ...api.pages.mert.slice(2)]; // position change only
   r = await h.run();
-  check('a position change alone is nothing (diff by ID, never by position), and a third look at the same pair edits nothing again', r.newFollows === 0 && h.sent.length === 0 && h.edits.length === 0);
+  check('a position change alone is nothing (diff by ID, never by position): no new follows, no message', r.newFollows === 0 && h.sent.length === 0);
 
   // 4. ESTABLISHED ACCOUNT -> RECORDED, NO ALERT
   api.pages.toly = [U(888, 'bigco', { age: 2000, followers: 1200000 }), ...api.pages.toly];
   h = harness(api, st, T0 + 5 * 3600e3);
   r = await h.run();
-  check('a builder following an established account → recorded only, no alert, no edit', r.sent === 0 && h.edits.length === 0 && h.rows.length === 1 && h.rows[0].fresh === false && h.rows[0].action === 'recorded');
+  check('a builder following an established account → recorded only; a day with nothing fresh sends NO message', r.sent === 0 && h.sent.length === 0 && h.rows.length === 1 && h.rows[0].fresh === false && h.rows[0].action === 'recorded');
   check('an old account with few followers IS fresh (OR, not AND); an account listing neither age nor followers is never alerted', freshness(accountFacts(U(1, 'x', { age: 2000, followers: 300 }), T0)).fresh === true
     && freshness(accountFacts({ id: '2', screen_name: 'y' }, T0)).fresh === null);
   // unfollow then re-follow: ignored
@@ -3216,15 +3245,40 @@ console.log('82. builder follows: baseline silent, one fresh follow one alert, a
     const st300 = JSON.parse(JSON.stringify(st)), api300 = mkApi({ ...api.pages, toly: [...mk(300, 50000), ...api.pages.toly] }, ids);
     const h300 = harness(api300, st300, T0 + 8 * 3600e3), r300 = await h300.run();
     check('300 new follows → the 10-page cap is hit: 10 pages, 200 recorded, saturation flagged and on the heartbeat', tolyLog(api300).length === 10 && h300.rows.filter((x) => x.watcher === 'toly').length === 200 && r300.saturated.includes('toly')
-      && /⚠️ 1 saturated window\(s\) 24h, 10-page cap hit: @toly — follows beyond 200 may have been missed/.test(followStatus(st300, T0 + 8 * 3600e3, { cfgResult: { ok: true, cfg }, key: 'k', price }).line));
+      && /⚠️ 1 saturated window\(s\) in the last look, 10-page cap hit: @toly — follows beyond 200 may have been missed/.test(followStatus(st300, T0 + 8 * 3600e3, { cfgResult: { ok: true, cfg }, key: 'k', price }).line));
     const stF = JSON.parse(JSON.stringify(st)), apiF = mkApi({ ...api.pages, toly: [...mk(45, 60000), ...api.pages.toly] }, ids);
     const realF = apiF.fetchJson; apiF.fetchJson = async (url) => (/cursor=20$/.test(url) ? { status: 502, json: null } : realF(url));
     const hF = harness(apiF, stF, T0 + 8 * 3600e3), rF = await hF.run();
     check('a page that fails mid-overflow is an INCOMPLETE window, flagged as such and not as saturation; the 20 already read are kept', rF.incomplete.includes('toly') && rF.saturated.length === 0 && hF.rows.filter((x) => x.watcher === 'toly').length === 20
-      && /⚠️ 1 incomplete window\(s\) 24h: @toly \(page 2 failed \(http\)\)/.test(followStatus(stF, T0 + 8 * 3600e3, { cfgResult: { ok: true, cfg }, key: 'k', price }).line));
+      && /⚠️ 1 incomplete window\(s\) in the last look: @toly \(page 2 failed \(http\)\)/.test(followStatus(stF, T0 + 8 * 3600e3, { cfgResult: { ok: true, cfg }, key: 'k', price }).line));
     const stE = JSON.parse(JSON.stringify(st)), apiE = mkApi({ ...api.pages, toly: mk(20, 70000) }, ids);
     const rE = await harness(apiE, stE, T0 + 8 * 3600e3).run();
     check('a full page of new IDs where the list ENDS (no next page) reads one page and flags nothing', tolyLog(apiE).length === 1 && rE.saturated.length === 0 && rE.incomplete.length === 0);
+  }
+  {
+    // REAL BASELINE SHAPE (2026-10-22): @ethereum follows nobody, so its baseline is empty.
+    const stE = {}; const apiE = mkApi({ toly: filler(30000, 20), mert: [] }, ids);
+    await harness(apiE, stE, T0).run();
+    apiE.pages.mert = [U(31337, 'firstfollow', { age: 5, followers: 80 })];
+    const hE = harness(apiE, stE, T0 + 86400e3); const bE = apiE.log.length;
+    const rE = await hE.run();
+    check('an account with an EMPTY baseline that makes one follow: listed once, not "saturated", no verification call', stE.follows.accounts['1002'].seen.length === 1 && rE.listed === 1 && rE.saturated.length === 0
+      && !apiE.log.slice(bE).some((u) => /batch_info/.test(u)) && (stE.follows.saturated ?? []).length === 0);
+  }
+  {
+    // DAILY MESSAGE CAPS: six lines per entry, a total length cap, "+N more" in the channel, the full list to the DM.
+    const many = Array.from({ length: 60 }, (_, i) => followMessage(entry(U(80000 + i, `proj${i}`, { bio: 'x'.repeat(80) + ' built on Solana', url: 'https://t.co/abcdefghij' }), [{ handle: 'toly', kind: 'founder' }]), { mentionIndex: IDX }));
+    const d = BF.digestMessage(T0, many), chunks = BF.fullListChunks(T0, d);
+    const channel = formatAlert({ source: 'SOCIAL', type: 'FOLLOW', title: d.title, lines: d.lines }, { kind: 'FACT' });
+    check('60 entries: the channel message stays under the cap (and Telegram\'s 4,096) and ends "+N more"; every entry ≤ 6 lines', d.more > 0 && d.shown + d.more === 60 && d.lines.at(-1) === `+${d.more} more` && channel.length < 4096
+      && d.title.length + d.lines.reduce((x, l) => x + l.length + 3, 0) <= BF.DIGEST_MAX_CHARS && many.every((m) => BF.entryLines(m).length <= BF.ENTRY_MAX_LINES));
+    check('the six-line cap is enforced, not assumed', BF.entryLines({ title: 't', lines: Array(9).fill('x') }).length === 6);
+    check('the operator DM gets the FULL list: every one of the 60 entries, in chunks under the cap', many.every((m, i) => chunks.some((c) => c.lines.includes(`<b>@proj${i} — followed by @toly (founder)</b>`)))
+      && chunks.every((c) => c.title.length + c.lines.reduce((x, l) => x + l.length + 3, 0) <= BF.DIGEST_MAX_CHARS) && /full list · 21 Oct \(1\/\d\)/.test(chunks[0].title));
+    const stM = JSON.parse(JSON.stringify(st)), apiM = mkApi({ ...api.pages, toly: [...Array.from({ length: 60 }, (_, i) => U(81000 + i, `fresh${i}`, { age: 9 })), ...api.pages.toly] }, ids);
+    const hM = harness(apiM, stM, T0 + 5 * 86400e3), rM = await hM.run();
+    check('end to end, 60 fresh follows in a day: ONE channel message with "+N more", and the full list sent to the DM', hM.sent.length === 1 && /^\+\d+ more$/.test(hM.sent[0].lines.at(-1)) && rM.listed === 60 && rM.more > 0 && hM.dms.length >= 1
+      && Array.from({ length: 60 }).every((_, i) => hM.dms.some((x) => x.l.includes(`<b>@fresh${i} — followed by @toly (founder)</b>`))) && followProblems([hM.sent[0].title, ...hM.sent[0].lines].join('\n')).length === 0);
   }
   // the same saturation caused by a handle that moved to another account: no alerts, re-baseline
   const st2 = JSON.parse(JSON.stringify(st));
@@ -3254,7 +3308,7 @@ console.log('82. builder follows: baseline silent, one fresh follow one alert, a
   h = harness(mkApi(api.pages, ids, { status: 401, json: { error: 'Unauthorized', message: 'API key is invalid' } }), st5, T0 + 12 * 3600e3);
   r = await h.run();
   const line7 = followStatus(st5, T0 + 12 * 3600e3, { cfgResult: { ok: true, cfg }, key: 'k', price }).line;
-  check('401 key rejected → silent: no alert, no edit, no record, no baseline touched', r.status === 'failed' && h.sent.length === 0 && h.edits.length === 0 && h.rows.length === 0 && JSON.stringify(st5.follows.accounts) === seenBefore);
+  check('401 key rejected → silent: no message, no record, no baseline touched', r.status === 'failed' && h.sent.length === 0 && h.dms.length === 0 && h.rows.length === 0 && JSON.stringify(st5.follows.accounts) === seenBefore);
   check('and flagged on the heartbeat, never a false "no new follows"', /🚨 source failing since 2026-10-22T00:00Z \(key: HTTP 401 API key is invalid\) — silent by design/.test(line7) && /not looking — a zero here is not "no new follows"/.test(line7));
   h = harness(mkApi(api.pages, ids), st5, T0 + 13 * 3600e3); await h.run();
   check('the next good look clears the flag', !st5.follows.failingSince && !/source failing/.test(followStatus(st5, T0 + 13 * 3600e3, { cfgResult: { ok: true, cfg }, key: 'k', price }).line));
@@ -3263,34 +3317,37 @@ console.log('82. builder follows: baseline silent, one fresh follow one alert, a
   {
     const idx = BF.buildMentionIndex(checkFollowConfig(JSON.parse(readFileSync('builder-follows.json', 'utf8'))).cfg.accounts);
     const ff = (bio) => accountFacts(U(9100, 'newthing', { bio, url: null }), T0);
-    const m1 = followMessage('solana', ff('Perps built on Solana, launching on Pump.fun and @base'), undefined, { kind: 'chain', mentionIndex: idx });
-    check('KIND renders as a fact about the watcher: "👀 FOLLOW · @solana (chain) followed @newthing"', m1.title === '👀 FOLLOW · @solana (chain) followed @newthing');
+    const E = (bio) => { const t = ff(bio); return { t, fr: freshness(t), watchers: [{ handle: 'solana', kind: 'chain' }], earlier: [] }; };
+    const m1 = followMessage(E('Perps built on Solana, launching on Pump.fun and @base'), { mentionIndex: idx });
+    check('KIND renders as a fact about the watcher: "@newthing — followed by @solana (chain)"', m1.title === '@newthing — followed by @solana (chain)');
     check('BIO EVIDENCE is quoted in the bio\'s own words: "Bio mentions: Solana, Pump.fun, @base"', m1.lines.at(-1) === 'Bio mentions: Solana, Pump.fun, @base' && followProblems(renderMessage(m1, 'public').text).length === 0);
-    const m2 = followMessage('solana', ff('Home base for traders. Drift into the sky with Phantom energy.'), undefined, { kind: 'chain', mentionIndex: idx });
+    const m2 = followMessage(E('Home base for traders. Drift into the sky with Phantom energy.'), { mentionIndex: idx });
     check('no mention adds no line — and ordinary words never count as a chain or project (base, sky, Phantom, Drift)', !m2.lines.some((l) => /^Bio mentions/.test(l)));
-    const m3 = followMessage('solana', ff('Strategic partnership with Solana'), undefined, { kind: 'chain', mentionIndex: idx });
-    check('a bio that trips the lint ("partnership") is withheld AND its mentions with it', !m3.lines.some((l) => /partnership|Bio mentions/.test(l)) && m3.operatorLines.some((l) => /Bio withheld, and any bio mentions with it: it contains "partnership"/.test(l)));
+    const m3 = followMessage(E('Strategic partnership with Solana'), { mentionIndex: idx });
+    check('a bio that trips the lint ("partnership") is withheld AND its mentions with it', !m3.lines.some((l) => /partnership|Bio mentions/.test(l)) && m3.operatorLines.some((l) => /bio withheld, and any bio mentions with it: it contains "partnership"/.test(l)));
     check('"partnership" in a TEMPLATE fails the lint; so do "partner", "in the ecosystem", "backed"', followProblems('👀 FOLLOW · @solana (chain) followed @x · a partnership').length === 1
       && ['a partner', 'partners', 'new in the ecosystem', 'backed'].every((t) => followProblems(t).length === 1) && followProblems(renderMessage(m1, 'public').text).length === 0);
     const daily = (vals) => Object.fromEntries(vals.map((v, i) => [BF.dayKey(T0 - (vals.length - i) * 86400e3), { alerted: v }]));
-    check('PRE-REGISTERED: 11-16 alerts/day expected; over 15 on 3 consecutive full days trips the review (tighten the bar, never cap)', BF.EXPECTED_ALERTS_PER_DAY.low === 11 && BF.EXPECTED_ALERTS_PER_DAY.high === 16
+    check('RE-REGISTERED as follows per day in one message: 27-38 new, 11-16 listed; over 15 listed on 3 consecutive full days trips the review (tighten the bar, never cap)', BF.EXPECTED_FOLLOWS_PER_DAY.newLow === 27 && BF.EXPECTED_FOLLOWS_PER_DAY.newHigh === 38 && BF.EXPECTED_FOLLOWS_PER_DAY.listedLow === 11 && BF.EXPECTED_FOLLOWS_PER_DAY.listedHigh === 16
       && BF.volumeReview(daily([16, 18, 20]), T0).tripped && !BF.volumeReview(daily([16, 15, 20]), T0).tripped && !BF.volumeReview(daily([20, 20]), T0).tripped
-      && /alerts over 15\/day for 3 days .* pre-registered rule: tighten the fresh-account bar \(e\.g\. age ≤30 days\), never cap alerts/.test(followStatus({ follows: { daily: daily([16, 18, 20]) } }, T0, { cfgResult: { ok: true, cfg }, key: 'k', price: null }).line));
+      && /listed entries over 15\/day for 3 days .* pre-registered rule: tighten the fresh-account bar \(e\.g\. age ≤30 days\), never cap alerts/.test(followStatus({ follows: { daily: daily([16, 18, 20]) } }, T0, { cfgResult: { ok: true, cfg }, key: 'k', price: null }).line));
   }
   check('lint adds "backed by", "backing", "endorsed", "invested" — a follow is a follow', ['backed by a16z', 'backing builders', 'endorsed by toly', 'toly invested'].every((t) => followProblems(t).length === 1) && followProblems('👀 FOLLOW · @toly followed @newproject').length === 0);
-  const bk = followMessage('toly', accountFacts(U(5, 'vc', { bio: 'Backed by Multicoin & friends' }), T0));
-  check('a bio that says "backed by" is withheld, not quoted (the operator is told why); the message passes the lint', !bk.lines.some((l) => /backed/i.test(l)) && bk.lines[1] === 'https://newproject.xyz' && bk.operatorLines.some((l) => /Bio withheld, and any bio mentions with it: it contains "Backed by"/.test(l)) && followProblems(renderMessage(bk, 'public').text).length === 0);
-  check('bio text is HTML-escaped and cut at 100 characters', (() => { const m = followMessage('toly', accountFacts(U(6, 'amp', { bio: 'A&B <beta> ' + 'x'.repeat(200), url: null }), T0)); return m.lines[1].startsWith('A&amp;B &lt;beta&gt; ') && m.lines[1].length < 130; })());
+  const bk = followMessage(entry(U(5, 'vc', { bio: 'Backed by Multicoin & friends' }), [{ handle: 'toly', kind: 'founder' }]));
+  check('a bio that says "backed by" is withheld, not quoted (the operator is told why); the entry passes the lint', !bk.lines.some((l) => /backed/i.test(l)) && bk.lines[1] === 'https://newproject.xyz' && bk.operatorLines.some((l) => /bio withheld, and any bio mentions with it: it contains "Backed by"/.test(l)) && followProblems([bk.title, ...bk.lines].join('\n')).length === 0);
+  check('bio text is HTML-escaped and cut at 100 characters', (() => { const m = followMessage(entry(U(6, 'amp', { bio: 'A&B <beta> ' + 'x'.repeat(200), url: null }), [{ handle: 'toly', kind: 'founder' }])); return m.lines[1].startsWith('A&amp;B &lt;beta&gt; ') && m.lines[1].length < 130; })());
   check("X's classic created_at format and ISO both parse to an age", accountFacts({ id: '1', created_at: 'Wed Oct 10 20:19:24 +0000 2018' }, T0).ageDays > 2900 && accountFacts({ id: '1', createdAt: '2026-10-18T12:00:00.000000Z' }, T0).ageDays === 3);
   check('no key → OFF with zero calls; a cycle handed no price refuses, and the poller always hands it one (priceInEffect is never null)', (await followCycle({}, { cfg, price, key: '' })).status === 'off' && (await followCycle({}, { cfg, price: null, key: 'k' })).status === 'off' && BF.priceInEffect(null) === BF.PUBLISHED_PRICE
     && /OFF \(no TWITTERAPI_KEY in \.env\)/.test(followStatus({}, T0, { cfgResult: { ok: true, cfg }, key: '' }).line));
   {
     const st6 = JSON.parse(JSON.stringify(st)); const api6 = mkApi({ ...api.pages, mert: [U(4242, 'fresh2'), ...api.pages.mert] }, ids);
     let fails = 1; const sent6 = [];
-    const run6 = (t) => followCycle(st6, { cfg, price, key: 'k', now: t, fetchJson: api6.fetchJson, sleep: async () => {}, record: () => {}, edit: async () => true, warn: async () => {},
-      dispatch: async (x) => { if (fails-- > 0) return false; sent6.push(x); return true; } });
-    await run6(T0 + 14 * 3600e3); await run6(T0 + 15 * 3600e3);
-    check('a fresh follow whose delivery failed stays "new" and is sent on the next look, once', sent6.length === 1 && sent6[0].dedupeKey === 'FOLLOW:4242');
+    const deps6 = { dispatch: async (x) => { if (fails-- > 0) return false; sent6.push(x); return true; } };
+    const r6 = await followCycle(st6, { cfg, price, key: 'k', now: T0 + 6 * 86400e3, fetchJson: api6.fetchJson, sleep: async () => {}, record: () => {}, warn: async () => {}, ...deps6 });
+    const pendingLine = followStatus(st6, T0 + 6 * 86400e3, { cfgResult: { ok: true, cfg }, key: 'k', price }).line;
+    const d6 = await BF.deliverDigest(st6, deps6), d6b = await BF.deliverDigest(st6, deps6);
+    check('an undelivered daily message stays PENDING (flagged on the heartbeat) and is delivered on retry, exactly once', r6.sent === 0 && /daily message is not delivered yet \(1 attempt\(s\)\)/.test(pendingLine)
+      && d6.status === 'sent' && d6b.status === 'none' && sent6.length === 1 && sent6[0].lines[0] === '<b>@fresh2 — followed by @mert (founder)</b>' && !st6.follows.pendingDigest && st6.follows.lastDigest.total === 1);
   }
   {
     // ZERO PRICE ON DISK AT BOOT: the v0.34.0 file, byte-for-byte in shape. It is "no price", never "free".
@@ -3358,7 +3415,7 @@ console.log('82. builder follows: baseline silent, one fresh follow one alert, a
     const lb4 = mkBiller(); lb4.spend(31000);
     const r9 = await BF.reconcile(st9, { key: 'k', price: P, now: T0 + 86400e3, fetchJson: lb4.fetchJson, sleep: lb4.sleep, clock: lb4.clock, dm: async () => { throw new Error('no DM expected'); }, writePrice: () => { throw new Error('no write expected'); } });
     check('within the band: no DM, no new price, and the published price reads "reconciled"', r9.status === 'agree' && /price 60 credits\/call \(published, reconciled \+3% on 2026-10-22\)/.test(followStatus(st9, T0 + 86400e3, { cfgResult: { ok: true, cfg }, key: 'k', price: null }).line));
-    check('at the published figure a page of 20 is $0.0006; 76 accounts looked at every 3 hours is ~$11.31 a 31-day month of the $40 cap', usd(60).toFixed(4) === '0.0006' && usd(60 * 76 * 8 * 31).toFixed(2) === '11.31');
+    check('at the published figure a page of 20 is $0.0006; 76 accounts once a day is ~$1.41 a 31-day month of the $40 cap', usd(60).toFixed(4) === '0.0006' && usd(60 * 76 * 31).toFixed(2) === '1.41');
   }
 }
 

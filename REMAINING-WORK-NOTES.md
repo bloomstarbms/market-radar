@@ -4764,3 +4764,56 @@ PROJECTED SPEND at 3 h (published price; x0.899 for the reconciled figure):
   total                                           ~1,325,848          ~$13.26 (~$11.92 reconciled)
 Live has shown no overflow in 4.5 days at hourly windows. Worst case (every look hits 10
 pages) is 10x the base and is stopped by the $40 cap, with the 80% DM first.
+
+## 2026-10-27 — BUILDER FOLLOWS GOES DAILY: 76 ACCOUNTS, ONE MESSAGE A DAY (operator: ship)
+
+Operator decisions, 2026-10-27, on top of the expansion entry above:
+1. Interval once daily (13:00 UTC, the fixed slot chosen here: 14:00 WAT, 09:00 New York);
+   handle-ID refresh weekly.
+2. Delivery: ONE daily message listing the day's fresh follows. Convergence first
+   ("@x — followed by @solana (chain), @paradigm (fund)"; a watcher from an earlier day
+   carries its date: "@toly (founder, 22 Oct)"), then single follows. Six-line cap per
+   entry, 3,500-character cap on the message; on overflow "+N more" in the channel and the
+   full list, in chunks, to the operator DM. Facts only; the lint is unchanged and runs
+   per entry and on the whole message. The per-follow alerts and the edit-the-original
+   convergence path are gone. An undelivered message is kept and retried on the 5-minute
+   tick for up to 20 h; a follow is never re-detected to be re-sent.
+3. Kyle Samani: kind founder (it already was; his bio says he has left Multicoin).
+4. Spend, on the operator's dashboard figures: $10 paid 2026-10-22, both bonuses used,
+   993,410 credits left, burn 18,084 credits/day.
+5. The 23 Oct report task's fixture-82 edit: the task first ran at 08:32 UTC today, stalled
+   at a permission prompt without changing main, and was stopped so it could not deploy
+   main in parallel with this ship. Its fixture work was done here instead: one real
+   followings response (@solana, pageSize 20, ~54 credits outside the meter, captured
+   09:05 UTC) is fixtures/twitterapi-followings-2026-10-27.json, and fixture 82's user
+   records are now built from it. The real records carry the documented field names
+   except entities: a listed website arrives as the t.co link in `url`.
+
+SPEND PROJECTION at the observed rate, daily, 76 accounts. The 18,084/day burn was made
+by the hourly 20-account schedule: 480 followings calls + one 20-user batch (360) a day,
+so (18,084 - 360) / 480 = 36.9 credits per followings call.
+  76 accounts x 1 look x 36.9 credits x 31 days       ~87,000 credits   $0.87
+  weekly handle-ID refresh, 76 x 18 / 7 x 31           ~6,000           $0.06
+  overflow allowance, 10 extra pages/day x 36.9 x 31  ~11,400           $0.11
+  one-time: 56 first reads of 200 (x 36.9/60)          ~6,900           $0.07
+  total                                              ~111,000 credits   ~$1.11 a month
+At that rate 993,410 credits last about 9 months.
+CAVEAT, recorded, not acted on: 18,084 is exactly the total drawn since the top-up
+(120,000 bonus + 6,590 purchased = 126,590 credits) divided by 7 calendar days, while the
+module ran ~4.6 of them; its own reconciliation measured 26,208 credits for 25-26 Oct
+(~54 per followings call). On that rate the same projection is ~$1.60 a month. Both are
+far under the $40 cap; the meter still charges the published price (60) until the daily
+reconciliation adopts the observed one.
+
+RE-REGISTERED (before the 76-account daily schedule went live) as FOLLOWS PER DAY in one
+message: 27-38 new follows/day, of which 11-16 fresh accounts are listed. Same basis as
+the expansion entry (lifetime rate 26.6/day for the 76, live 1.44x lifetime, fresh share
+42%). Rule unchanged: over 15 LISTED entries on each of 3 consecutive full UTC days ->
+tighten the fresh-account bar (e.g. age <= 30 days), never cap entries.
+
+Fixture 82 now: the real-response shape and records; the daily slot; one message with one
+entry; convergence across days (dated) and on the same day, listed first; a day with
+nothing fresh sends nothing; 60 entries stay under the cap with "+N more" and every entry
+reaches the DM's full list; the six-line cap enforced; an undelivered message retried
+once; the empty-baseline (@ethereum) case restored (it had been dropped by the overflow
+rewrite on the branch).
