@@ -1,27 +1,708 @@
 {
-  "_about": "Builder follows watch list (v0.34.0). Handles are resolved to numeric IDs once and stored in data/state.json; the handle is refreshed from the ID daily. Edit the list here; capUsd is the operator-approved monthly cap for the paid source.",
+  "_about": "Builder follows watch list. Each account is pinned to the numeric ID verified on 2026-10-23/27 (badge, followers, affiliation label, official site); the handle is refreshed from the ID daily. kind is shown as a fact about the watcher. bioNames are exact-case names quoted when a new account's bio uses them; @handle mentions always match for chain/ecosystem/project accounts. capUsd is the operator-approved monthly cap for the paid source.",
   "approved": "2026-10-21",
   "capUsd": 40,
-  "handles": [
-    "solana",
-    "base",
-    "HyperliquidX",
-    "RobinhoodApp",
-    "ethereum",
-    "arbitrum",
-    "inkonchain",
-    "JupiterExchange",
-    "phantom",
-    "coinbase",
-    "toly",
-    "rajgokal",
-    "jessepollak",
-    "VitalikButerin",
-    "chameleon_jeff",
-    "brian_armstrong",
-    "Pumpfun",
-    "mert",
-    "MeteoraAG",
-    "helius"
+  "verifiedAt": "2026-10-27",
+  "rejected": [
+    {
+      "wanted": "Arbitrum Foundation",
+      "why": "no account found (@ArbitrumFdn, @arbitrum_fdn, @arbitrumfoundation not found; @ArbFoundation is an unrelated reef foundation)"
+    },
+    {
+      "wanted": "Aptos Foundation",
+      "why": "@AptosFndn is a 0-follower personal account; @AptosFoundation says it moved to @Aptos, already watched as the chain"
+    },
+    {
+      "wanted": "Base ecosystem",
+      "why": "@BaseEcosystem is unrelated (28 followers); @buildonbase (affiliation Base) is used"
+    },
+    {
+      "wanted": "Drift",
+      "why": "@DriftProtocol, the handle drift.trade links, is SUSPENDED; @DriftTrade suspended; @drift is an unrelated account"
+    },
+    {
+      "wanted": "a16z crypto as @a16zcrypto",
+      "why": "a 2026 squatter (\"TK\", 0 followers); the firm's site links @a16zfrontier, used instead"
+    },
+    {
+      "wanted": "Guy Young as @leptokurtic_",
+      "why": "896 followers, no check, no bio; @gdog97_ (\"G | Ethena\", affiliation Ethena, followed by @ethena) used instead"
+    }
+  ],
+  "accounts": [
+    {
+      "handle": "solana",
+      "kind": "chain",
+      "id": "951329744804392960",
+      "name": "Solana",
+      "bioNames": [
+        "Solana"
+      ],
+      "evidence": "Business check · 4,225,694 followers · since 2018-01 · operator list"
+    },
+    {
+      "handle": "base",
+      "kind": "chain",
+      "id": "1628067904083181570",
+      "name": "Base",
+      "bioNames": [],
+      "evidence": "Business check · 1,551,046 followers · since 2023-02 · operator list; base.org links @base"
+    },
+    {
+      "handle": "HyperliquidX",
+      "kind": "chain",
+      "id": "1527020295059648513",
+      "name": "Hyperliquid",
+      "bioNames": [
+        "Hyperliquid"
+      ],
+      "evidence": "Business check · 431,379 followers · since 2022-05 · operator list; Hyperliquid is an L1 as well as a venue: kind chain"
+    },
+    {
+      "handle": "RobinhoodApp",
+      "kind": "exchange",
+      "id": "1265037073",
+      "name": "Robinhood",
+      "bioNames": [],
+      "evidence": "Business check · 1,393,051 followers · since 2013-03 · operator list"
+    },
+    {
+      "handle": "ethereum",
+      "kind": "chain",
+      "id": "2312333412",
+      "name": "Ethereum",
+      "bioNames": [
+        "Ethereum"
+      ],
+      "evidence": "blue check · 4,551,123 followers · since 2014-01 · operator list"
+    },
+    {
+      "handle": "arbitrum",
+      "kind": "chain",
+      "id": "1332033418088099843",
+      "name": "Arbitrum",
+      "bioNames": [
+        "Arbitrum"
+      ],
+      "evidence": "Business check · 1,140,599 followers · since 2020-11 · operator list"
+    },
+    {
+      "handle": "inkonchain",
+      "kind": "chain",
+      "id": "1770294882185416704",
+      "name": "Ink",
+      "bioNames": [],
+      "evidence": "Business check · 137,917 followers · since 2024-03 · operator list"
+    },
+    {
+      "handle": "JupiterExchange",
+      "kind": "project",
+      "id": "1446489618208067586",
+      "name": "Jupiter",
+      "bioNames": [],
+      "evidence": "Business check · 615,608 followers · since 2021-10 · operator list"
+    },
+    {
+      "handle": "phantom",
+      "kind": "project",
+      "id": "1379053041995890695",
+      "name": "Phantom",
+      "bioNames": [],
+      "evidence": "Business check · 955,397 followers · since 2021-04 · operator list"
+    },
+    {
+      "handle": "coinbase",
+      "kind": "exchange",
+      "id": "574032254",
+      "name": "Coinbase",
+      "bioNames": [],
+      "evidence": "Business check · 7,194,336 followers · since 2012-05 · operator list"
+    },
+    {
+      "handle": "toly",
+      "kind": "founder",
+      "id": "2327407569",
+      "name": "Anatoly Yakovenko",
+      "bioNames": [],
+      "evidence": "blue check · 2,776,434 followers · since 2014-02 · affiliation Solana Labs · operator list"
+    },
+    {
+      "handle": "rajgokal",
+      "kind": "founder",
+      "id": "101833150",
+      "name": "Raj Gokal",
+      "bioNames": [],
+      "evidence": "blue check · 2,420,320 followers · since 2010-01 · affiliation Solana Labs · operator list"
+    },
+    {
+      "handle": "jessepollak",
+      "kind": "founder",
+      "id": "18876842",
+      "name": "Jesse Pollak",
+      "bioNames": [],
+      "evidence": "blue check · 356,597 followers · since 2009-01 · affiliation Base · operator list"
+    },
+    {
+      "handle": "VitalikButerin",
+      "kind": "founder",
+      "id": "295218901",
+      "name": "Vitalik Buterin",
+      "bioNames": [],
+      "evidence": "blue check · 7,981,231 followers · since 2011-05 · operator list"
+    },
+    {
+      "handle": "chameleon_jeff",
+      "kind": "founder",
+      "id": "1622260212798291972",
+      "name": "Jeff Yan",
+      "bioNames": [],
+      "evidence": "blue check · 149,515 followers · since 2023-02 · operator list"
+    },
+    {
+      "handle": "brian_armstrong",
+      "kind": "founder",
+      "id": "14379660",
+      "name": "Brian Armstrong",
+      "bioNames": [],
+      "evidence": "blue check · 4,009,786 followers · since 2008-04 · affiliation Coinbase 🛡️ · operator list"
+    },
+    {
+      "handle": "Pumpfun",
+      "kind": "project",
+      "id": "1622243071806128131",
+      "name": "Pump.fun",
+      "bioNames": [
+        "Pump.fun",
+        "pump.fun"
+      ],
+      "evidence": "Business check · 739,917 followers · since 2023-02 · operator list"
+    },
+    {
+      "handle": "mert",
+      "kind": "founder",
+      "id": "1309886201944473600",
+      "name": "Mert Mumtaz",
+      "bioNames": [],
+      "evidence": "blue check · 2,378,069 followers · since 2020-09 · affiliation Helius · operator list"
+    },
+    {
+      "handle": "MeteoraAG",
+      "kind": "project",
+      "id": "1384042881808166924",
+      "name": "Meteora",
+      "bioNames": [
+        "Meteora"
+      ],
+      "evidence": "Business check · 216,692 followers · since 2021-04 · operator list"
+    },
+    {
+      "handle": "Helius",
+      "kind": "project",
+      "id": "1542601224654127105",
+      "name": "Helius",
+      "bioNames": [
+        "Helius"
+      ],
+      "evidence": "Business check · 75,685 followers · since 2022-06 · operator list"
+    },
+    {
+      "handle": "0xPolygon",
+      "kind": "chain",
+      "id": "914738730740715521",
+      "name": "Polygon",
+      "bioNames": [],
+      "evidence": "Business check · 2,047,517 followers · since 2017-10 · polygon.technology links @0xPolygon"
+    },
+    {
+      "handle": "avax",
+      "kind": "chain",
+      "id": "1055894724245155841",
+      "name": "Avalanche",
+      "bioNames": [
+        "AVAX"
+      ],
+      "evidence": "Business check · 1,096,133 followers · since 2018-10 · avax.network links @avax"
+    },
+    {
+      "handle": "SuiNetwork",
+      "kind": "chain",
+      "id": "1428872926363754497",
+      "name": "Sui",
+      "bioNames": [
+        "Sui"
+      ],
+      "evidence": "Business check · 1,079,672 followers · since 2021-08 · sui.io links @SuiNetwork"
+    },
+    {
+      "handle": "Aptos",
+      "kind": "chain",
+      "id": "1491526425580474368",
+      "name": "Aptos",
+      "bioNames": [
+        "Aptos"
+      ],
+      "evidence": "Business check · 643,688 followers · since 2022-02 · @AptosFoundation says it moved to @Aptos; aptosnetwork.com is the profile site (429 to a fetch)"
+    },
+    {
+      "handle": "BNBCHAIN",
+      "kind": "chain",
+      "id": "1052454006537314306",
+      "name": "BNB Chain",
+      "bioNames": [
+        "BNB Chain"
+      ],
+      "evidence": "Business check · 3,893,932 followers · since 2018-10 · bnbchain.org links @BNBChain"
+    },
+    {
+      "handle": "Optimism",
+      "kind": "chain",
+      "id": "1044836083530452992",
+      "name": "Optimism",
+      "bioNames": [],
+      "evidence": "Business check · 721,264 followers · since 2018-09 · optimism.io links @Optimism"
+    },
+    {
+      "handle": "ton_blockchain",
+      "kind": "chain",
+      "id": "1442437262663319565",
+      "name": "TON",
+      "bioNames": [
+        "TON"
+      ],
+      "evidence": "Business check · 2,237,095 followers · since 2021-09 · ton.org is the profile site; no X link in its static HTML"
+    },
+    {
+      "handle": "SolanaFndn",
+      "kind": "ecosystem",
+      "id": "1407411848446611459",
+      "name": "Solana Foundation",
+      "bioNames": [
+        "Solana Foundation"
+      ],
+      "evidence": "Business check · 196,279 followers · since 2021-06 · affiliation Solana · affiliation label Solana; solana.org not fetchable"
+    },
+    {
+      "handle": "buildonbase",
+      "kind": "ecosystem",
+      "id": "1444011503275810822",
+      "name": "Base Build",
+      "bioNames": [],
+      "evidence": "Business check · 613,002 followers · since 2021-10 · affiliation Base · affiliation label Base"
+    },
+    {
+      "handle": "ethereumfndn",
+      "kind": "ecosystem",
+      "id": "1529875152460193794",
+      "name": "Ethereum Foundation",
+      "bioNames": [
+        "Ethereum Foundation"
+      ],
+      "evidence": "blue check · 74,466 followers · since 2022-05 · ethereum.org links @ethereumfndn"
+    },
+    {
+      "handle": "SuiFoundation",
+      "kind": "ecosystem",
+      "id": "1582498720527962113",
+      "name": "Sui Foundation",
+      "bioNames": [
+        "Sui Foundation"
+      ],
+      "evidence": "Business check · 68,952 followers · since 2022-10 · affiliation Sui · affiliation label Sui"
+    },
+    {
+      "handle": "binance",
+      "kind": "exchange",
+      "id": "877807935493033984",
+      "name": "Binance",
+      "bioNames": [],
+      "evidence": "Business check · 16,116,504 followers · since 2017-06 · binance.com served a bot challenge; Business check, 16M followers since 2017"
+    },
+    {
+      "handle": "okx",
+      "kind": "exchange",
+      "id": "867617849208037377",
+      "name": "OKX",
+      "bioNames": [],
+      "evidence": "Business check · 5,573,457 followers · since 2017-05 · okx.com links @okx"
+    },
+    {
+      "handle": "Bybit_Official",
+      "kind": "exchange",
+      "id": "999947328621395968",
+      "name": "Bybit",
+      "bioNames": [],
+      "evidence": "Business check · 4,870,735 followers · since 2018-05 · Business check; bybit.com served its EU page (@BybitEurope)"
+    },
+    {
+      "handle": "krakenfx",
+      "kind": "exchange",
+      "id": "1399148563",
+      "name": "Kraken",
+      "bioNames": [],
+      "evidence": "Business check · 1,746,652 followers · since 2013-05 · affiliation Payward · kraken.com links @krakenfx; affiliation label Payward"
+    },
+    {
+      "handle": "Uniswap",
+      "kind": "project",
+      "id": "984188226826010624",
+      "name": "Uniswap",
+      "bioNames": [
+        "Uniswap"
+      ],
+      "evidence": "Business check · 1,484,129 followers · since 2018-04 · Business check; @haydenzadams carries the Uniswap affiliation"
+    },
+    {
+      "handle": "aave",
+      "kind": "project",
+      "id": "867100084248469505",
+      "name": "Aave",
+      "bioNames": [
+        "Aave"
+      ],
+      "evidence": "Business check · 701,102 followers · since 2017-05 · aave.com links @aave"
+    },
+    {
+      "handle": "LidoFinance",
+      "kind": "project",
+      "id": "1311617716239900673",
+      "name": "Lido",
+      "bioNames": [
+        "Lido"
+      ],
+      "evidence": "Business check · 226,949 followers · since 2020-10 · lido.fi links @lidofinance"
+    },
+    {
+      "handle": "eigencloud",
+      "kind": "project",
+      "id": "1542947918709080065",
+      "name": "EigenCloud (EigenLayer)",
+      "bioNames": [
+        "EigenCloud",
+        "EigenLayer"
+      ],
+      "evidence": "Business check · 302,370 followers · since 2022-07 · affiliation Eigen Labs · eigencloud.xyz links @eigencloud; @eigenlayer no longer exists"
+    },
+    {
+      "handle": "ethena",
+      "kind": "project",
+      "id": "1637885519374721035",
+      "name": "Ethena",
+      "bioNames": [
+        "Ethena"
+      ],
+      "evidence": "Business check · 246,569 followers · since 2023-03 · ethena.fi links @ethena; @ethena_labs no longer exists"
+    },
+    {
+      "handle": "chainlink",
+      "kind": "project",
+      "id": "1530530365",
+      "name": "Chainlink",
+      "bioNames": [
+        "Chainlink"
+      ],
+      "evidence": "Business check · 1,390,736 followers · since 2013-06 · chain.link links @chainlink"
+    },
+    {
+      "handle": "SkyEcosystem",
+      "kind": "project",
+      "id": "3190865591",
+      "name": "Sky (Maker)",
+      "bioNames": [
+        "MakerDAO"
+      ],
+      "evidence": "Business check · 290,660 followers · since 2015-04 · skyeco.com links @SkyEcosystem; @MakerDAO is a stub pointing here"
+    },
+    {
+      "handle": "jito",
+      "kind": "project",
+      "id": "1552378476560355331",
+      "name": "Jito",
+      "bioNames": [
+        "Jito"
+      ],
+      "evidence": "Business check · 103,122 followers · since 2022-07 · Business check; profile site jito.network; bio \"Tweets by @JitoFDN\"; @jito_sol no longer exists"
+    },
+    {
+      "handle": "Raydium",
+      "kind": "project",
+      "id": "1358454920299433985",
+      "name": "Raydium",
+      "bioNames": [
+        "Raydium"
+      ],
+      "evidence": "Business check · 462,984 followers · since 2021-02 · Business check; profile site raydium.io; @RaydiumProtocol no longer exists"
+    },
+    {
+      "handle": "kamino",
+      "kind": "project",
+      "id": "1549038204178911233",
+      "name": "Kamino",
+      "bioNames": [
+        "Kamino"
+      ],
+      "evidence": "Business check · 158,414 followers · since 2022-07 · Business check; profile site kamino.com; @KaminoFinance is a stub pointing here"
+    },
+    {
+      "handle": "PythNetwork",
+      "kind": "project",
+      "id": "1376553581508059144",
+      "name": "Pyth",
+      "bioNames": [
+        "Pyth"
+      ],
+      "evidence": "Business check · 283,278 followers · since 2021-03 · pyth.network links @PythNetwork"
+    },
+    {
+      "handle": "wormhole",
+      "kind": "project",
+      "id": "1417845872436547587",
+      "name": "Wormhole",
+      "bioNames": [
+        "Wormhole"
+      ],
+      "evidence": "Business check · 367,142 followers · since 2021-07 · wormhole.com links @wormhole"
+    },
+    {
+      "handle": "LayerZero_Core",
+      "kind": "project",
+      "id": "1395504028910424065",
+      "name": "LayerZero",
+      "bioNames": [
+        "LayerZero"
+      ],
+      "evidence": "Business check · 708,351 followers · since 2021-05 · layerzero.network links @LayerZero_Core"
+    },
+    {
+      "handle": "celestia",
+      "kind": "project",
+      "id": "1168944141449015296",
+      "name": "Celestia",
+      "bioNames": [
+        "Celestia"
+      ],
+      "evidence": "Business check · 362,292 followers · since 2019-09 · celestia.org links @celestia; @CelestiaOrg is a stub pointing here"
+    },
+    {
+      "handle": "pendle_fi",
+      "kind": "project",
+      "id": "1377493693762969600",
+      "name": "Pendle",
+      "bioNames": [
+        "Pendle"
+      ],
+      "evidence": "blue check · 161,781 followers · since 2021-04 · pendle.finance links @pendle_fi"
+    },
+    {
+      "handle": "Morpho",
+      "kind": "project",
+      "id": "1420789685811650560",
+      "name": "Morpho",
+      "bioNames": [
+        "Morpho"
+      ],
+      "evidence": "Business check · 141,131 followers · since 2021-07 · morpho.org links @Morpho"
+    },
+    {
+      "handle": "Polymarket",
+      "kind": "project",
+      "id": "1261335549215989760",
+      "name": "Polymarket",
+      "bioNames": [
+        "Polymarket"
+      ],
+      "evidence": "Business check · 2,034,358 followers · since 2020-05 · polymarket.com links @Polymarket"
+    },
+    {
+      "handle": "a16zfrontier",
+      "kind": "fund",
+      "id": "1539681011696603137",
+      "name": "a16z crypto (now a16z Frontier)",
+      "bioNames": [],
+      "evidence": "Business check · 1,606,403 followers · since 2022-06 · a16zcrypto.com links @a16zfrontier; @a16zcrypto is a 2026 squatter"
+    },
+    {
+      "handle": "paradigm",
+      "kind": "fund",
+      "id": "166765173",
+      "name": "Paradigm",
+      "bioNames": [],
+      "evidence": "Business check · 1,689,576 followers · since 2010-07 · paradigm.xyz links @paradigm"
+    },
+    {
+      "handle": "multicoin",
+      "kind": "fund",
+      "id": "883431331098759169",
+      "name": "Multicoin Capital",
+      "bioNames": [],
+      "evidence": "Business check · 1,487,495 followers · since 2017-07 · multicoin.capital links @multicoin"
+    },
+    {
+      "handle": "PanteraCapital",
+      "kind": "fund",
+      "id": "2287471915",
+      "name": "Pantera Capital",
+      "bioNames": [],
+      "evidence": "Business check · 226,002 followers · since 2014-01 · panteracapital.com links @PanteraCapital"
+    },
+    {
+      "handle": "dragonfly",
+      "kind": "fund",
+      "id": "1173770081295200263",
+      "name": "Dragonfly",
+      "bioNames": [],
+      "evidence": "Business check · 1,510,970 followers · since 2019-09 · dragonfly.xyz links @dragonfly"
+    },
+    {
+      "handle": "ElectricCapital",
+      "kind": "fund",
+      "id": "994440544657928193",
+      "name": "Electric Capital",
+      "bioNames": [],
+      "evidence": "Business check · 69,250 followers · since 2018-05 · electriccapital.com links @electriccapital"
+    },
+    {
+      "handle": "jump_",
+      "kind": "fund",
+      "id": "1436363727159365637",
+      "name": "Jump Crypto",
+      "bioNames": [],
+      "evidence": "blue check · 96,297 followers · since 2021-09 · jumpcrypto.com links @jump_"
+    },
+    {
+      "handle": "polychain",
+      "kind": "fund",
+      "id": "246158437",
+      "name": "Polychain Capital",
+      "bioNames": [],
+      "evidence": "Business check · 1,482,772 followers · since 2011-02 · Business check; profile site polychain.capital (no X link in static HTML)"
+    },
+    {
+      "handle": "haydenzadams",
+      "kind": "founder",
+      "id": "702654540387127296",
+      "name": "Hayden Adams",
+      "bioNames": [],
+      "evidence": "blue check · 2,404,811 followers · since 2016-02 · affiliation Uniswap · affiliation label Uniswap"
+    },
+    {
+      "handle": "StaniKulechov",
+      "kind": "founder",
+      "id": "952921795316912133",
+      "name": "Stani Kulechov",
+      "bioNames": [],
+      "evidence": "blue check · 305,241 followers · since 2018-01 · affiliation Aave · affiliation label Aave"
+    },
+    {
+      "handle": "sreeramkannan",
+      "kind": "founder",
+      "id": "2166711024",
+      "name": "Sreeram Kannan",
+      "bioNames": [],
+      "evidence": "blue check · 46,217 followers · since 2013-10 · affiliation Eigen Labs · affiliation label Eigen Labs"
+    },
+    {
+      "handle": "gdog97_",
+      "kind": "founder",
+      "id": "1589990734601625601",
+      "name": "Guy Young",
+      "bioNames": [],
+      "evidence": "blue check · 64,423 followers · since 2022-11 · affiliation Ethena · affiliation label Ethena; followed by @ethena; @leptokurtic_ is not him"
+    },
+    {
+      "handle": "SergeyNazarov",
+      "kind": "founder",
+      "id": "46238620",
+      "name": "Sergey Nazarov",
+      "bioNames": [],
+      "evidence": "blue check · 185,109 followers · since 2009-06 · affiliation Chainlink · affiliation label Chainlink; chain.link links @sergeynazarov"
+    },
+    {
+      "handle": "RuneKek",
+      "kind": "founder",
+      "id": "385328034",
+      "name": "Rune Christensen",
+      "bioNames": [],
+      "evidence": "blue check · 58,197 followers · since 2011-10 · no affiliation label; bio \"Cofounder of Sky (fka MakerDAO) @SkyEcosystem\"; verified, since 2011"
+    },
+    {
+      "handle": "buffalu__",
+      "kind": "founder",
+      "id": "946428151005110272",
+      "name": "Lucas Bruder",
+      "bioNames": [],
+      "evidence": "blue check · 40,823 followers · since 2017-12 · affiliation JTX · affiliation label JTX; bio \"ceo @ jito\""
+    },
+    {
+      "handle": "musalbas",
+      "kind": "founder",
+      "id": "1436258888",
+      "name": "Mustafa Al-Bassam",
+      "bioNames": [],
+      "evidence": "blue check · 45,323 followers · since 2013-05 · affiliation Celestia · affiliation label Celestia"
+    },
+    {
+      "handle": "PrimordialAA",
+      "kind": "founder",
+      "id": "44494347",
+      "name": "Bryan Pellegrino",
+      "bioNames": [],
+      "evidence": "blue check · 114,796 followers · since 2009-06 · affiliation LayerZero · affiliation label LayerZero"
+    },
+    {
+      "handle": "shayne_coplan",
+      "kind": "founder",
+      "id": "3474685637",
+      "name": "Shayne Coplan",
+      "bioNames": [],
+      "evidence": "blue check · 250,600 followers · since 2015-08 · affiliation Polymarket · affiliation label Polymarket"
+    },
+    {
+      "handle": "cz_binance",
+      "kind": "founder",
+      "id": "902926941413453824",
+      "name": "Changpeng Zhao",
+      "bioNames": [],
+      "evidence": "blue check · 12,987,154 followers · since 2017-08 · no affiliation label; verified, 13M followers since 2017"
+    },
+    {
+      "handle": "star_okx",
+      "kind": "founder",
+      "id": "2985599460",
+      "name": "Star Xu",
+      "bioNames": [],
+      "evidence": "blue check · 246,430 followers · since 2015-01 · affiliation OKX · affiliation label OKX"
+    },
+    {
+      "handle": "benbybit",
+      "kind": "founder",
+      "id": "1100932506193260544",
+      "name": "Ben Zhou",
+      "bioNames": [],
+      "evidence": "blue check · 273,136 followers · since 2019-02 · affiliation Bybit · affiliation label Bybit"
+    },
+    {
+      "handle": "KyleSamani",
+      "kind": "founder",
+      "id": "46332443",
+      "name": "Kyle Samani",
+      "bioNames": [],
+      "evidence": "blue check · 247,386 followers · since 2009-06 · kylesamani.com links @KyleSamani; bio says he has left Multicoin"
+    },
+    {
+      "handle": "hosseeb",
+      "kind": "founder",
+      "id": "231208649",
+      "name": "Haseeb Qureshi",
+      "bioNames": [],
+      "evidence": "blue check · 149,825 followers · since 2010-12 · affiliation Dragonfly ＞|＜ · affiliation label Dragonfly; haseebq.com links @hosseeb"
+    },
+    {
+      "handle": "CryptoHayes",
+      "kind": "founder",
+      "id": "983993370048630785",
+      "name": "Arthur Hayes",
+      "bioNames": [],
+      "evidence": "blue check · 812,434 followers · since 2018-04 · no affiliation label; verified, 812K followers since 2018; bio \"CEO of @Flop_Labs & CIO @Maelstromfund\""
+    }
   ]
 }

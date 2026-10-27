@@ -1,4 +1,5 @@
-// BUILDER FOLLOWS — when a watched account follows a new X account, post it as a FACT (v0.34.0).
+// BUILDER FOLLOWS — when a watched account follows a new X account, post it as a FACT (v0.34.0;
+// 76 verified accounts with kinds, 3-hourly looks, cursor overflow and bio evidence 2026-10-27).
 //
 // FIRST PAID DEPENDENCY. Operator-approved 2026-10-21, cap $40/month (builder-follows.json,
 // REMAINING-WORK-NOTES.md 2026-10-21). The cap is STRUCTURAL: every call is metered at the
@@ -35,13 +36,29 @@ export const API = 'https://api.twitterapi.io';
 export const PAGE_SIZE = 20;           // operator spec: newest page only, 20 per call
 export const BASELINE_PAGE_SIZE = 200; // FIRST look per account only: a deeper baseline means a re-follow
                                        // of an older account is already known, not "new" (re-follows: ignore)
-export const POLL_EVERY_MS = 3600e3;   // operator spec: hourly
+export const POLL_EVERY_MS = 3 * 3600e3; // operator spec 2026-10-27: every 3 hours (was hourly)
+export const MAX_PAGES = 10;            // operator spec 2026-10-27: overflow follows the cursor, at most 10 pages per account per check
 export const CALL_SPACING_MS = 6000;   // twitterapi.io publishes no QPS limit; 20 calls in ~2 min stays clear of one
 export const REFRESH_IDS_EVERY_MS = 24 * 3600e3;
 export const CONVERGE_WINDOW_MS = 7 * 24 * 3600e3;
 export const SEEN_CAP = 3000;          // per account: union of IDs ever seen, newest kept
 export const USD_PER_CREDIT = 1 / 100000; // published: 100,000 credits = $1 (recharge bonuses only lower it)
 export const WARN_AT = 0.8;
+
+// KIND of each watched account (operator spec 2026-10-27), shown as a fact about the WATCHER.
+export const KINDS = ['chain', 'ecosystem', 'exchange', 'project', 'fund', 'founder'];
+// Bio evidence is quoted only for these kinds ("a watched chain or project"); the ecosystem
+// accounts are the chains' own foundations and builder accounts.
+export const MENTION_KINDS = new Set(['chain', 'ecosystem', 'project']);
+
+// PRE-REGISTERED VOLUME (2026-10-27, before the 76-account list went live). Basis: the 20
+// accounts made 48 new follows over 23-26 Oct (12/day), 20 of them fresh (42%), 4.75
+// alerts/day. Their lifetime follow rate is 8.34/day, the 76 accounts' 26.6/day; live ran
+// 1.44x lifetime. 26.6 x 0.42 = 11/day; 26.6 x 1.44 x 0.42 = 16/day.
+export const EXPECTED_ALERTS_PER_DAY = Object.freeze({ low: 11, high: 16, registered: '2026-10-27' });
+// The rule decided in advance: more than 15 alerts on each of 3 consecutive full UTC days ->
+// tighten the fresh-account bar (e.g. age <= 30 days). Never a cap on alerts.
+export const VOLUME_REVIEW = Object.freeze({ perDay: 15, days: 3, action: 'tighten the fresh-account bar (e.g. age ≤30 days), never cap alerts' });
 
 // FRESHNESS — what makes a follow news. Declared constants with their basis.
 export const FRESH_MAX_AGE_DAYS = 90;
@@ -56,12 +73,24 @@ const recordPath = () => join(config.dataDir, 'builder-follows.jsonl');
 // ---------------------------------------------------------------- config, price (refuse the ambiguous case)
 export function checkFollowConfig(c) {
   const problems = [];
-  if (!Array.isArray(c?.handles) || !c.handles.length) problems.push('no handles');
-  for (const h of c?.handles ?? []) if (!/^[A-Za-z0-9_]{1,15}$/.test(String(h).replace(/^@/, ''))) problems.push(`bad handle ${h}`);
+  const acc = Array.isArray(c?.accounts) ? c.accounts : null;
+  if (!acc || !acc.length) problems.push('no accounts');
+  const hs = new Set(), ids = new Set();
+  for (const a of acc ?? []) {
+    const h = String(a?.handle ?? '').replace(/^@/, '');
+    if (!/^[A-Za-z0-9_]{1,15}$/.test(h)) problems.push(`bad handle ${a?.handle}`);
+    if (!KINDS.includes(a?.kind)) problems.push(`@${h}: kind '${a?.kind}' is not one of ${KINDS.join('|')}`);
+    if (a?.id !== undefined && a?.id !== null && !/^\d{1,20}$/.test(String(a.id))) problems.push(`@${h}: id must be numeric`);
+    if (a?.bioNames !== undefined && !(Array.isArray(a.bioNames) && a.bioNames.every((x) => typeof x === 'string' && x.trim()))) problems.push(`@${h}: bioNames must be non-empty strings`);
+    if (hs.has(h.toLowerCase())) problems.push(`duplicate handle @${h}`);
+    hs.add(h.toLowerCase());
+    if (a?.id) { if (ids.has(String(a.id))) problems.push(`duplicate id ${a.id}`); ids.add(String(a.id)); }
+  }
   if (!(Number(c?.capUsd) > 0)) problems.push('capUsd missing — a paid source with no cap does not run');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(c?.approved ?? ''))) problems.push('approved date missing');
   if (problems.length) return { ok: false, why: problems.join('; ') };
-  return { ok: true, cfg: { ...c, capUsd: Number(c.capUsd), handles: c.handles.map((h) => String(h).replace(/^@/, '')) } };
+  const accounts = acc.map((a) => ({ handle: String(a.handle).replace(/^@/, ''), kind: a.kind, id: a.id ? String(a.id) : null, name: a.name ?? null, bioNames: a.bioNames ?? [] }));
+  return { ok: true, cfg: { ...c, capUsd: Number(c.capUsd), accounts, handles: accounts.map((a) => a.handle) } };
 }
 export function loadFollowConfig(file = cfgPath()) {
   if (!existsSync(file)) return { ok: false, why: 'builder-follows.json absent' };
@@ -187,26 +216,51 @@ export function ageText(d) {
   if (d < 730) return `${Math.floor(d / 30.44)} months`;
   return `${Math.floor(d / 365.25)} years`;
 }
+// BIO EVIDENCE: when the new account's own bio names a watched chain, ecosystem account or
+// project, the message QUOTES the words it used ("Bio mentions: Solana"). A quote, not an
+// inference: the match is the bio's own text, by @handle (any case) or by a listed name
+// (exact case, whole word). Names that are ordinary words (Base, Optimism, Polygon, Sky,
+// Phantom, Jupiter, Ink) are listed by @handle only, so "home base" is never "Base".
+const escRx = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+export function buildMentionIndex(accounts) {
+  const idx = [];
+  for (const a of accounts ?? []) {
+    if (!MENTION_KINDS.has(a.kind)) continue;
+    idx.push(new RegExp(`(?<![A-Za-z0-9_])@${escRx(a.handle)}(?![A-Za-z0-9_])`, 'gi'));
+    for (const n of a.bioNames ?? []) idx.push(new RegExp(`(?<![A-Za-z0-9_@$.])${escRx(n)}(?![A-Za-z0-9_])`, 'g'));
+  }
+  return idx;
+}
+export function bioMentions(bio, index) {
+  const hits = [];
+  for (const rx of index ?? []) { rx.lastIndex = 0; for (const m of String(bio ?? '').matchAll(rx)) hits.push({ a: m.index, b: m.index + m[0].length, t: m[0] }); }
+  const kept = hits.filter((h) => !hits.some((o) => o !== h && o.a <= h.a && o.b >= h.b && (o.b - o.a) > (h.b - h.a))).sort((x, y) => x.a - y.a);
+  const seen = new Set(), out = [];
+  for (const h of kept) { const k = h.t.toLowerCase(); if (!seen.has(k)) { seen.add(k); out.push(h.t); } }
+  return out;
+}
 // The bio is the account's own words. If they say "backed by" (or anything the lint bars),
-// the bio is WITHHELD rather than quoted: nothing in this message may read as backing.
-export function followMessage(watcher, f, fr = freshness(f)) {
+// the bio is WITHHELD rather than quoted, and its mentions with it: nothing in this message
+// may read as backing.
+export function followMessage(watcher, f, fr = freshness(f), { kind = null, mentionIndex = [] } = {}) {
   const bio = [...f.bio].slice(0, 100).join('');
-  const bioHit = bio ? (bio.match(FOLLOW_CLAIM) || bio.match(DIRECTION)) : null;
+  const bioHit = f.bio ? (f.bio.match(FOLLOW_CLAIM) || f.bio.match(DIRECTION)) : null;
   const facts = [f.ageDays !== null ? `Account ${ageText(f.ageDays)} old` : 'Account age not listed',
     f.followers !== null ? `${fmt(f.followers)} follower${f.followers === 1 ? '' : 's'}` : 'follower count not listed'].join(' · ');
   const about = [bio && !bioHit ? esc(bio) : null, f.website ? esc(f.website) : null].filter(Boolean).join(' · ');
+  const mentions = bioHit ? [] : bioMentions(f.bio, mentionIndex);
   return {
-    title: `👀 FOLLOW · @${watcher} followed @${f.handle}`,
-    lines: [facts, ...(about ? [about] : [])],
-    operatorLines: [`Fresh because: ${fr.why} · target ID ${f.id} · seen on the hourly newest-${PAGE_SIZE} page (X does not publish the follow time)`,
-      ...(bioHit ? [`Bio withheld: it contains "${bioHit[0]}"`] : [])],
+    title: `👀 FOLLOW · @${watcher}${kind ? ` (${kind})` : ''} followed @${f.handle}`,
+    lines: [facts, ...(about ? [about] : []), ...(mentions.length ? [`Bio mentions: ${mentions.map(esc).join(', ')}`] : [])],
+    operatorLines: [`Fresh because: ${fr.why} · target ID ${f.id} · seen on the ${POLL_EVERY_MS / 3600e3}-hourly look (X does not publish the follow time)`,
+      ...(bioHit ? [`Bio withheld, and any bio mentions with it: it contains "${bioHit[0]}"`] : [])],
     url: `https://x.com/${f.handle}`,
   };
 }
-// Times are DETECTION times (hourly looks), so the gap is "seen N h later", not a follow timestamp.
-export function convergenceLine(handle, deltaMs) {
+// Times are DETECTION times (3-hourly looks), so the gap is "seen N h later", not a follow timestamp.
+export function convergenceLine(handle, deltaMs, kind = null) {
   const h = Math.floor(deltaMs / 3600e3);
-  return `also followed by @${handle}, ${h < 1 ? 'seen within the hour' : h < 48 ? `seen ${h}h later` : `seen ${Math.floor(h / 24)}d later`}`;
+  return `also followed by @${handle}${kind ? ` (${kind})` : ''}, ${h < 1 ? 'seen within the hour' : h < 48 ? `seen ${h}h later` : `seen ${Math.floor(h / 24)}d later`}`;
 }
 
 // Append a line to the original alert (dispatch keeps the published text on the thread).
@@ -230,7 +284,7 @@ async function defaultWarn(s, capUsd) {
 // deps: { cfg, price, key, fetchJson, now, sleep, dispatch, edit, record, warn }
 export async function followCycle(state, deps = {}) {
   const f = (state.follows ??= {});
-  f.accounts ??= {}; f.byHandle ??= {}; f.alerted ??= {}; f.saturated ??= []; f.daily ??= {}; f.unresolved ??= {};
+  f.accounts ??= {}; f.byHandle ??= {}; f.alerted ??= {}; f.saturated ??= []; f.incomplete ??= []; f.daily ??= {}; f.unresolved ??= {};
   const nowFn = typeof deps.now === 'function' ? deps.now : () => deps.now ?? Date.now();
   const { cfg, price, key } = deps;
   if (!cfg) return { status: 'off', why: 'no config' };
@@ -239,7 +293,7 @@ export async function followCycle(state, deps = {}) {
   const ctx = { f, cfg, price, key, now: nowFn, fetchJson: deps.fetchJson ?? defaultFetchJson,
     sleep: deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))), calls: 0, warn: [] };
   const send = deps.dispatch ?? dispatch, edit = deps.edit ?? editThread, record = deps.record ?? defaultRecord;
-  const out = { status: 'ok', polled: 0, failed: [], baseline: [], newFollows: 0, sent: 0, edited: 0, recorded: 0, saturated: [], capped: false, calls: 0 };
+  const out = { status: 'ok', polled: 0, failed: [], baseline: [], newFollows: 0, sent: 0, edited: 0, recorded: 0, saturated: [], incomplete: [], extraPages: 0, capped: false, calls: 0 };
   const day = () => (f.daily[dayKey(nowFn())] ??= { new: 0, fresh: 0, alerted: 0, edited: 0 });
   const fail = (kind, msg) => { f.lastError = { at: nowFn(), kind, msg }; f.failingSince ??= nowFn(); };
   const finish = async (status) => {
@@ -248,11 +302,22 @@ export async function followCycle(state, deps = {}) {
     if (status === 'ok' || status === 'partial') { f.lastOkAt = nowFn(); if (status === 'ok') { f.failingSince = null; f.lastError = null; } }
     for (const k of Object.keys(f.daily)) if (k < dayKey(nowFn() - 7 * 86400e3)) delete f.daily[k];
     f.saturated = f.saturated.filter((x) => nowFn() - x.at < 7 * 86400e3);
+    f.incomplete = f.incomplete.filter((x) => nowFn() - x.at < 7 * 86400e3);
     return out;
   };
 
-  // 1. Resolve each handle to its numeric ID, once.
-  for (const h of cfg.handles) {
+  // 1. Each watched account by its VERIFIED numeric ID (pinned in builder-follows.json after
+  //    checking badge, followers and the official site). An unpinned handle is resolved once.
+  for (const ca of cfg.accounts) {
+    const h = ca.handle;
+    if (ca.id) {
+      const prev = f.byHandle[h.toLowerCase()];
+      if (prev && prev !== ca.id) console.error(`[OPERATOR][follows] @${h} resolved earlier to ${prev}; config pins the verified ID ${ca.id} — using the pinned ID`);
+      f.byHandle[h.toLowerCase()] = ca.id;
+      f.accounts[ca.id] ??= { id: ca.id, handle: h, seen: null, baselineAt: null };
+      delete f.unresolved[h];
+      continue;
+    }
     if (f.byHandle[h.toLowerCase()]) continue;
     const r = await meteredCall(ctx, 'userInfo', `${API}/twitter/user/info?userName=${encodeURIComponent(h)}`);
     if (r.refused) { out.capped = true; return finish('capped'); }
@@ -267,7 +332,8 @@ export async function followCycle(state, deps = {}) {
     f.accounts[id] ??= { id, handle: d.userName ?? h, seen: null, baselineAt: null };
     delete f.unresolved[h];
   }
-  const watched = cfg.handles.map((h) => f.accounts[f.byHandle[h.toLowerCase()]]).filter(Boolean);
+  const watched = cfg.accounts.map((ca) => { const a = f.accounts[ca.id ?? f.byHandle[ca.handle.toLowerCase()]]; if (a) a.kind = ca.kind; return a; }).filter(Boolean);
+  const mentionIndex = buildMentionIndex(cfg.accounts);
 
   // 2. ID -> current handle (handles change; IDs do not). Daily, and on a saturated page.
   const refresh = async (accts) => {
@@ -294,7 +360,8 @@ export async function followCycle(state, deps = {}) {
   for (const a of watched) {
     const baseline = !a.seen;
     const size = baseline ? BASELINE_PAGE_SIZE : PAGE_SIZE;
-    const r = await meteredCall(ctx, 'followings', `${API}/twitter/user/followings?userName=${encodeURIComponent(a.handle)}&pageSize=${size}`, size);
+    const pageUrl = `${API}/twitter/user/followings?userName=${encodeURIComponent(a.handle)}&pageSize=${size}`;
+    const r = await meteredCall(ctx, 'followings', pageUrl, size);
     if (r.refused) { out.capped = true; break; }
     if (!r.ok) {
       out.failed.push(`@${a.handle} (${r.kind})`);
@@ -307,29 +374,53 @@ export async function followCycle(state, deps = {}) {
     const ids = users.map((u) => String(u.id ?? u.id_str));
     if (baseline) { a.seen = ids.slice(0, SEEN_CAP); a.baselineAt = nowFn(); out.baseline.push(a.handle); continue; }
     const seen = new Set(a.seen);
-    const fresh = users.filter((u) => !seen.has(String(u.id ?? u.id_str)));
-    if (!fresh.length) continue;
-    // A page can only be saturated if it came back FULL. @ethereum follows nobody (baseline
-    // 2026-10-22: 0 IDs) and @Pumpfun 3: their first new follow is a page where every ID is
-    // new, and that is one follow, not a saturated window.
-    if (fresh.length === ids.length && ids.length >= PAGE_SIZE) {
-      // SATURATED: every returned ID is new. Either more follows since the last look than the
-      // page holds (some may be missed — said, not hidden), or the handle now belongs to a
-      // different account. The ID decides which, before anything alerts.
+    const isNew = (u) => !seen.has(String(u.id ?? u.id_str));
+    if (!users.some(isNew)) continue;
+    // OVERFLOW (operator spec 2026-10-27): a FULL page where every ID is new means more follows
+    // than one page since the last look, or a handle that now belongs to another account. The
+    // ID decides which before another page is paid for; then the cursor is followed until a
+    // known ID appears, the list ends, or MAX_PAGES. Every page is metered. Saturation is
+    // flagged only if the cap is hit; a page that failed or a spend cap that stopped the
+    // paging is flagged as an INCOMPLETE window instead. Neither is pretended complete.
+    // (A short page of all-new IDs is not overflow: @ethereum follows nobody, @Pumpfun 3.)
+    let all = users, lastJson = r.json, lastUsers = users, pages = 1;
+    const fullAndNew = (us) => us.length >= PAGE_SIZE && us.every(isNew);
+    if (fullAndNew(users)) {
       const v = await refresh([a]);
       if (out.capped) break;
-      if (!v?.ok) { out.failed.push(`@${a.handle} (saturation unverified)`); continue; } // nothing committed; the next look sees them again
+      if (!v?.ok) { out.failed.push(`@${a.handle} (overflow unverified)`); continue; } // nothing committed; the next look sees them again
       if (v.moved.length) { a.seen = null; a.baselineAt = null; out.failed.push(`@${a.handle} (handle moved — re-baselining)`); continue; }
-      f.saturated.push({ at: nowFn(), handle: a.handle, n: ids.length });
-      out.saturated.push(a.handle);
-      console.error(`[OPERATOR][follows] @${a.handle}: all ${ids.length} returned follows are new — the page is saturated; follows beyond it may have been missed`);
+      let capHit = false, incomplete = null;
+      while (fullAndNew(lastUsers) && lastJson?.has_next_page && lastJson?.next_cursor) {
+        if (pages >= MAX_PAGES) { capHit = true; break; }
+        const p = await meteredCall(ctx, 'followings', `${pageUrl}&cursor=${encodeURIComponent(lastJson.next_cursor)}`, PAGE_SIZE);
+        if (p.refused) { out.capped = true; incomplete = 'spend cap reached mid-window'; break; }
+        if (!p.ok) { incomplete = `page ${pages + 1} failed (${p.kind})`; break; }
+        lastJson = p.json; lastUsers = (p.json?.followings ?? []).filter((u) => u && (u.id ?? u.id_str));
+        all = all.concat(lastUsers); pages++;
+      }
+      out.extraPages += pages - 1;
+      if (capHit) {
+        f.saturated.push({ at: nowFn(), handle: a.handle, n: all.length, pages });
+        out.saturated.push(a.handle);
+        console.error(`[OPERATOR][follows] @${a.handle}: ${pages} pages (${all.length} follows) all new — the ${MAX_PAGES}-page cap was hit; follows beyond it may have been missed`);
+      } else if (incomplete) {
+        f.incomplete.push({ at: nowFn(), handle: a.handle, n: all.length, pages, why: incomplete });
+        out.incomplete.push(a.handle);
+        console.error(`[OPERATOR][follows] @${a.handle}: overflow paging stopped after ${pages} page(s): ${incomplete} — this window is incomplete`);
+      }
     }
+    // De-duplicate across pages (a follow arriving mid-paging shifts the list by one).
+    const byId = new Map();
+    for (const u of all) { const id = String(u.id ?? u.id_str); if (!byId.has(id)) byId.set(id, u); }
+    const allIds = [...byId.keys()];
+    const fresh = [...byId.values()].filter(isNew);
     const unsent = new Set();
     for (const u of fresh) {
       const t = accountFacts(u, nowFn());
       const fr = freshness(t);
       out.newFollows++; day().new++;
-      const row = { at: new Date(nowFn()).toISOString(), watcherId: a.id, watcher: a.handle, targetId: t.id, target: t.handle,
+      const row = { at: new Date(nowFn()).toISOString(), watcherId: a.id, watcher: a.handle, watcherKind: a.kind ?? null, targetId: t.id, target: t.handle,
         ageDays: t.ageDays, followers: t.followers, fresh: fr.fresh, why: fr.why, action: 'recorded' };
       if (fr.fresh) {
         day().fresh++;
@@ -338,13 +429,13 @@ export async function followCycle(state, deps = {}) {
           // CONVERGENCE: a second watched account, within 7 days, EDITS the original. Never a second alert.
           const delta = nowFn() - prior.at;
           if (prior.by !== a.id && !(prior.also ?? []).some((x) => x.by === a.id) && delta <= CONVERGE_WINDOW_MS) {
-            const ok = await edit(prior.dedupeKey, convergenceLine(a.handle, delta));
+            const ok = await edit(prior.dedupeKey, convergenceLine(a.handle, delta, a.kind));
             (prior.also ??= []).push({ by: a.id, handle: a.handle, at: nowFn(), edited: !!ok });
             if (ok) { out.edited++; day().edited++; }
             row.action = ok ? 'edited-original' : 'convergence-logged (no message to edit)';
           } else row.action = 'repeat (already alerted)';
         } else {
-          const msg = followMessage(a.handle, t, fr);
+          const msg = followMessage(a.handle, t, fr, { kind: a.kind, mentionIndex });
           const problems = followProblems(renderMessage(msg, 'public').text);
           if (problems.length) {
             console.error(`[OPERATOR][follows] refused to send @${a.handle} → @${t.handle}: ${problems.join('; ')}`);
@@ -353,7 +444,7 @@ export async function followCycle(state, deps = {}) {
             const dedupeKey = `FOLLOW:${t.id}`;
             const sent = await send({ source: 'SOCIAL', type: 'FOLLOW', severity: 'MEDIUM', kind: 'FACT', key: `follow:${t.id}`, dedupeKey,
               cooldownMin: 7 * 24 * 60, linkLabel: 'profile', ...msg });
-            if (sent) { f.alerted[t.id] = { by: a.id, byHandle: a.handle, handle: t.handle, at: nowFn(), dedupeKey, also: [] }; out.sent++; day().alerted++; row.action = 'alerted'; }
+            if (sent) { f.alerted[t.id] = { by: a.id, byHandle: a.handle, handle: t.handle, at: nowFn(), dedupeKey, also: [] }; out.sent++; day().alerted++; row.action = 'alerted'; row.mentions = bioMentions(t.bio, mentionIndex); }
             else { unsent.add(t.id); row.action = 'send failed (retried on the next look)'; }
           }
         }
@@ -362,7 +453,7 @@ export async function followCycle(state, deps = {}) {
     }
     // Commit the union of IDs seen, newest first — except a fresh follow whose send failed,
     // which stays "new" so the next look retries it while it is still on the page.
-    a.seen = [...ids.filter((id) => !unsent.has(id)), ...a.seen.filter((id) => !ids.includes(id))].slice(0, SEEN_CAP);
+    a.seen = [...allIds.filter((id) => !unsent.has(id)), ...a.seen.filter((id) => !byId.has(id))].slice(0, SEEN_CAP);
   }
   for (const [id, x] of Object.entries(f.alerted)) if (nowFn() - x.at > 180 * 86400e3) delete f.alerted[id];
   if (out.capped) return finish('capped');
@@ -483,13 +574,13 @@ export function followStatus(state, now = Date.now(), deps = {}) {
     : 'published, unverified';
   const s = spendOf(f, now), cap = c.cfg.capUsd;
   const today = s.byDay[dayKey(now)] || 0, yday = s.byDay[dayKey(now - 86400e3)] || 0;
-  const resolved = c.cfg.handles.filter((h) => f.byHandle?.[h.toLowerCase()]).length;
+  const resolved = c.cfg.accounts.filter((x) => f.byHandle?.[x.handle.toLowerCase()]).length;
   const age = f.lastOkAt ? Math.round((now - f.lastOkAt) / 60e3) : null;
-  const looking = age !== null && age <= 130 && !f.failingSince;
+  const looking = age !== null && age <= POLL_EVERY_MS / 60e3 + 20 && !f.failingSince;
   const d = f.daily?.[dayKey(now)] ?? { new: 0, fresh: 0, alerted: 0, edited: 0 };
   const sat = (f.saturated ?? []).filter((x) => now - x.at < 24 * 3600e3);
   const next = new Date(Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth() + 1, 1)).toISOString().slice(0, 10);
-  const parts = [`Builder follows: ${resolved}/${c.cfg.handles.length} watched`,
+  const parts = [`Builder follows: ${resolved}/${c.cfg.accounts.length} watched every ${POLL_EVERY_MS / 3600e3}h`,
     `last good look ${age === null ? 'never' : age < 120 ? `${age}m` : `${(age / 60).toFixed(1)}h`} ago`,
     looking ? `today ${d.new} new · ${d.fresh} fresh · ${d.alerted} alerted · ${d.edited} edits` : 'today: not looking — a zero here is not "no new follows"',
     `spend today $${usd(today).toFixed(2)} · yesterday $${usd(yday).toFixed(2)} · month $${usd(s.credits).toFixed(2)} of $${cap}`,
@@ -497,12 +588,25 @@ export function followStatus(state, now = Date.now(), deps = {}) {
   const flags = [];
   if (!canSpend(f, price.credits.followings20, cap, now)) flags.push(`⛔ CAP REACHED — no calls until ${next}`);
   if (f.failingSince) flags.push(`🚨 source failing since ${new Date(f.failingSince).toISOString().slice(0, 16)}Z (${f.lastError?.kind}: ${f.lastError?.msg}) — silent by design`);
-  if (sat.length) flags.push(`⚠️ ${sat.length} saturated page(s) 24h: ${[...new Set(sat.map((x) => '@' + x.handle))].join(', ')} — follows beyond the newest ${PAGE_SIZE} may have been missed`);
+  if (sat.length) flags.push(`⚠️ ${sat.length} saturated window(s) 24h, ${MAX_PAGES}-page cap hit: ${[...new Set(sat.map((x) => '@' + x.handle))].join(', ')} — follows beyond ${MAX_PAGES * PAGE_SIZE} may have been missed`);
+  const inc = (f.incomplete ?? []).filter((x) => now - x.at < 24 * 3600e3);
+  if (inc.length) flags.push(`⚠️ ${inc.length} incomplete window(s) 24h: ${inc.map((x) => `@${x.handle} (${x.why})`).join(', ')}`);
+  const vr = volumeReview(f.daily, now);
+  if (vr.tripped) flags.push(`⚠️ alerts over ${VOLUME_REVIEW.perDay}/day for ${VOLUME_REVIEW.days} days (${vr.days.map((x) => `${x.day.slice(5)} ${x.alerted}`).join(', ')}) — pre-registered rule: ${VOLUME_REVIEW.action}`);
   if (f.recon?.lastError && now - f.recon.lastError.at < 2 * 86400e3) flags.push(`⚠️ reconciliation unsettled (${f.recon.lastError.msg})`);
   if (rl?.kind === 'anomalous' && now - rl.at < 7 * 86400e3) flags.push(`⚠️ reconciliation anomalous ${dayKey(rl.at)}: balance fell ${rl.ratio}× the meter (not adopted)`);
   const un = Object.keys(f.unresolved ?? {});
   if (un.length) flags.push(`⚠️ unresolved: ${un.map((h) => '@' + h).join(', ')}`);
   return { line: [...parts, ...flags].join(' · ') };
+}
+
+// Pure: the pre-registered review. The last VOLUME_REVIEW.days FULL UTC days (today excluded)
+// each over VOLUME_REVIEW.perDay alerts. A day with no record counts as not over.
+export function volumeReview(daily, now = Date.now()) {
+  const days = [];
+  for (let i = 1; i <= VOLUME_REVIEW.days; i++) { const day = dayKey(now - i * 86400e3); days.push({ day, alerted: daily?.[day]?.alerted ?? 0 }); }
+  days.reverse();
+  return { tripped: days.every((x) => x.alerted > VOLUME_REVIEW.perDay), days };
 }
 
 // ---------------------------------------------------------------- the poller (own timer: a 2-minute cycle must not stall the 60 s loop)

@@ -28,7 +28,8 @@ export function proseProblems(text) {
 // message may say or imply that the watcher backs, endorses or invested in the account.
 // The module runs this over its whole public rendering and refuses to send on a hit; an
 // account bio that trips it is withheld rather than quoted.
-export const FOLLOW_CLAIM = /\b(backed by|backing|endorsed|invested)\b/i;
+// 2026-10-27: + "partner", "partnership" (and their plurals/tense), "in the ecosystem", "backed".
+export const FOLLOW_CLAIM = /\b(backed by|backed|backing|endorsed|invested|partners?|partnered|partnerships?|in the ecosystem)\b/i;
 export function followProblems(text) {
   const p = proseProblems(text);
   const m = String(text ?? '').match(FOLLOW_CLAIM);

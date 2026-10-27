@@ -4718,3 +4718,49 @@ every ID is new, which v0.34.3 would have called "saturated" (a false flag plus 
 verification call). Saturation now requires a full page (at least 20 IDs).
 Fixture 82: an empty baseline that makes one follow alerts once, no saturation, no
 verification call.
+
+## 2026-10-27 — BUILDER FOLLOWS EXPANSION, BUILT, AWAITING OPERATOR REVIEW (branch follows-v2, not deployed)
+
+Operator spec 2026-10-27: every 3 hours; cursor overflow up to 10 pages; a KIND per watched
+account shown as a fact about the watcher; 56 more accounts, each resolved and VERIFIED;
+bio evidence quoted; lint + "partner", "partnership", "in the ecosystem", "backed"; show
+the list, the spend projection and a pre-registered alert volume BEFORE deploying.
+
+LIVE BASIS (20 accounts, hourly, 22-27 Oct): 34+ cycles all ok; 55 new follows recorded;
+full days 23-26 Oct: new 10/10/15/13, alerts 6/3/2/8 (4.75/day); fresh share 42% (20 of
+48); 14 of those 20 alerts were fresh by followers only (old personal accounts under 5,000
+followers); about 1/day would pass "age <= 30 days". First reconciliation 25-26 Oct:
+balance fell 26,208 vs 29,160 metered, ratio 0.899, agree: a page of 20 costs ~54 credits.
+The bonus credits (120,000 with the top-up) ran out by 27 Oct; 993,414 purchased credits
+($9.93) remain.
+
+VERIFICATION (2026-10-23 and 27, ~1,700 credits outside the meter): /twitter/user/info for
+every candidate (badge: verifiedType Business = gold organisation check; affiliation label
+granted by the organisation; followers; creation date; profile site), official sites
+fetched for the X handles they link. 56 accepted, pinned by numeric ID in
+builder-follows.json with the evidence per account. Rejected or replaced: Arbitrum
+Foundation (no account found), Aptos Foundation (@AptosFndn is a 0-follower personal
+account; @AptosFoundation moved to @Aptos), @BaseEcosystem (unrelated; @buildonbase used),
+Drift (@DriftProtocol, the handle drift.trade links, is SUSPENDED), @a16zcrypto (2026
+squatter; the firm's site links @a16zfrontier), @leptokurtic_ (not Guy Young; @gdog97_
+carries the Ethena affiliation and is followed by @ethena). Renamed: EigenLayer is
+@eigencloud, Ethena is @ethena, Jito is @jito, Raydium is @Raydium, Kamino is @kamino,
+Celestia is @Celestia, Multicoin is @multicoin, Dragonfly is @dragonfly. Founders without
+an affiliation label, accepted on verified long-standing accounts and their bios: Rune
+Christensen, CZ, Kyle Samani (bio: has left Multicoin), Arthur Hayes.
+
+PRE-REGISTERED (recorded before go-live): 11-16 alerts/day for the 76 accounts. Basis:
+lifetime follow rate (following / account age) is 8.34/day for the 20 and 26.6/day for
+the 76; live ran 1.44x lifetime; fresh share 42%. 26.6 x 0.42 = 11; 26.6 x 1.44 x 0.42 =
+16. Founders are ~48% of the follow rate. Rule decided in advance: over 15 alerts on each
+of 3 consecutive full UTC days -> tighten the fresh-account bar (e.g. age <= 30 days),
+never cap alerts. The heartbeat flags it (volumeReview).
+
+PROJECTED SPEND at 3 h (published price; x0.899 for the reconciled figure):
+  76 accounts x 8 looks x 60 credits x 31 days   1,130,880 credits   $11.31
+  daily ID refresh, 76 x 18 x 31                     42,408           $0.42
+  overflow allowance, 1 extra page/account/day      141,360           $1.41
+  one-time: 56 baselines x 200                       11,200           $0.11
+  total                                           ~1,325,848          ~$13.26 (~$11.92 reconciled)
+Live has shown no overflow in 4.5 days at hourly windows. Worst case (every look hits 10
+pages) is 10x the base and is stopped by the $40 cap, with the 80% DM first.
