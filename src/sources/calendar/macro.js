@@ -4,10 +4,11 @@
 //      Scraping only VERIFIES: the weekly check compares the file against the BLS
 //      page and alerts the OPERATOR on mismatch. A parse failure is loud and
 //      non-blocking; it can never silently empty the calendar.
-//   2. T+5m reports MARKET REACTION (BTC/ETH move across the print, from exchange
-//      data we already poll) — never the print value. FRED/BLS series lag the 08:30
-//      release by minutes-to-hours; building T+5m on them ships an empty field. The
-//      print itself arrives at T+30m if BLS has it by then, else "not yet published".
+//   2. T+5m reports the OUTCOME and the MARKET REACTION (v0.36.0). The figure is read
+//      from its publisher (figures.js: the Fed's statement, the BLS API, the BEA API with
+//      a key) and parsed, never guessed. If it is not out at T+5m the T+5m message says
+//      so and the T+30m message carries it, or says it was not out by T+30m. No later
+//      separate message. A STANDARD event gets a T+30m message only in that case.
 //   3. TIERED, because RISK-bypass is a privilege: FULL (FOMC, CPI) get all four
 //      stages; STANDARD (PCE, NFP) get T-24h and T+5m; DIGEST (claims, ISM, PPI)
 //      never push. ~200 alerts/year of calendar spam is how a channel dies.
@@ -22,11 +23,12 @@ import { getState, save } from '../../core/store.js';
 import { btcPrice } from '../../core/outcomes.js';
 import { notePulse } from '../../core/pulse.js';
 import { proseProblems } from '../../core/prose-lint.js';
+import { figureFor, BLS_SERIES, BLS_DAILY_QUERIES } from './figures.js';
 
 const CAL_PATH = join(process.cwd(), 'data', 'macro-calendar.json');
 const STAGES = {
   FULL: ['t24h', 't60m', 't5m', 't30m'],
-  STANDARD: ['t24h', 't5m'],
+  STANDARD: ['t24h', 't5m', 't30m'], // t30m only when the T+5m message lacked the figure (figureNeededAt30)
   DIGEST: [],
 };
 const STAGE_AT = { t24h: -24 * 3600e3, t60m: -3600e3, t5m: 5 * 60e3, t30m: 30 * 60e3 };
@@ -113,20 +115,46 @@ export function macroMessage(ev, stage, ctx = {}) {
     return { title: `⏰ IN 60 MINUTES · ${name}`, lines: [whenLine(ev, t0), ...(plain ? [plain] : []), priorLine(ev)], operatorLines: op };
   }
   const tPlus = Math.round((now - t0) / 60e3);
+  const cons = ev.consensus ? [`Consensus: ${ev.consensus}${ev.consensusAsOf ? ' (as of ' + ev.consensusAsOf + ')' : ''}`] : [];
+  const figOp = (fig) => [...(fig?.link ? [`Statement: ${fig.link}`] : []), ...(fig?.why ? [`Figure: ${fig.status}: ${fig.why}`] : [])];
   if (stage === 't5m') {
-    const { b = null, e = null } = ctx;
-    return { title: `📊 ${name} printed — first reaction (T+${tPlus}m)`, lines: [
-      b !== null ? `BTC ${sgn(b)}% · ETH ${sgn(e)}% from just before the print to T+${tPlus}m` : 'Reaction basis unavailable (bot was not up before the print).',
-      ...[lagDisclosure(now - due, (m) => `delivered ${m}m after the T+5m mark — the window above is as stated, not live`)].filter(Boolean),
-      `Consensus: ${ev.consensus ? ev.consensus + (ev.consensusAsOf ? ' (as of ' + ev.consensusAsOf + ')' : '') : 'not entered'} · actual figure: not fetched by this bot (the reaction is measured, the print is not).`,
-    ], operatorLines: op };
+    const { b = null, e = null, fig = null } = ctx;
+    const react = b !== null ? `BTC ${sgn(b)}% · ETH ${sgn(e)}% from just before the release to T+${tPlus}m` : 'Reaction basis unavailable (bot was not up before the release).';
+    const lag = [lagDisclosure(now - due, (m) => `delivered ${m}m after the T+5m mark — the window above is as stated, not live`)].filter(Boolean);
+    if (fig?.status === 'ok') return { title: `📊 ${name}: ${fig.headline}`, lines: [...(fig.detail ? [fig.detail] : []), react, ...lag, ...cons, `Source: ${fig.source}`], operatorLines: [...op, ...figOp(fig)] };
+    if (fig?.status === 'unparsed') return { title: `📊 ${name}: decision published, not parsed`, lines: [react, ...lag, `Statement: ${fig.link}`, `Source: ${fig.source}`], operatorLines: [...op, ...figOp(fig)] };
+    const what = fig?.status === 'unavailable' ? 'Actual figure: not fetched by this bot.'
+      : fig?.status === 'error' ? `The figure could not be fetched at T+${tPlus}m; the T+30m message carries it.`
+      : `The figure was not yet published at T+${tPlus}m; the T+30m message carries it.`;
+    return { title: `📊 ${name} released — first reaction (T+${tPlus}m)`, lines: [react, ...lag, ...cons, what], operatorLines: [...op, ...figOp(fig)] };
   }
-  const { b5 = null, b30 = null, held = 'unknown' } = ctx;
+  const { b5 = null, b30 = null, held = 'unknown', fig = null } = ctx;
+  const move = b30 !== null ? `BTC ${sgn(b30)}% from just before the release to T+${tPlus}m (was ${sgn(b5)}% at the first reading)` : 'No pre-release basis.';
+  const lag30 = [lagDisclosure(now - due, (m) => `delivered ${m}m after the T+30m mark — observation window as stated, not live`)].filter(Boolean);
+  const noClaim = 'No claim about the follow-through rate yet — that statistic starts accumulating from this event forward.';
+  // ctx.fig is set only when the T+5m message lacked the figure: then T+30m carries it, or says it is not out.
+  if (fig?.status === 'ok') return { title: `📊 ${name} · T+${tPlus}m: ${fig.headline}`, lines: [...(fig.detail ? [fig.detail] : []), move, ...lag30, `Source: ${fig.source}`], operatorLines: [...op, ...figOp(fig)] };
+  if (fig?.status === 'unparsed') return { title: `📊 ${name} · T+${tPlus}m: decision published, not parsed`, lines: [move, ...lag30, `Statement: ${fig.link}`, `Source: ${fig.source}`], operatorLines: [...op, ...figOp(fig)] };
   return { title: `📊 ${name} · T+${tPlus}m — initial move is ${held}`, lines: [
-    b30 !== null ? `BTC ${sgn(b30)}% from before the print to T+${tPlus}m (was ${sgn(b5)}% at the first reading)` : 'No pre-print basis.',
-    ...[lagDisclosure(now - due, (m) => `delivered ${m}m after the T+30m mark — observation window as stated, not live`)].filter(Boolean),
-    'No claim about the follow-through rate yet — that statistic starts accumulating from this event forward.',
-  ], operatorLines: op };
+    move, ...lag30, ...(fig ? [`The figure was not out by T+${tPlus}m; no later message will carry it.`] : [noClaim]),
+  ], operatorLines: [...op, ...figOp(fig)] };
+}
+// Pure: does the T+30m stage still owe the reader the figure? Only when the T+5m message did not
+// carry it (not published, or not reachable). "Not fetched" (no key) is final, not owed.
+export function figureNeededAt30(fig5) { return !fig5 || fig5.status === 'pending' || fig5.status === 'error'; }
+// A stage whose send fails is retried every poll; the figure is not re-fetched every poll. A final
+// answer (ok / unparsed / not fetched) is kept; a "not out yet" or an error is re-asked at most every 5 min.
+export async function cachedFigure(ev, rec, slot, st, now = Date.now(), fetchFigure = figureFor) {
+  const c = rec[slot];
+  if (c && (['ok', 'unparsed', 'unavailable'].includes(c.status) || now - c.at < 5 * 60e3)) return c;
+  const fig = await fetchFigure(ev, { budget: blsBudget(st.macro ?? st, now) });
+  rec[slot] = { ...fig, at: now };
+  return rec[slot];
+}
+// The keyless BLS budget, per UTC day, in state. Pure when st and now are injected.
+export function blsBudget(st, now = Date.now()) {
+  const day = new Date(now).toISOString().slice(0, 10);
+  return { take() { st.blsQueries = st.blsQueries?.day === day ? st.blsQueries : { day, n: 0 }; if (st.blsQueries.n >= BLS_DAILY_QUERIES - 1) return false; st.blsQueries.n++; return true; } };
 }
 const proseReported = new Set();
 
@@ -188,11 +216,15 @@ export async function pollMacro() {
         if (!proseReported.has(k)) { proseReported.add(k); console.error(`[macro][OPERATOR] calendar ${p.id}.${p.field} fails the prose lint (${p.problems.join(', ')}): "${p.text}" — rendering the built-in sentence instead. Fix data/macro-calendar.json.`); }
       }
       const ctx = { t0, now, due };
+      const hasFigure = BLS_SERIES[ev.kind] || ev.kind === 'FOMC' || ev.kind === 'PCE';
+      if (stage === 't30m' && ev.tier === 'STANDARD' && !(hasFigure && rec.fired.t5m && figureNeededAt30(rec.fig5))) { rec.fired.t30m = 'not-needed'; save(); continue; }
       if (stage === 't5m') {
         const snap = await marketSnap();
         ctx.b = pct(rec.pre?.btc, snap.btc); ctx.e = pct(rec.pre?.eth, snap.eth);
         rec.post5 = snap;
+        if (hasFigure) { ctx.fig = await cachedFigure(ev, rec, 'fig5', st, now); save(); }
       } else if (stage === 't30m') {
+        if (hasFigure && figureNeededAt30(rec.fig5)) { ctx.fig = await cachedFigure(ev, rec, 'fig30', st, now); save(); }
         const snap = await marketSnap();
         ctx.b5 = pct(rec.pre?.btc, rec.post5?.btc); ctx.b30 = pct(rec.pre?.btc, snap.btc);
         ctx.held = ctx.b5 !== null && ctx.b30 !== null

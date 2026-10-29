@@ -21,7 +21,8 @@ function etToUtc(dateStr, hm) {
 const STAGE_AT = { t24h: -24 * 3600e3, t60m: -3600e3, t5m: 5 * 60e3, t30m: 30 * 60e3 };
 // Tier -> stages mirrors macro.js STAGES. ANY tier promotion in the calendar is also
 // a wake-timer regeneration — rerun this + SETUP-WAKE-TIMERS.bat after every edit.
-const TIER_STAGES = { FULL: ['t24h', 't60m', 't5m', 't30m'], STANDARD: ['t24h', 't5m'] };
+// STANDARD t30m is conditional in macro.js (only when T+5m lacked the figure); a wake for it is harmless.
+const TIER_STAGES = { FULL: ['t24h', 't60m', 't5m', 't30m'], STANDARD: ['t24h', 't5m', 't30m'] };
 const WAKE_EARLY = 15 * 60e3;
 
 const cal = JSON.parse(readFileSync('data/macro-calendar.json', 'utf8')).events;

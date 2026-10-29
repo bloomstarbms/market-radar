@@ -2763,7 +2763,7 @@ console.log('74. MACRO MESSAGES — full names, one plain sentence, no bare abbr
   const op60 = renderMessage(m.macroMessage(events.bareFomc, 't60m', ctxFor('t60m')), 'operator');
   check('the hand-entered note (a frequency claim) renders to the OPERATOR only', /frequently reverses/.test(op60.text) && !/frequently reverses/.test(t60.text));
   const t5 = renderMessage(m.macroMessage(events.withFields, 't5m', ctxFor('t5m')), 'public');
-  check('T+5m: "printed — first reaction", the BTC/ETH move, consensus restated, and an honest "actual figure: not fetched" line', /^📊 Non-Farm Payrolls \(US jobs report\) printed — first reaction \(T\+6m\)$/.test(t5.title) && /BTC \+0\.8% · ETH -0\.3%/.test(t5.text) && /Consensus: \+150k \(as of 2026-09-30\) · actual figure: not fetched/.test(t5.text));
+  check('T+5m without the figure: "released — first reaction", the move from just before the release, consensus restated, and "not yet published at T+6m; the T+30m message carries it" (no "not fetched")', /^📊 Non-Farm Payrolls \(US jobs report\) released — first reaction \(T\+6m\)$/.test(t5.title) && /BTC \+0\.8% · ETH -0\.3% from just before the release/.test(t5.text) && /Consensus: \+150k \(as of 2026-09-30\)/.test(t5.text) && /The figure was not yet published at T\+6m; the T\+30m message carries it\./.test(t5.text) && !/not fetched/.test(t5.text));
   const t30 = renderMessage(m.macroMessage(events.withFields, 't30m', ctxFor('t30m')), 'public');
   check('T+30m: full name, initial move HOLDING, both readings, no follow-through claim', /Non-Farm Payrolls \(US jobs report\) · T\+31m — initial move is HOLDING/.test(t30.title) && /BTC \+1\.1% .* \(was \+0\.8% at the first reading\)/.test(t30.text) && /No claim about the follow-through rate yet/.test(t30.text));
   // A directional plain in the DATA never renders: the built-in sentence does, and the operator is told (fixture 30 proves the lint; this proves the fallback).
@@ -2771,10 +2771,8 @@ console.log('74. MACRO MESSAGES — full names, one plain sentence, no bare abbr
   const tbad = renderMessage(m.macroMessage(bad, 't24h', ctxFor('t24h')), 'public');
   check('MUTATION: a directional plain in the calendar is replaced by the built-in sentence in the rendering', !/cut odds/.test(tbad.text) && tbad.lines[1] === m.KIND_PLAIN.NFP);
   check('every built-in name and plain sentence is itself lint-clean and names its kind in full', Object.keys(m.KIND_NAMES).every((k) => proseProblems(m.KIND_NAMES[k]).length === 0 && proseProblems(m.KIND_PLAIN[k]).length === 0 && !bare(m.KIND_NAMES[k] + ' ' + m.KIND_PLAIN[k])));
-  // The other CPI path (cpi.js, its own hardcoded schedule) and its dispatcher label carry no bare abbreviation either.
-  const cpiSrc = readFileSync('src/sources/calendar/cpi.js', 'utf8');
-  const cpiStrings = [...cpiSrc.matchAll(/(?:title|lines):\s*\[?\s*`([^`]*)`/g)].map((x) => x[1]);
-  check('cpi.js titles and lines carry the full name, never "US CPI" / "CPI days" / YoY / MoM', cpiStrings.length >= 3 && cpiStrings.every((s) => /Consumer Price Index/.test(s) || !/\bCPI\b/.test(s)) && !/YoY|MoM|CPI days/.test(cpiSrc.split('export { SCHEDULE }')[0].replace(/^\s*\/\/.*$/gm, '')));
+  // cpi.js (a dead second CPI schedule with its own fetch) is DELETED: the calendar is the only schedule, figures.js the only fetch.
+  check('cpi.js is gone; the calendar is the only schedule and figures.js the only BLS fetch', !(await import('node:fs')).existsSync('src/sources/calendar/cpi.js') && /api\.bls\.gov/.test(readFileSync('src/sources/calendar/figures.js', 'utf8')));
   const { TAG_FOR_TEST } = await import('./src/core/dispatcher.js').then((d) => ({ TAG_FOR_TEST: formatAlert({ source: 'CAL', type: 'CPI', title: 'x', lines: [] }, { kind: 'FACT' }, 'public') }));
   check('the CAL:CPI dispatcher label no longer says "CPI"', !/\bCPI\b/.test(TAG_FOR_TEST));
   // The poll path builds through the pure builder (no inline title/lines left in pollMacro).
@@ -3417,6 +3415,91 @@ console.log('82. builder follows: baseline silent, ONE daily message (convergenc
     check('within the band: no DM, no new price, and the published price reads "reconciled"', r9.status === 'agree' && /price 60 credits\/call \(published, reconciled \+3% on 2026-10-22\)/.test(followStatus(st9, T0 + 86400e3, { cfgResult: { ok: true, cfg }, key: 'k', price: null }).line));
     check('at the published figure a page of 20 is $0.0006; 76 accounts once a day is ~$1.41 a 31-day month of the $40 cap', usd(60).toFixed(4) === '0.0006' && usd(60 * 76 * 31).toFixed(2) === '1.41');
   }
+}
+
+console.log('83. MACRO OUTCOMES — the Fed decision parsed from its statement, BLS levels turned into changes, PCE only with a key; never guessed');
+{
+  const F = await import('./src/sources/calendar/figures.js');
+  const m = await import('./src/sources/calendar/macro.js');
+  const { renderMessage } = await import('./src/core/dispatcher.js');
+  const { proseProblems } = await import('./src/core/prose-lint.js');
+  const html = readFileSync('fixtures/fomc-monetary20261028a.htm', 'utf8');
+  const feed = readFileSync('fixtures/fed-press_monetary-2026-10-29.xml', 'utf8');
+  const bls = JSON.parse(readFileSync('fixtures/bls-timeseries-2026-10-29.json', 'utf8')).response;
+  const p = F.parseFomcStatement(html), s = F.fomcSummary(p);
+  check('the REAL 28 Oct statement: decision, vote and dissents parse to "Held at 3.75–4.00% · vote 10–2 · two dissents preferred a 0.25 point hike"', s?.line === 'Held at 3.75–4.00% · vote 10–2 · two dissents preferred a 0.25 point hike' && p.problems.length === 0);
+  check('the statement reads "Lisa D. Cook and Beth M. Hammack, who preferred to raise": ONE clause covering TWO dissenters, matching the 10–2 vote', p.dissents.length === 1 && p.dissents[0].n === 2 && p.vote.against === 2 && /Lisa D\. Cook and Beth M\. Hammack, who preferred to raise/.test(F.statementText(html)));
+  // The page carries the statement four times (three meta descriptions with "&#8211;", the body with "–");
+  // the parser reads the body. A mutation replaces EVERY occurrence, in both dash forms, or it proves nothing.
+  const mut = (a, b) => { const forms = [[a, b], [a.replaceAll('&#8211;', '–'), b.replaceAll('&#8211;', '–')]];
+    let out = html; for (const [x, y] of forms) out = out.split(x).join(y);
+    if (out === html || F.statementText(out) === F.statementText(html)) throw new Error('fixture mutation did not change the statement body: ' + a);
+    return out; };
+  check('a decision sentence that does not parse → no headline, so the message says "decision published, not parsed"', F.fomcSummary(F.parseFomcStatement(mut('decided to maintain the target range', 'decided to keep the target range'))) === null);
+  check('the Fed\'s fractions read exactly: 3-3/4 → 3.75, 4 → 4, 1/4 → 0.25, 1/2 → 0.5; a word is not a number', F.fedNumber('3-3/4') === 3.75 && F.fedNumber('4') === 4 && F.fedNumber('1/4') === 0.25 && F.fedNumber('1/2') === 0.5 && F.fedNumber('four') === null);
+  const cut = mut('decided to maintain the target range for the federal funds rate at 3-3/4 to 4 percent', 'decided to lower the target range for the federal funds rate to 3-1/2 to 3-3/4 percent')
+    .split('who preferred to raise the target range for the federal funds rate by 1/4 percentage point').join('who preferred to lower the target range for the federal funds rate by 1/2 percentage point');
+  check('a cut renders "Lowered to 3.50–3.75%", and dissents preferring a bigger cut "preferred a 0.50 point cut"', F.fomcSummary(F.parseFomcStatement(cut))?.line === 'Lowered to 3.50–3.75% · vote 10–2 · two dissents preferred a 0.50 point cut');
+  check('a vote count that disagrees with the named dissenters says "dissents not parsed", never a count of its own', F.fomcSummary(F.parseFomcStatement(mut('by a 10 &#8211; 2 vote', 'by a 11 &#8211; 1 vote')))?.line === 'Held at 3.75–4.00% · vote 11–1 · dissents not parsed');
+  const twoClauses = mut('Lisa D. Cook and Beth M. Hammack, who preferred to raise the target range for the federal funds rate by 1/4 percentage point at this meeting.',
+    'Lisa D. Cook, who preferred to lower the target range for the federal funds rate by 1/4 percentage point at this meeting; and Beth M. Hammack, who preferred to raise the target range for the federal funds rate by 1/4 percentage point at this meeting.');
+  check('two dissents with different stated preferences are each stated', F.fomcSummary(F.parseFomcStatement(twoClauses))?.line === 'Held at 3.75–4.00% · vote 10–2 · one dissent preferred a 0.25 point cut · one dissent preferred a 0.25 point hike');
+  check('the REAL feed: the 28 Oct "Federal Reserve issues FOMC statement" item and its link; nothing for 29 Oct (not out = pending)', F.findFomcStatement(feed, '2026-10-28')?.link === 'https://www.federalreserve.gov/newsevents/pressreleases/monetary20261028a.htm' && F.findFomcStatement(feed, '2026-10-29') === null);
+  check('a feed link off federalreserve.gov is never followed', F.findFomcStatement(feed.replace('https://www.federalreserve.gov/newsevents/pressreleases/monetary20261028a.htm', 'https://example.org/monetary20261028a.htm'), '2026-10-28') === null);
+  // BLS: a LEVEL becomes a CHANGE (the units rule), on two REAL consecutive levels
+  const nfp = F.blsFigure('NFP', bls, { kind: 'NFP', date: '2026-10-02' });
+  check('payrolls from two REAL levels (Aug 159,015 → Sep 159,044): "+29k jobs in Sep (first estimate)", never 159,044', nfp.headline === '+29k jobs in Sep (first estimate)' && !/159/.test(nfp.headline) && nfp.detail === 'Unemployment 4.2% (prior 4.1%)');
+  const swap = JSON.parse(JSON.stringify(bls)), ces = swap.Results.series.find((x) => x.seriesID === 'CES0000000001').data;
+  const sep = ces.find((d) => d.year === '2026' && d.period === 'M09'), aug = ces.find((d) => d.year === '2026' && d.period === 'M08');
+  [sep.value, aug.value] = [aug.value, sep.value];
+  check('MUTATION, the two months swapped: "-29k" (the sign is checked)', F.blsFigure('NFP', swap, { kind: 'NFP', date: '2026-10-02' }).headline === '-29k jobs in Sep (first estimate)');
+  const one = JSON.parse(JSON.stringify(bls));
+  one.Results.series.find((x) => x.seriesID === 'CES0000000001').data = one.Results.series.find((x) => x.seriesID === 'CES0000000001').data.filter((d) => !(d.year === '2026' && d.period === 'M08'));
+  check('MUTATION, only one month: pending ("not yet published"), never a figure', F.blsFigure('NFP', one, { kind: 'NFP', date: '2026-10-02' }).status === 'pending');
+  check('the next release (6 Nov, October data) is pending on today\'s data, not a figure', F.blsFigure('NFP', bls, { kind: 'NFP', date: '2026-11-06' }).status === 'pending');
+  check('CPI from the REAL Sep indexes: "+0.6% in Sep, 3.7% over the year" (336.298 / 334.131; 336.940 / Sep 2025)', F.blsFigure('CPI', bls, { kind: 'CPI', date: '2026-10-14' }).headline === '+0.6% in Sep, 3.7% over the year');
+  check('PPI final demand from the REAL Sep indexes: "final demand +1.3% in Sep, 6.3% over the year"', F.blsFigure('PPI', bls, { kind: 'PPI', date: '2026-10-15' }).headline === 'final demand +1.3% in Sep, 6.3% over the year');
+  check('a refused BLS request is an error with its reason, not a figure', F.blsFigure('CPI', { status: 'REQUEST_NOT_PROCESSED', message: ['daily threshold'] }, { kind: 'CPI', date: '2026-10-14' }).status === 'error');
+  check('the reference month is the calendar\'s ref when entered, else the month before the release', JSON.stringify(F.refMonth({ date: '2026-10-14' })) === '[2026,9]' && JSON.stringify(F.refMonth({ date: '2026-01-09' })) === '[2025,12]' && JSON.stringify(F.refMonth({ date: '2026-10-14', ref: '2026-08' })) === '[2026,8]');
+  // PCE
+  check('PCE without a key: "unavailable" with no fetch, and the heartbeat says why', (await F.figureFor({ kind: 'PCE', date: '2026-10-29' }, { key: '', fetchImpl: async () => { throw new Error('must not fetch'); } })).status === 'unavailable'
+    && /PCE ⚠️ not fetched: no BEA_API_KEY in \.env/.test(F.macroFigureCoverage({ beaKey: '' }).line) && /PCE from apps\.bea\.gov/.test(F.macroFigureCoverage({ beaKey: 'k' }).line));
+  const bea = { BEAAPI: { Results: { Data: [{ LineDescription: 'Personal consumption expenditures (PCE)', TimePeriod: '2026M09', DataValue: '0.3' }, { LineDescription: 'PCE excluding food and energy', TimePeriod: '2026M09', DataValue: '0.2' }, { LineDescription: 'Personal consumption expenditures (PCE)', TimePeriod: '2026M08', DataValue: '0.1' }] } } };
+  check('PCE with a key, on BEA\'s documented row shape: "prices +0.3% in Sep" · "Excluding food and energy +0.2%"; a missing month is pending', JSON.stringify(F.beaPceFigure(bea, { date: '2026-10-29' })) === JSON.stringify({ status: 'ok', source: 'bea.gov', headline: 'prices +0.3% in Sep', detail: 'Excluding food and energy +0.2%' })
+    && F.beaPceFigure(bea, { date: '2026-11-25' }).status === 'pending');
+  const fake = async (url) => ({ ok: true, status: 200, text: async () => (url === F.FED_FEED ? feed : html), json: async () => bls });
+  const fo = await F.figureFor({ kind: 'FOMC', date: '2026-10-28' }, { fetchImpl: fake });
+  check('figureFor, the Fed end to end on the real feed and statement: ok, federalreserve.gov, the statement link', fo.status === 'ok' && fo.headline === 'held at 3.75–4.00%' && fo.detail === 'Vote 10–2 · two dissents preferred a 0.25 point hike' && fo.source === 'federalreserve.gov' && /monetary20261028a\.htm$/.test(fo.link));
+  check('figureFor, payrolls end to end on the real BLS response: the same "+29k" figure', (await F.figureFor({ kind: 'NFP', date: '2026-10-02' }, { fetchImpl: fake })).headline === '+29k jobs in Sep (first estimate)');
+  // MESSAGES
+  const fomcEv = { id: 'fomc-2026-10', kind: 'FOMC', tier: 'FULL', date: '2026-10-28', et: '14:00', verified: true };
+  const t0 = m.etToUtc('2026-10-28', '14:00');
+  const msg = renderMessage(m.macroMessage(fomcEv, 't5m', { t0, now: t0 + 5 * 60e3, b: '0.22', e: '0.18', fig: fo }), 'public');
+  check('the T+5m message is the spec: "📊 Federal Reserve rate decision: held at 3.75–4.00%" · vote · the reaction to T+5m · the source', msg.title === '📊 Federal Reserve rate decision: held at 3.75–4.00%'
+    && JSON.stringify(msg.lines) === JSON.stringify(['Vote 10–2 · two dissents preferred a 0.25 point hike', 'BTC +0.22% · ETH +0.18% from just before the release to T+5m', 'Source: federalreserve.gov']));
+  check('facts only: the message passes the prose lint', [msg.title, ...msg.lines].every((l) => proseProblems(l).length === 0));
+  const un = renderMessage(m.macroMessage(fomcEv, 't5m', { t0, now: t0 + 5 * 60e3, b: '0.22', e: '0.18', fig: { status: 'unparsed', source: 'federalreserve.gov', link: fo.link, why: 'decision sentence not found' } }), 'public');
+  check('an unparsed decision sends "decision published, not parsed" with the link, and no rate', un.title === '📊 Federal Reserve rate decision: decision published, not parsed' && un.lines.includes(`Statement: ${fo.link}`) && !/\d\.\d\d–/.test(un.text));
+  const nfpEv = { id: 'nfp-2026-10', kind: 'NFP', tier: 'STANDARD', date: '2026-10-02', et: '08:30' }, n0 = m.etToUtc('2026-10-02', '08:30');
+  const nm = renderMessage(m.macroMessage(nfpEv, 't5m', { t0: n0, now: n0 + 5 * 60e3, b: '0.25', e: '0.11', fig: nfp }), 'public');
+  check('payrolls T+5m: "📊 Non-Farm Payrolls (US jobs report): +29k jobs in Sep (first estimate)", unemployment, reaction, source', nm.title === '📊 Non-Farm Payrolls (US jobs report): +29k jobs in Sep (first estimate)' && nm.lines[0] === 'Unemployment 4.2% (prior 4.1%)' && nm.lines.at(-1) === 'Source: bls.gov');
+  const pend = renderMessage(m.macroMessage(nfpEv, 't5m', { t0: n0, now: n0 + 5 * 60e3, b: '0.25', e: '0.11', fig: { status: 'pending', why: 'x' } }), 'public');
+  const late = renderMessage(m.macroMessage(nfpEv, 't30m', { t0: n0, now: n0 + 30 * 60e3, b5: '0.25', b30: '0.40', held: 'HOLDING', fig: nfp }), 'public');
+  const never = renderMessage(m.macroMessage(nfpEv, 't30m', { t0: n0, now: n0 + 30 * 60e3, b5: '0.25', b30: '0.40', held: 'HOLDING', fig: { status: 'pending', why: 'x' } }), 'public');
+  check('not out at T+5m: T+5m says so and points to T+30m; T+30m carries the figure, or says it was not out by T+30m', /The figure was not yet published at T\+5m; the T\+30m message carries it\./.test(pend.text)
+    && late.title === '📊 Non-Farm Payrolls (US jobs report) · T+30m: +29k jobs in Sep (first estimate)' && /The figure was not out by T\+30m; no later message will carry it\./.test(never.text));
+  check('a STANDARD event owes a T+30m message only when T+5m lacked the figure; "not fetched" (no key) is final', m.figureNeededAt30({ status: 'pending' }) && m.figureNeededAt30({ status: 'error' }) && m.figureNeededAt30(undefined)
+    && !m.figureNeededAt30({ status: 'ok' }) && !m.figureNeededAt30({ status: 'unparsed' }) && !m.figureNeededAt30({ status: 'unavailable' }));
+  const pce = renderMessage(m.macroMessage({ id: 'pce-2026-10', kind: 'PCE', tier: 'STANDARD', date: '2026-10-29', et: '08:30' }, 't5m', { t0: n0, now: n0 + 5 * 60e3, b: '0.1', e: '0.1', fig: { status: 'unavailable', why: 'no BEA_API_KEY' } }), 'public');
+  check('"not fetched by this bot" remains ONLY where nothing is fetched (PCE without a key)', /Actual figure: not fetched by this bot\./.test(pce.text) && !/not fetched/.test(nm.text + pend.text + late.text + never.text + msg.text + un.text));
+  const stB = {}, bud = m.blsBudget(stB, Date.UTC(2026, 9, 29, 12));
+  let took = 0; for (let i = 0; i < 30; i++) if (bud.take()) took++;
+  check('the keyless BLS budget allows 24 queries a UTC day (one of 25 held back) and resets the next day', took === 24 && m.blsBudget(stB, Date.UTC(2026, 9, 30, 1)).take() === true);
+  let calls = 0; const rec = {}; const ff = async () => { calls++; return { status: 'pending', why: 'x' }; };
+  await m.cachedFigure(nfpEv, rec, 'fig5', {}, 1e12, ff); await m.cachedFigure(nfpEv, rec, 'fig5', {}, 1e12 + 60e3, ff); await m.cachedFigure(nfpEv, rec, 'fig5', {}, 1e12 + 6 * 60e3, ff);
+  await m.cachedFigure(nfpEv, { fig5: { status: 'ok', headline: 'h', at: 1 } }, 'fig5', {}, 1e12, ff);
+  check('a retried send does not re-fetch every poll: "not out" is re-asked at most every 5 min, a final answer never', calls === 2);
+  check('the poller fetches the figure at T+5m and, for a STANDARD event, sends T+30m only when the figure is still owed', (() => { const src = readFileSync('src/sources/calendar/macro.js', 'utf8'); return /stage === 't30m' && ev\.tier === 'STANDARD' && !\(hasFigure && rec\.fired\.t5m && figureNeededAt30\(rec\.fig5\)\)/.test(src) && /cachedFigure\(ev, rec, 'fig5'/.test(src) && /cachedFigure\(ev, rec, 'fig30'/.test(src); })());
 }
 
 console.error = origErr;

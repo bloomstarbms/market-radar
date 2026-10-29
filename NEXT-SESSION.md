@@ -141,9 +141,9 @@ ALSO QUEUED, small, whenever there is room:
     the September verdict ratio under each, and a spec with meanBasis unset is refused
     by sourcedRowProblems/verifiedRowProblems (a mean of unknown kind is the units error
     coming back).
-  - THE PRINT BESIDE THE REACTION (2026-10-04): fetch NFP and CPI from api.bls.gov
-    after release into the T+30m message; cpi.js is dead code and should be deleted
-    once its period logic is reused. Full item in REMAINING-WORK-NOTES.md.
+  - DONE 2026-10-29 — THE PRINT BESIDE THE REACTION: CPI, payrolls and PPI from api.bls.gov,
+    the Fed decision from its statement, PCE with a BEA key; cpi.js deleted. See the
+    REMAINING-WORK-NOTES.md entries of 2026-10-29 (and the FOMC correction there).
   - The version bump should ask each file's PREMISE what "Written against" means
     rather than sed-ing a number across every .md. The 2026-09-13 blanket sed
     reached a parked patch and a brief that each had a different claim to make

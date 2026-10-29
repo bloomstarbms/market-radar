@@ -4817,3 +4817,55 @@ nothing fresh sends nothing; 60 entries stay under the cap with "+N more" and ev
 reaches the DM's full list; the six-line cap enforced; an undelivered message retried
 once; the empty-baseline (@ethereum) case restored (it had been dropped by the overflow
 rewrite on the branch).
+
+## 2026-10-29 — CORRECTION: FOMC HAS A KEYLESS SOURCE (the 2026-10-04 entry was wrong)
+
+The 2026-10-04 entry "QUEUED: THE PRINT BESIDE THE REACTION" says "PCE is BEA (keyed API)
+and FOMC has no keyless source; both keep 'not fetched'". The FOMC half is wrong. The
+Fed's monetary press feed (https://www.federalreserve.gov/feeds/press_monetary.xml) lists
+"Federal Reserve issues FOMC statement" at 14:00 ET, and the linked statement page carries
+the decision sentence, the vote count ("by a 10 – 2 vote") and each dissent's stated
+preference. Both answered from the VPS on IPv4 and IPv6 on 2026-10-29 (HTTP 200, ~0.14 s).
+The PCE half stands: BEA's API needs a (free) key.
+
+## 2026-10-29 — MACRO MESSAGES STATE THE OUTCOME, NOT JUST THE REACTION
+
+Operator spec 2026-10-29. New module src/sources/calendar/figures.js; macro.js renders the
+figure at T+5m, or says it is not out and carries it (or its absence) at T+30m. No later
+separate message.
+
+- FEDERAL RESERVE: the feed item for the meeting date (ET), then the statement page, parsed
+  for the decision sentence ("decided to maintain/raise/lower the target range for the
+  federal funds rate at/to X to Y percent", the Fed's fractions read exactly: 3-3/4 = 3.75),
+  the vote ("by a 10 – 2 vote") and each "who preferred to ..." clause. The dissenter names
+  are counted and must equal the vote's minority, or the message says "dissents not
+  parsed". A decision sentence that does not parse sends "decision published, not parsed"
+  with the statement link. Only federalreserve.gov links are followed.
+- THE REAL 28 OCT STATEMENT (fixtures/fomc-monetary20261028a.htm) renders "Held at
+  3.75–4.00% · vote 10–2 · two dissents preferred a 0.25 point hike". The brief expected
+  "one dissent": the statement reads "Voting against the monetary policy action were Lisa
+  D. Cook and Beth M. Hammack, who preferred to raise the target range for the federal
+  funds rate by 1/4 percentage point at this meeting." One clause covers both dissenters,
+  and the vote is 10–2. Rendered as the statement says, not as the brief guessed.
+- CPI · PAYROLLS · PPI from api.bls.gov v2, keyless (one query per release stage, budget 24
+  of the 25 a day kept in state). Payrolls are a LEVEL, the headline is the CHANGE: real
+  Aug 159,015 → Sep 159,044 renders "+29k jobs in Sep (first estimate)"; swapped months
+  render "-29k"; one month alone is "not yet published". CPI and PPI final demand: monthly
+  change from the seasonally adjusted index, yearly from the unadjusted, from the published
+  3-decimal levels (BLS's own method), one decimal: real Sep CPI "+0.6% in Sep, 3.7% over
+  the year", PPI "final demand +1.3% in Sep, 6.3% over the year". Real response saved:
+  fixtures/bls-timeseries-2026-10-29.json.
+- PCE: BEA_API_KEY in .env (free, apps.bea.gov/API/signup). Without it the message keeps
+  "Actual figure: not fetched by this bot." and the heartbeat line "Macro figures: ... PCE
+  ⚠️ not fetched: no BEA_API_KEY in .env". With it: NIPA table T20807, built against BEA's
+  documented row shape, NOT yet exercised live (no key exists).
+- MESSAGE: "📊 Federal Reserve rate decision: held at 3.75–4.00%" · "Vote 10–2 · two
+  dissents preferred a 0.25 point hike" · "BTC +x% · ETH +y% from just before the release
+  to T+5m" · "Source: federalreserve.gov". STANDARD events (payrolls, PPI, PCE) gained a
+  conditional T+30m stage: sent only when T+5m lacked the figure; with a key-less PCE the
+  answer is final and nothing is owed. A failed send is retried without re-fetching every
+  poll ("not out" is re-asked at most every 5 minutes).
+- "not fetched by this bot" is gone wherever a figure is fetched; it remains only for PCE
+  without a key. cpi.js (the dead second CPI schedule) is DELETED, as the 2026-10-04 item
+  required: the calendar is the only schedule and figures.js the only fetch.
+- Fixture 83 on the real statement, feed and BLS response; fixture 74 updated.

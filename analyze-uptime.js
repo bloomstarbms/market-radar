@@ -42,7 +42,8 @@ function etToUtc(dateStr, hm) {
   }
   return Date.parse(`${dateStr}T${hm}:00-05:00`);
 }
-const STAGES = { FULL: ['t24h', 't60m', 't5m', 't30m'], STANDARD: ['t24h', 't5m'], DIGEST: [] };
+// STANDARD t30m is conditional (sent only when the T+5m message lacked the figure), counted as possible.
+const STAGES = { FULL: ['t24h', 't60m', 't5m', 't30m'], STANDARD: ['t24h', 't5m', 't30m'], DIGEST: [] };
 const STAGE_AT = { t24h: -24 * 3600e3, t60m: -3600e3, t5m: 5 * 60e3, t30m: 30 * 60e3 };
 const ASLEEP = 0.5;
 
