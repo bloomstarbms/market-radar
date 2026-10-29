@@ -4887,3 +4887,18 @@ Checked against the real tree: a copy-only run holds all 219 source files but on
 data/state.json.248892.tmp left on the desktop (exactly the class skipped). Fixture 63:
 in-flight temps not copied, real files and a non-pid .tmp outside data/ copied, a vanishing
 file skipped with the copy completing (marker written, no .env), an EACCES still aborting.
+
+## 2026-10-29 — v0.36.2: THE COPY COUNTS WHAT IT SKIPS; LEFTOVER TEMP FILES ARE SWEPT AT BOOT
+
+Operator follow-ups to v0.36.1:
+1. boot-check prints "copy: N files, skipped M tmp, V vanished". One file vanishing during a
+   live write is normal; more than MAX_VANISHED (3) means something other than a save is
+   deleting files mid-deploy, so boot-check refuses before the suite and names the files.
+   Fixture 63: 1 vanishing file passes, 4 refuse, every name in the refusal.
+2. At boot (after the preflight exit, which promises no write), every *.<digits>.tmp under
+   data/ older than an hour is deleted and the operator told ("[OPERATOR][boot] N leftover
+   temp file(s) ... deleted"). Each is an interrupted save. More than 5 in 24 hours puts a
+   line on the heartbeat: repeated interrupted saves are a bug, not housekeeping. Sweeps are
+   kept in state (tmpSweeps, 7 days). The desktop's data/state.json.248892.tmp (2.6 MB, last
+   written 2026-08-27, the desktop bot disabled since the migration) was deleted by hand; the
+   VPS had none.

@@ -2204,8 +2204,40 @@ console.log('63. a COPY of the tree cannot send — by construction, not by a ru
         && ex(join(d2, COPY_MARKER)) && !ex(join(d2, '.env')));
       const denied = (from, to) => { if (/a\.js$/.test(from)) { const e = new Error('EACCES: permission denied'); e.code = 'EACCES'; throw e; } return copyFileSync(from, to); };
       check('any OTHER error still aborts the copy (a copy that silently lost files would prove nothing)', (() => { try { makeCopy(s2, d2, { copyFile: denied, note: () => {} }); return false; } catch (e) { return e.code === 'EACCES'; } })());
+      {
+        // COUNT WHAT IS SKIPPED, REFUSE PAST 3 VANISHED (v0.36.2)
+        const { copyVerdict, MAX_VANISHED } = await import('./boot-check.js');
+        const many = (n) => { const r = {}; const vanish = new Set(['a.js', 'sub/b.js', 'data/state.json', 'cleanup-result.tmp'].slice(0, n).map((x) => x.replaceAll('/', join('a', 'b').includes('\\') ? '\\' : '/')));
+          makeCopy(s2, d2, { report: r, note: () => {}, copyFile: (from, to) => { const rel = from.slice(s2.length + 1); if (vanish.has(rel) || /vanish\.json$/.test(from)) { const e = new Error('ENOENT'); e.code = 'ENOENT'; throw e; } return copyFileSync(from, to); } });
+          return r; };
+        const r1 = many(0), v1 = copyVerdict(r1), r4 = many(3), v4 = copyVerdict(r4);
+        check('the copy counts what it skips: "copy: N files, skipped M tmp, V vanished"', /^copy: \d+ files, skipped 3 tmp, 1 vanished$/.test(v1.line) && r1.copied >= 4);
+        check('1 vanishing file passes; 4 refuse the deploy and name every file', v1.ok && MAX_VANISHED === 3 && r4.vanished.length === 4 && !v4.ok && /REFUSED: 4 files vanished/.test(v4.refusal) && /vanish\.json/.test(v4.refusal) && /a\.js/.test(v4.refusal));
+        check('the CLI prints the line and exits before the suite when the verdict refuses', (() => { const src = readFileSync('boot-check.js', 'utf8'); return /console\.log\(verdict\.line\)/.test(src) && /if \(!verdict\.ok\) \{ console\.error\(verdict\.refusal\); process\.exit\(1\); \}/.test(src) && src.indexOf('verdict.ok') < src.indexOf("run('suite'"); })());
+      }
       check('isInFlight is exact: pid temps anywhere and any .tmp under data/, nothing else', isInFlight('data/state.json.164938.tmp') && isInFlight('state.json.12.tmp') && isInFlight('data/x.tmp') && !isInFlight('cleanup-result.tmp') && !isInFlight('data/state.json') && !isInFlight('data/tmp.json'));
     } finally { rm(s2, { recursive: true, force: true }); rm(d2, { recursive: true, force: true }); }
+  }
+  {
+    // LEFTOVER TEMP FILES AT BOOT (v0.36.2): stale *.<pid>.tmp under data/ deleted and counted; > 5 in 24h is a heartbeat line.
+    const T = await import('./src/core/tmp-sweep.js');
+    const { utimesSync } = await import('node:fs');
+    const dd = mkdtempSync(join(tmpdir(), 'mr-sweep-'));
+    md(join(dd, 'backups'));
+    const old = (Date.now() - 2 * 3600e3) / 1000;
+    for (const f of ['state.json.248892.tmp', join('backups', 'outcomes.json.77.tmp')]) { wf(join(dd, f), '{'); utimesSync(join(dd, f), old, old); }
+    wf(join(dd, 'cadence-watch.json.555.tmp'), '{'); // fresh: a save may be in flight
+    wf(join(dd, 'scratch.tmp'), 'x'); utimesSync(join(dd, 'scratch.tmp'), old, old); // not a pid temp
+    wf(join(dd, 'state.json'), '{}'); utimesSync(join(dd, 'state.json'), old, old);
+    try {
+      const st = {}, sw = T.sweepStaleTmp(st, dd, Date.now());
+      check('boot sweep: *.<pid>.tmp older than 1 h are deleted (subfolders too); a fresh one, a non-pid .tmp and real files are kept', sw.deleted.length === 2 && !ex(join(dd, 'state.json.248892.tmp')) && !ex(join(dd, 'backups', 'outcomes.json.77.tmp'))
+        && ex(join(dd, 'cadence-watch.json.555.tmp')) && ex(join(dd, 'scratch.tmp')) && ex(join(dd, 'state.json')) && st.tmpSweeps.length === 1 && st.tmpSweeps[0].n === 2);
+      const now = Date.now(), at = (h, n) => ({ at: now - h * 3600e3, n, files: [`f${n}.1.tmp`] });
+      check('2 found in a day is housekeeping: no heartbeat line', T.tmpSweepStatus({ tmpSweeps: [at(1, 2)] }, now).line === null);
+      check('more than 5 in 24h puts the line on the heartbeat: "repeated interrupted saves are a bug, not housekeeping"', /🚨 Interrupted saves: 6 leftover temp files found at boot in 24h .* repeated interrupted saves are a bug, not housekeeping/.test(T.tmpSweepStatus({ tmpSweeps: [at(2, 4), at(20, 2), at(30, 9)] }, now).line ?? ''));
+      check('the boot runs the sweep AFTER the preflight exit (preflight promises no write) and tells the operator', (() => { const src = readFileSync('src/index.js', 'utf8'); const p = src.indexOf('if (PREFLIGHT)'), q = src.indexOf('sweepStaleTmp(getState()'); return p > 0 && q > p && /\[OPERATOR\]\[boot\] \$\{sw\.deleted\.length\} leftover temp file/.test(src); })());
+    } finally { rm(dd, { recursive: true, force: true }); }
   }
 }
 

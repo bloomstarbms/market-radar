@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { config, VERSION, ROOT, migratedGuard } from './config.js';
 import { load, getState, save } from './core/store.js';
+import { sweepStaleTmp } from './core/tmp-sweep.js';
 import { startBot } from './core/telegram.js';
 import { dispatch, recordSuppressedRug, checkPendingListings } from './core/dispatcher.js';
 import { dailyDigest, heartbeat } from './core/telemetry.js';
@@ -210,6 +211,12 @@ async function main() {
   }
   console.log(`[boot] tier-1 venue collectors: OK (${vc.venues.join(', ')})`);
   if (PREFLIGHT) { console.log(`[preflight] v${VERSION}: five gates OK — not starting (no poll, no send, no write)`); process.exit(0); }
+  // Leftover *.<pid>.tmp under data/ older than an hour are interrupted saves: deleted, and the operator told.
+  { const sw = sweepStaleTmp(getState(), config.dataDir, Date.now());
+    if (sw.deleted.length || sw.failed.length) {
+      console.error(`[OPERATOR][boot] ${sw.deleted.length} leftover temp file(s) older than 1 h deleted under data/ (interrupted saves): ${sw.deleted.slice(0, 5).join(', ')}${sw.failed.length ? ` · could not delete ${sw.failed.length}: ${sw.failed.join(', ')}` : ''}`);
+      save();
+    } }
   purgeExcludedFromAdv();
   const whaleMode = (config.etherscanKey ? 'evm ' : '') + (config.heliusKey ? 'solana' : '') || 'OFF (no keys)';
   console.log(`Market Radar v${VERSION} starting · poll ${config.pollIntervalSec}s · minSev ${config.minSeverity} · telegram ${config.telegramToken ? 'ON' : 'OFF (console-only)'} · cex [${config.cexExchanges.join(', ')}] · whale ${whaleMode}`);

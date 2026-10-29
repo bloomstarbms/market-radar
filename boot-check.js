@@ -26,13 +26,22 @@ const SKIP = new Set([...NEVER_COPIED, '.git', 'node_modules', COPY_MARKER, MIGR
 //     (they are half-written by definition; the file they become is copied in its own right);
 //   - a file that vanishes between listing and copying is skipped with a note, not fatal;
 //   - any other error still aborts the copy (a copy that silently lost files would prove nothing).
+// ONE file vanishing during a live write is normal; MANY means something else is deleting
+// files mid-deploy, and a suite run on that copy proves nothing. Past MAX_VANISHED the deploy
+// is refused and the files are named. Pure.
+export const MAX_VANISHED = 3;
+export function copyVerdict(r) {
+  const line = `copy: ${r.copied} files, skipped ${r.inFlight.length} tmp, ${r.vanished.length} vanished`;
+  if (r.vanished.length <= MAX_VANISHED) return { ok: true, line };
+  return { ok: false, line, refusal: `[boot-check] REFUSED: ${r.vanished.length} files vanished during the copy (more than ${MAX_VANISHED}: something other than a live save is deleting files mid-deploy): ${r.vanished.join(', ')}` };
+}
 export const isInFlight = (rel) => { const n = basename(rel); return /\.\d+\.tmp$/.test(n) || (/^data[\\/]/.test(rel) && /\.tmp$/.test(n)); };
 // deps (for the fixture): { copyFile, readdir, note, report } — report receives { inFlight: [], vanished: [] }.
 export function makeCopy(src, dest, deps = {}) {
   const copyFile = deps.copyFile ?? copyFileSync;
   const list = deps.readdir ?? ((d) => readdirSync(d, { withFileTypes: true }));
   const note = deps.note ?? ((m) => console.log(m));
-  const skipped = { inFlight: [], vanished: [] };
+  const skipped = { copied: 0, inFlight: [], vanished: [] };
   const gone = (e) => e?.code === 'ENOENT';
   rmSync(dest, { recursive: true, force: true });
   mkdirSync(dest, { recursive: true });
@@ -46,7 +55,7 @@ export function makeCopy(src, dest, deps = {}) {
       try {
         if (ent.isDirectory()) { mkdirSync(join(dest, r), { recursive: true }); walk(r); }
         else if (ent.isSymbolicLink()) cpSync(join(src, r), join(dest, r));
-        else copyFile(join(src, r), join(dest, r));
+        else { copyFile(join(src, r), join(dest, r)); skipped.copied++; }
       } catch (e) {
         if (!gone(e)) throw e;
         skipped.vanished.push(r);
@@ -65,8 +74,12 @@ const isCli = process.argv[1] && basename(process.argv[1]) === 'boot-check.js';
 if (isCli) {
   const args = process.argv.slice(2);
   const dest = args.find((a) => !a.startsWith('--')) ?? join(tmpdir(), 'market-radar-copy');
-  const copy = makeCopy(process.cwd(), dest);
+  const report = {};
+  const copy = makeCopy(process.cwd(), dest, { report });
   console.log(`copy: ${copy} (no .env, ${COPY_MARKER} written)`);
+  const verdict = copyVerdict(report);
+  console.log(verdict.line);
+  if (!verdict.ok) { console.error(verdict.refusal); process.exit(1); }
   if (args.includes('--copy-only')) process.exit(0);
   // Suite: the stub token (fetch is stubbed inside the suite; the guard admits only
   // this sentinel). Boot: no token at all — console-only.
