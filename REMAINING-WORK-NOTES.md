@@ -4869,3 +4869,21 @@ separate message.
   without a key. cpi.js (the dead second CPI schedule) is DELETED, as the 2026-10-04 item
   required: the calendar is the only schedule and figures.js the only fetch.
 - Fixture 83 on the real statement, feed and BLS response; fixture 74 updated.
+
+## 2026-10-29 — v0.36.1: BOOT-CHECK COPIES A TREE THAT IS BEING WRITTEN
+
+The v0.36.0 deploy was refused on its first attempt before the suite ran: boot-check's copy
+threw "ENOENT: no such file or directory, lstat
+'/home/radar/market-radar/data/state.json.164938.tmp'". On the VPS boot-check copies the
+tree while the live bot writes it; store.js saves state.json through a per-PID temp file and
+renames it (cadence-watch and builder-follows do the same), and cpSync lists a directory
+before copying each entry. The gate did the right thing (no restart); a retry passed. A copy
+race should not fail a deploy, so makeCopy is now an explicit walk:
+- in-flight temp files are never copied: `*.<digits>.tmp` anywhere, any `*.tmp` under data/
+  (half-written by definition; the file they become is copied in its own right);
+- a file that vanishes between listing and copying is skipped with a note;
+- any other error still aborts the copy.
+Checked against the real tree: a copy-only run holds all 219 source files but one, a stale
+data/state.json.248892.tmp left on the desktop (exactly the class skipped). Fixture 63:
+in-flight temps not copied, real files and a non-pid .tmp outside data/ copied, a vanishing
+file skipped with the copy completing (marker written, no .env), an EACCES still aborting.

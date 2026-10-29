@@ -2182,6 +2182,31 @@ console.log('63. a COPY of the tree cannot send — by construction, not by a ru
     check('makeCopy: .env is NOT in the copy, the marker IS, sources and data are', !ex(join(dst, '.env')) && ex(join(dst, COPY_MARKER)) && ex(join(dst, 'a.js')) && ex(join(dst, 'data', 'x.json')) && !ex(join(dst, 'node_modules')));
     check('the copy it makes is exactly the shape the guard refuses to run with a token', /must not send/.test(copySendGuard(dst, { TELEGRAM_BOT_TOKEN: 't' }) || '') && copySendGuard(dst, {}) === null);
   } finally { rm(src, { recursive: true, force: true }); rm(dst, { recursive: true, force: true }); }
+  {
+    // A COPY MADE WHILE THE BOT RUNS (2026-10-29: "ENOENT ... lstat data/state.json.164938.tmp" refused
+    // the v0.36.0 deploy before the suite ran). In-flight temp files are not copied; a file that
+    // vanishes between listing and copying is skipped with a note; any other error still aborts.
+    const { isInFlight } = await import('./boot-check.js');
+    const { copyFileSync } = await import('node:fs');
+    const s2 = mkdtempSync(join(tmpdir(), 'mr-src2-')), d2 = join(tmpdir(), 'mr-dst2-' + process.pid);
+    md(join(s2, 'data')); md(join(s2, 'sub'));
+    wf(join(s2, '.env'), 'TELEGRAM_BOT_TOKEN=secret'); wf(join(s2, 'a.js'), '1'); wf(join(s2, 'cleanup-result.tmp'), 'root tmp'); wf(join(s2, 'sub', 'b.js'), '2');
+    wf(join(s2, 'data', 'state.json'), '{}'); wf(join(s2, 'data', 'state.json.164938.tmp'), '{"half":'); wf(join(s2, 'data', 'cadence-watch.json.77.tmp'), '{'); wf(join(s2, 'data', 'scratch.tmp'), 'x'); wf(join(s2, 'data', 'vanish.json'), '{}');
+    const notes = [], report = {};
+    // The live writer renames data/vanish.json away after it was listed: copyFile meets ENOENT.
+    const racing = (from, to) => { if (/vanish\.json$/.test(from)) { const e = new Error('ENOENT: no such file or directory'); e.code = 'ENOENT'; throw e; } return copyFileSync(from, to); };
+    try {
+      makeCopy(s2, d2, { copyFile: racing, note: (m) => notes.push(m), report });
+      check('makeCopy with a live writer: in-flight temp files (*.<pid>.tmp anywhere, *.tmp under data/) are not copied', !ex(join(d2, 'data', 'state.json.164938.tmp')) && !ex(join(d2, 'data', 'cadence-watch.json.77.tmp')) && !ex(join(d2, 'data', 'scratch.tmp'))
+        && report.inFlight.length === 3);
+      check('...the real files are: data/state.json, sources, subfolders, and a .tmp OUTSIDE data/ that is not a pid temp', ex(join(d2, 'data', 'state.json')) && ex(join(d2, 'a.js')) && ex(join(d2, 'sub', 'b.js')) && ex(join(d2, 'cleanup-result.tmp')));
+      check('a file that vanished between listing and copying is skipped with a note, and the copy completes (marker written, no .env)', report.vanished.length === 1 && /vanish\.json/.test(report.vanished[0]) && notes.some((n) => /vanish\.json vanished during the copy/.test(n))
+        && ex(join(d2, COPY_MARKER)) && !ex(join(d2, '.env')));
+      const denied = (from, to) => { if (/a\.js$/.test(from)) { const e = new Error('EACCES: permission denied'); e.code = 'EACCES'; throw e; } return copyFileSync(from, to); };
+      check('any OTHER error still aborts the copy (a copy that silently lost files would prove nothing)', (() => { try { makeCopy(s2, d2, { copyFile: denied, note: () => {} }); return false; } catch (e) { return e.code === 'EACCES'; } })());
+      check('isInFlight is exact: pid temps anywhere and any .tmp under data/, nothing else', isInFlight('data/state.json.164938.tmp') && isInFlight('state.json.12.tmp') && isInFlight('data/x.tmp') && !isInFlight('cleanup-result.tmp') && !isInFlight('data/state.json') && !isInFlight('data/tmp.json'));
+    } finally { rm(s2, { recursive: true, force: true }); rm(d2, { recursive: true, force: true }); }
+  }
 }
 
 console.log('64. MESSAGE DIET — two renderings, one row; public is lint-clean, capped, and loses no field');
