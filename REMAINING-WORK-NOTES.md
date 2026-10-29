@@ -4902,3 +4902,38 @@ Operator follow-ups to v0.36.1:
    kept in state (tmpSweeps, 7 days). The desktop's data/state.json.248892.tmp (2.6 MB, last
    written 2026-08-27, the desktop bot disabled since the migration) was deleted by hand; the
    VPS had none.
+
+## 2026-10-29 — v0.37.0: US SPOT ETF FLOWS, ONE DAILY FACT (SoSoValue)
+
+Source decision (operator approved): SoSoValue's official API over Farside. Farside's pages
+return Cloudflare's challenge (HTTP 403 "Just a moment...") from the VPS and would need the
+desktop headed-Chrome relay daily; SoSoValue answers from the VPS on IPv4 and IPv6 and has
+per-fund daily net inflow with an explicit "not settled" state (null). Key SOSOVALUE_KEY in
+.env (operator registered; the value is never printed or logged). Limits: 100,000 requests a
+month, 20 a minute; no rate-limit headers come back, so calls are spaced 3.2 s.
+
+REAL FETCH, 2026-10-29 09:52 UTC (fixtures/sosovalue-etf-2026-10-29.json, no key in it): 32
+US funds listed (12 BTC, 11 ETH, 9 SOL: spot SOL ETFs ARE trading, read from the source, not
+assumed). Every fund's 28 Oct figure had settled by then. A real zero comes back as 0, an
+unsettled day as null. The BTC funds sum to SoSoValue's own 28 Oct total: IBIT 136,009,040 +
+BITB 1,321,258.95 = 137,330,298.95.
+
+SETTLEMENT TIMING: a self-stopping timer (systemd unit soso-settle-timing on the VPS, as
+radar, stops when all 29 Oct rows settle or at 2026-10-30 20:00 UTC) logs when each fund's 29
+Oct row appears and settles: /home/radar/soso-capture/settle-2026-10-29.log. Until it has
+run, the windows are set from the one observation (28 Oct complete by 05:52 ET next day):
+open 17:00 ET on day D, send by 08:00 ET on D+1 with whatever has reported, edits until 16:00
+ET on D+1. Revisit the three constants in src/sources/etf/flows.js against the log.
+
+THE MESSAGE: "📈 ETF FLOWS · Wed 28 Oct" · per asset "BTC: +$137M net · largest in IBIT
++$136M" (largest in/out only when there is one) · "Not yet reported: N funds" while any is
+pending · "Source: SoSoValue". Sent at once when every fund has reported, else at the 08:00
+ET deadline; a fund reporting later EDITS the original (the line replaced), never a second
+message. A fund with null, or no row yet while it has earlier rows, is NOT reported, never
+zero; a fund with no row on or before the day is not trading yet and is left out. No
+session (weekend, NYSE holiday from the rules, Good Friday included; or no fund with any
+row for the day) -> no message.
+
+MISSED DAYS: the history goes back a month. Trading days the bot misses while down are
+recorded and shown on the heartbeat ("not messaged" if still within the month, "missing"
+beyond it), never filled in as zero and never sent late. Fixture 84 on the real table.

@@ -24,6 +24,7 @@ import { whaleCoverage } from '../sources/chain/whale.js';
 import { followStatus } from '../sources/social/builder-follows.js';
 import { macroFigureCoverage } from '../sources/calendar/figures.js';
 import { tmpSweepStatus } from './tmp-sweep.js';
+import { flowsStatus } from '../sources/etf/flows.js';
 import { cadenceStatus } from '../sources/calendar/cadence-watch.js';
 import { unlockCoverage, sourcedFiring } from '../sources/calendar/unlocks.js';
 import { verdictCorrections } from '../sources/calendar/cadence-watch.js';
@@ -284,6 +285,7 @@ export function buildHeartbeat(now = Date.now(), deps = {}) {
       (deps.follows ?? followStatus(getState(), now)).line,
       // Which macro figures are fetched, from where, and why one is not (PCE needs a key).
       (deps.macroFigures ?? macroFigureCoverage()).line,
+      (deps.etfFlows ?? flowsStatus(getState(), now)).line,
       // Only when it is no longer housekeeping: more than 5 interrupted saves found in 24h.
       ...(() => { const t = deps.tmpSweep ?? tmpSweepStatus(getState(), now); return t.line ? [t.line] : []; })(),
       ...(() => { const c = deps.corrections ?? verdictCorrections(); return c.line ? [c.line] : []; })(),

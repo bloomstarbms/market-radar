@@ -3559,6 +3559,68 @@ console.log('83. MACRO OUTCOMES — the Fed decision parsed from its statement, 
   check('the poller fetches the figure at T+5m and, for a STANDARD event, sends T+30m only when the figure is still owed', (() => { const src = readFileSync('src/sources/calendar/macro.js', 'utf8'); return /stage === 't30m' && ev\.tier === 'STANDARD' && !\(hasFigure && rec\.fired\.t5m && figureNeededAt30\(rec\.fig5\)\)/.test(src) && /cachedFigure\(ev, rec, 'fig5'/.test(src) && /cachedFigure\(ev, rec, 'fig30'/.test(src); })());
 }
 
+console.log('84. ETF FLOWS — one daily FACT from SoSoValue; a pending fund is missing, never zero; a late report edits the message');
+{
+  const E = await import('./src/sources/etf/flows.js');
+  const { proseProblems } = await import('./src/core/prose-lint.js');
+  const { checkTierRoutes, checkClassifiersWired } = await import('./src/core/routes.js');
+  const FX = JSON.parse(readFileSync('fixtures/sosovalue-etf-2026-10-29.json', 'utf8'));
+  const D = '2026-10-28';
+  const tickers = (a) => FX.lists[a].data.map((x) => x.ticker);
+  const day = (a, table = FX.table) => E.assetDay(a, tickers(a).map((t) => E.fundOnDay(t, table[a][t], D)));
+  const btc = day('BTC'), eth = day('ETH'), sol = day('SOL');
+  check('the REAL table (captured 29 Oct 09:52 UTC): 12 BTC, 11 ETH, 9 SOL funds listed, every one reported for 28 Oct', tickers('BTC').length === 12 && tickers('ETH').length === 11 && tickers('SOL').length === 9 && [btc, eth, sol].every((a) => a.reported === a.funds && a.pending.length === 0));
+  const summ = FX.summary.data.find((r) => r.date === D).total_net_inflow;
+  check('totals add up: the 12 BTC funds sum to SoSoValue\'s own 28 Oct total, 137,330,298.95', Math.abs(btc.net - summ) < 0.01 && Math.abs(summ - 137330298.95) < 0.01);
+  const m = E.flowsMessage(D, [btc, eth, sol]);
+  check('the message from the real table: net, largest in, largest out, per asset; facts only', m.title === 'Wed 28 Oct' && JSON.stringify(m.lines) === JSON.stringify(['BTC: +$137M net · largest in IBIT +$136M', 'ETH: −$21M net · largest in FETH +$19M · largest out ETHA −$45M', 'SOL: −$5.7M net · largest out BSOL −$5.7M', 'Source: SoSoValue'])
+    && E.flowsProblems(m).length === 0 && !/bullish|bearish/i.test(m.lines.join(' ')));
+  check('a real 0 is a REPORTED zero (FBTC on 28 Oct), not a missing fund', JSON.stringify(E.fundOnDay('FBTC', FX.table.BTC.FBTC, D)) === JSON.stringify({ ticker: 'FBTC', status: 'reported', usd: 0 }));
+  // A PENDING fund: SoSoValue's null. Counted as missing, never as zero.
+  const pendingTable = JSON.parse(JSON.stringify(FX.table)); pendingTable.ETH.ETHA.data.find((r) => r.date === D).net_inflow = null;
+  const eth2 = day('ETH', pendingTable), m2 = E.flowsMessage(D, [btc, eth2, sol]);
+  check('a pending fund (net_inflow null) is counted as missing, not zero: 10 of 11 reported, "Not yet reported: 1 fund"', eth2.reported === 10 && JSON.stringify(eth2.pending) === '["ETHA"]' && m2.pending === 1 && m2.lines.includes('Not yet reported: 1 fund') && m2.lines[1] === 'ETH: +$23M net · largest in FETH +$19M');
+  const noRow = { data: FX.table.ETH.ETHA.data.filter((r) => r.date !== D) }, never = { data: [{ date: '2026-11-02', net_inflow: 5 }] };
+  check('no row yet for the day while the fund has earlier rows: pending; no row on or before the day: not trading yet, left out', E.fundOnDay('ETHA', noRow, D).status === 'pending' && E.fundOnDay('NEW', never, D).status === 'excluded');
+  check('an asset whose funds trade but none has reported says so; an asset with no fund trading is left out', E.flowsMessage(D, [E.assetDay('BTC', [{ ticker: 'IBIT', status: 'pending' }]), E.assetDay('SOL', [{ ticker: 'X', status: 'excluded' }])]).lines.join('|') === 'BTC: no fund reported yet|Not yet reported: 1 fund|Source: SoSoValue');
+  check('money is stated plainly: +$137M, −$45M, +$5.7M, +$850K, +$1.23B, $0', E.money(137330298.95) === '+$137M' && E.money(-44825613.84) === '−$45M' && E.money(5657565.6) === '+$5.7M' && E.money(850000) === '+$850K' && E.money(1.234e9) === '+$1.23B' && E.money(0) === '$0');
+  // THE US SESSION: NYSE holidays and weekends send nothing.
+  check('NYSE calendar 2026-27: Thanksgiving, Christmas, Good Friday (3 Apr), Juneteenth, 3 Jul (4 Jul is a Saturday), MLK, Presidents, Memorial, Labor closed; Columbus Day, the day after Thanksgiving, 31 Dec 2027 open',
+    ['2026-11-26', '2026-12-25', '2026-04-03', '2026-06-19', '2026-07-03', '2026-01-19', '2026-02-16', '2026-05-25', '2026-09-07', '2026-10-31', '2026-11-01'].every((d) => !E.isTradingDay(d)) && ['2026-10-12', '2026-11-27', '2027-12-31', '2026-10-28'].every((d) => E.isTradingDay(d)));
+  check('no window on a holiday or a weekend: Thanksgiving evening, Saturday evening → no message', E.activeDay(Date.parse('2026-11-26T23:00:00Z')) === null && E.activeDay(Date.parse('2026-10-31T23:00:00Z')) === null && E.activeDay(Date.parse('2026-10-29T03:00:00Z'))?.D === '2026-10-28');
+  // THE CYCLE on the real table: send, then an EDIT when a late fund reports; never a second message.
+  const serve = (table) => async (path) => {
+    const l = path.match(/^\/etfs\?symbol=(\w+)/); if (l) return { status: 200, json: FX.lists[l[1]] };
+    const h = path.match(/^\/etfs\/([^/]+)\/history/); if (h) { const t = decodeURIComponent(h[1]); for (const a of E.ASSETS) if (table[a][t]) return { status: 200, json: table[a][t] }; }
+    return { status: 404, json: null };
+  };
+  const sends = [], edits = [], deps = (now, table) => ({ key: 'k', now, fetchJson: serve(table), sleep: async () => {}, dispatch: async (a) => { sends.push(a); return true; }, edit: async (k, text) => { edits.push({ k, text }); return true; } });
+  const st = {};
+  const early = await E.flowsCycle(st, deps(Date.parse('2026-10-28T23:30:00Z'), pendingTable));
+  check('before the 08:00 ET deadline with a fund pending: nothing is sent yet', early.status === 'waiting' && sends.length === 0);
+  const first = await E.flowsCycle(st, deps(Date.parse('2026-10-29T12:05:00Z'), pendingTable));
+  check('at the deadline with a fund still pending: ONE message, saying how many are not yet reported', first.status === 'sent' && sends.length === 1 && sends[0].source === 'ETF' && sends[0].type === 'FLOWS' && sends[0].kind === 'FACT' && sends[0].dedupeKey === 'ETFFLOWS:2026-10-28' && sends[0].lines.includes('Not yet reported: 1 fund'));
+  const later = await E.flowsCycle(st, deps(Date.parse('2026-10-29T12:40:00Z'), FX.table));
+  check('when the late fund reports, the original message is EDITED and the line replaced; no second message', later.status === 'edited' && sends.length === 1 && edits.length === 1 && edits[0].k === 'ETFFLOWS:2026-10-28'
+    && /ETH: −\$21M net · largest in FETH \+\$19M · largest out ETHA −\$45M/.test(edits[0].text) && !/Not yet reported/.test(edits[0].text) && st.etfFlows.days[D].status === 'final');
+  const after = await E.flowsCycle(st, deps(Date.parse('2026-10-29T13:20:00Z'), FX.table));
+  check('a day that is complete is final: no further fetch, send or edit', after.status === 'final' && sends.length === 1 && edits.length === 1);
+  const st2 = {}, s2 = []; await E.flowsCycle(st2, { ...deps(Date.parse('2026-10-29T03:00:00Z'), FX.table), dispatch: async (a) => { s2.push(a); return true; } });
+  check('every fund in before the deadline: sent at once, complete', s2.length === 1 && !s2[0].lines.some((l) => /Not yet reported/.test(l)));
+  // MISSED DAYS: the history only goes back a month. Reported as missing, never filled in as zero, never sent late.
+  const md = E.missedDays('2026-09-10', '2026-10-28', '2026-10-29');
+  check('days missed while the bot was down: older than a month are "missing", recent ones "not messaged"; no figure, no zero', md.length > 20 && md[0].day === '2026-09-11' && /beyond the 1-month history: missing/.test(md[0].why) && /bot was down: not messaged/.test(md.at(-1).why) && md.every((x) => !('usd' in x) && !('net' in x)) && !md.some((x) => !E.isTradingDay(x.day)));
+  const st3 = { etfFlows: { lastDay: '2026-09-10', days: {}, missed: [] } }, s3 = [];
+  await E.flowsCycle(st3, { ...deps(Date.parse('2026-10-29T03:00:00Z'), FX.table), dispatch: async (a) => { s3.push(a); return true; } });
+  check('after a long outage only the current day is messaged; the missed days go on the heartbeat as missing', s3.length === 1 && st3.etfFlows.missed.length === md.length && /trading day\(s\) not messaged: 2026-09-11 \(beyond the 1-month history: missing\)/.test(E.flowsStatus(st3, Date.parse('2026-10-29T04:00:00Z'), { key: 'k' }).line));
+  // FAILURE AND OFF
+  const st4 = {}; const f4 = await E.flowsCycle(st4, { ...deps(Date.parse('2026-10-29T12:05:00Z'), FX.table), fetchJson: async () => ({ status: 401, json: { code: 400101, message: 'API Key is invalid or does not exist' } }) });
+  check('a rejected key (the real 401 body): failed, nothing sent, flagged on the heartbeat as silent, not "no flows"', f4.status === 'failed' && /🚨 source failing since .* \(key: HTTP 401 API Key is invalid or does not exist\): silent, not "no flows"/.test(E.flowsStatus(st4, Date.now(), { key: 'k' }).line));
+  check('no key: OFF, and the heartbeat says so', (await E.flowsCycle({}, { key: '' })).status === 'off' && /ETF flows: OFF \(no SOSOVALUE_KEY in \.env\)/.test(E.flowsStatus({}, Date.now(), { key: '' }).line));
+  check('FLOWS is a fact type with a route, and the emitter must lint its words (classifiers-wired gate)', checkTierRoutes({ calendarEvents: [], tokens: [] }).ok && checkClassifiersWired().ok
+    && !checkClassifiersWired({ readFile: (f) => (f === 'sources/etf/flows.js' ? '// no lint' : readFileSync('src/' + f, 'utf8')) }).ok);
+}
+
 console.error = origErr;
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

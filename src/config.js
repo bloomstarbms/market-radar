@@ -13,7 +13,7 @@ if (existsSync(envPath)) {
   }
 }
 
-export const VERSION = '0.36.2';
+export const VERSION = '0.37.0';
 
 // A COPY OF THE TREE MUST NOT SEND. Twice (2026-09-15, 2026-09-17) a boot check on a
 // tree copy carried .env and pushed "cliff today" reminders that the live bot then
@@ -67,6 +67,7 @@ export const config = {
   coinmarketcalKey: process.env.COINMARKETCAL_API_KEY || '',
   cryptorankKey: process.env.CRYPTORANK_API_KEY || '',
   twitterapiKey: process.env.TWITTERAPI_KEY || '', // builder-follows; PAID (cap in builder-follows.json)
+  sosovalueKey: process.env.SOSOVALUE_KEY || '', // US spot ETF flows (SoSoValue API); without it the module is OFF
   beaKey: process.env.BEA_API_KEY || '', // PCE figures (free key, apps.bea.gov/API/signup); without it PCE is "not fetched"
   // Tier delivery declarations — read by the boot assertion in core/routes.js.
   // A tier with no reader is a CONFIG BUG unless it is DECLARED recorded-only here;

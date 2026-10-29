@@ -64,6 +64,8 @@ const TAG = {
   'PERPDEX:OI': '📊 OPEN INTEREST MOVE',
   // Builder follows (v0.34.0): a watched X account followed a fresh account. A fact about a follow, nothing more.
   'SOCIAL:FOLLOW': '👀 BUILDER FOLLOWS',
+  // US spot ETF net flows (v0.37.0): one message per US trading day, from SoSoValue.
+  'ETF:FLOWS': '📈 ETF FLOWS',
   'SYS:HEARTBEAT': '💓 HEARTBEAT',
   'SYS:DIGEST': '📋 DAILY DIGEST',
 };

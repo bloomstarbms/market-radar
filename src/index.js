@@ -18,6 +18,7 @@ import { pollFunding } from './sources/cex/funding.js';
 import { pollAnnouncements } from './sources/cex/announcements.js';
 import { pollUpbit, startUpbitNoticeWatch } from './sources/cex/upbit.js';
 import { startBuilderFollows } from './sources/social/builder-follows.js';
+import { startEtfFlows } from './sources/etf/flows.js';
 import { pollCoinbase } from './sources/cex/coinbase.js';
 import { pollCascade } from './sources/cex/cascade.js';
 import { pollHyperliquid } from './sources/perp/hyperliquid.js';
@@ -229,6 +230,8 @@ async function main() {
   startUpbitNoticeWatch();
   // Builder follows: hourly, on its own timer (20 spaced calls must not stall the 60 s loop).
   startBuilderFollows();
+  // ETF flows: once per US trading day, on its own timer (~35 spaced calls must not stall the 60 s loop).
+  startEtfFlows();
 }
 
 main();
