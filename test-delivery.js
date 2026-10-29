@@ -1152,7 +1152,13 @@ console.log('53. CROSS-SOURCE AGREEMENT — a second index changes the MESSAGE, 
   const cov = unlockCoverage();
   check('coverage line reports the second-source split', /2nd source: \d+ agree · \d+ DISAGREE · \d+ single-source/.test(cov.line));
   check('LIVE: the states sum to the sourced row count', Object.values(cov.agreement).reduce((a, b) => a + b, 0) === cov.sourced);
-  check('LIVE: at least one real disagreement was found (the state that earns the feature)', cov.agreement['both-differ'] >= 1);
+  // (2026-10-29) This check said "LIVE: at least one real disagreement was found" and pinned a date's state: the one
+  // real disagreement (FF: DefiLlama 2026-10-29 vs CryptoRank 2026-10-01) dropped out when its date passed, and the
+  // suite failed on the desktop and the VPS alike. A live-shaped fixture asserts a RULE; the real case is frozen below.
+  check('LIVE: the coverage line prints the same DISAGREE count the split holds, whatever today holds', Number((cov.line.match(/· (\d+) DISAGREE/) || [])[1]) === cov.agreement['both-differ']);
+  check('FROZEN, the real FF case: 29 Oct vs 1 Oct is a disagreement (28 days) while the date is ahead, and single-source once it has passed', (() => {
+    const ff = sourceAgreement(row([52]), idx('2026-10-01'), now);
+    return ff.state === 'both-differ' && Math.abs(ff.deltaDays) === 28 && sourceAgreement(row([52]), idx('2026-10-01'), Date.UTC(2026, 9, 29, 14)).state === 'single-source'; })());
   check('LIVE: the second index is on disk and dated', (() => { const s2 = loadSecondIndex(); return !!s2 && /^\d{4}-\d\d-\d\dT/.test(s2.fetchedAt) && s2.protocols.length >= 20; })());
 }
 
@@ -3619,6 +3625,30 @@ console.log('84. ETF FLOWS — one daily FACT from SoSoValue; a pending fund is 
   check('no key: OFF, and the heartbeat says so', (await E.flowsCycle({}, { key: '' })).status === 'off' && /ETF flows: OFF \(no SOSOVALUE_KEY in \.env\)/.test(E.flowsStatus({}, Date.now(), { key: '' }).line));
   check('FLOWS is a fact type with a route, and the emitter must lint its words (classifiers-wired gate)', checkTierRoutes({ calendarEvents: [], tokens: [] }).ok && checkClassifiersWired().ok
     && !checkClassifiersWired({ readFile: (f) => (f === 'sources/etf/flows.js' ? '// no lint' : readFileSync('src/' + f, 'utf8')) }).ok);
+}
+
+console.log('85. DST — the ETF schedule is America/New_York wall-clock, never a fixed offset: 17:00 ET is 21:00 UTC before Sun 1 Nov 2026 and 22:00 UTC after');
+{
+  const E = await import('./src/sources/etf/flows.js');
+  const Z = (s) => Date.parse(s);
+  const fri = E.activeDay(Z('2026-10-30T21:00:00Z')), mon = E.activeDay(Z('2026-11-02T22:00:00Z')), tue = E.activeDay(Z('2026-11-03T22:00:00Z'));
+  check('Fri 30 Oct (EDT, UTC−4): opens 17:00 ET = 21:00 UTC, sends by Sat 08:00 ET = 12:00 UTC, edits until Sat 16:00 ET = 20:00 UTC', fri?.D === '2026-10-30' && fri.opens === Z('2026-10-30T21:00:00Z') && fri.sendBy === Z('2026-10-31T12:00:00Z') && fri.closes === Z('2026-10-31T20:00:00Z'));
+  check('Mon 2 Nov (EST, UTC−5, after the change): opens 17:00 ET = 22:00 UTC, sends by Tue 08:00 ET = 13:00 UTC, edits until Tue 16:00 ET = 21:00 UTC', mon?.D === '2026-11-02' && mon.opens === Z('2026-11-02T22:00:00Z') && mon.sendBy === Z('2026-11-03T13:00:00Z') && mon.closes === Z('2026-11-03T21:00:00Z'));
+  check('Tue 3 Nov (Election Day, NYSE open) opens at 22:00 UTC as well', tue?.D === '2026-11-03' && tue.opens === Z('2026-11-03T22:00:00Z'));
+  check('one minute before each opening there is no window for that day', E.activeDay(Z('2026-10-30T20:59:00Z'))?.D !== '2026-10-30' && E.activeDay(Z('2026-11-02T21:59:00Z'))?.D !== '2026-11-02' && E.activeDay(Z('2026-11-02T21:00:00Z'))?.D !== '2026-11-02');
+  // Run the schedule across 30 Oct to 4 Nov in 5-minute steps; record each window's first and last step.
+  const seen = {};
+  for (let t = Z('2026-10-30T00:00:00Z'); t < Z('2026-11-05T00:00:00Z'); t += 5 * 60e3) { const w = E.activeDay(t); if (w) (seen[w.D] ??= { first: t, last: t }).last = t; }
+  const at = (t) => new Date(t).toISOString().slice(0, 16);
+  check('across 30 Oct to 4 Nov: windows only for trading days (none for the weekend), each opening at 17:00 ET in that day\'s offset and closing at 16:00 ET the next day',
+    JSON.stringify(Object.keys(seen)) === JSON.stringify(['2026-10-29', '2026-10-30', '2026-11-02', '2026-11-03', '2026-11-04'])
+    && at(seen['2026-10-30'].first) === '2026-10-30T21:00' && at(seen['2026-10-30'].last) === '2026-10-31T19:55'
+    && at(seen['2026-11-02'].first) === '2026-11-02T22:00' && at(seen['2026-11-02'].last) === '2026-11-03T20:55'
+    && at(seen['2026-11-03'].first) === '2026-11-03T22:00' && at(seen['2026-11-04'].first) === '2026-11-04T22:00');
+  check('and the spring change too: Fri 12 Mar 2027 (EST) opens at 22:00 UTC, Mon 15 Mar 2027 (EDT) at 21:00 UTC', E.activeDay(Z('2027-03-12T22:00:00Z'))?.opens === Z('2027-03-12T22:00:00Z') && E.activeDay(Z('2027-03-15T21:00:00Z'))?.opens === Z('2027-03-15T21:00:00Z'));
+  const src = readFileSync('src/sources/etf/flows.js', 'utf8'), macro = readFileSync('src/sources/calendar/macro.js', 'utf8');
+  check('no fixed offset in the ETF schedule: all three times go through etToUtc, which converts with America/New_York', /etToUtc\(D, WINDOW_OPENS_ET\)/.test(src) && /etToUtc\(addDays\(D, 1\), SEND_BY_ET\)/.test(src) && /etToUtc\(addDays\(D, 1\), RECHECK_UNTIL_ET\)/.test(src)
+    && !/-0[45]:00|UTC-?[45]\b/.test(src) && /timeZone: 'America\/New_York'/.test(macro.split('export function etToUtc')[1].split('\n}')[0]));
 }
 
 console.error = origErr;

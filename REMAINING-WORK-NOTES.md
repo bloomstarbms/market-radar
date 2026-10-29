@@ -4937,3 +4937,27 @@ row for the day) -> no message.
 MISSED DAYS: the history goes back a month. Trading days the bot misses while down are
 recorded and shown on the heartbeat ("not messaged" if still within the month, "missing"
 beyond it), never filled in as zero and never sent late. Fixture 84 on the real table.
+
+## 2026-10-29 — v0.37.1: THE ETF SCHEDULE ACROSS THE CLOCK CHANGE (checks after v0.37.0)
+
+1. DST (US clocks change Sun 1 Nov 2026): the ETF schedule was already wall-clock. All three
+   times (17:00 ET start, 08:00 ET cutoff, 16:00 ET end of edits) go through macro.js's
+   etToUtc, which picks the offset that round-trips through America/New_York; there is no
+   fixed offset in flows.js. No code change. Fixture 85 runs the schedule across 30 Oct to 4
+   Nov in 5-minute steps: Fri 30 Oct opens 21:00 UTC (sends by 12:00, edits to 20:00 UTC Sat),
+   Mon 2 Nov opens 22:00 UTC (sends by 13:00, edits to 21:00 UTC Tue), no weekend window; the
+   spring change (12/15 Mar 2027) is checked the other way.
+2. The v0.36.2 follow-ups DID ship (commit 2bc9bde, deployed 2026-10-29 09:43 UTC): the copy
+   line ("copy: N files, skipped M tmp, V vanished", refusal above 3 vanished) printed on the
+   v0.37.0 deploy; the boot sweep found nothing to delete. Nothing redone.
+3. The settlement timer (soso-settle-timing) is still running: at 14:43 UTC on 29 Oct all 32
+   funds had NO row for 29 Oct yet (SoSoValue's docs say a null row exists during the
+   session; observed: no row before the close). The report on when each fund appeared and
+   settled, any schedule change, and the removal check follow when it stops.
+4. FOUND ON THE WAY: fixture 53's "LIVE: at least one real disagreement was found" pinned a
+   date's state. The one real disagreement, FF (DefiLlama 2026-10-29 vs CryptoRank
+   2026-10-01), dropped out when 29 Oct passed, and the suite failed on the desktop and the
+   VPS alike (it would have blocked this deploy). Same class as the coveredTo and cadence
+   fixtures: rewritten as a rule (the coverage line prints the count the split holds), with
+   the real FF case frozen as its own fixture (both-differ by 28 days while ahead,
+   single-source once past).
