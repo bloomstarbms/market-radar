@@ -3235,10 +3235,12 @@ console.log('82. builder follows: baseline silent, ONE daily message (convergenc
     check('the rejected and replaced handles are recorded, never watched: Drift (suspended), the @a16zcrypto squatter, @leptokurtic_, @AptosFndn, @BaseEcosystem', ['Drift', 'a16zcrypto', 'leptokurtic_', 'AptosFndn', 'BaseEcosystem', 'Arbitrum Foundation'].every((w) => JSON.stringify(raw.rejected).includes(w))
       && !c.cfg.handles.some((h) => ['DriftProtocol', 'a16zcrypto', 'leptokurtic_', 'AptosFndn', 'BaseEcosystem'].includes(h)));
   }
-  check('schedule: once daily at 13:00 UTC, handle-ID refresh weekly; overflow cap 10 pages per account per check', BF.POLL_EVERY_MS === 24 * 3600e3 && BF.DAILY_AT_UTC_HOUR === 13 && BF.REFRESH_IDS_EVERY_MS === 7 * 86400e3 && BF.MAX_PAGES === 10);
+  check('schedule: looks at 01:00 and 13:00 UTC, one message at 13:00, handle-ID refresh weekly; overflow cap 10 pages per account per check', BF.POLL_EVERY_MS === 12 * 3600e3 && JSON.stringify(BF.LOOK_AT_UTC_HOURS) === '[1,13]' && BF.DAILY_AT_UTC_HOUR === 13 && BF.REFRESH_IDS_EVERY_MS === 7 * 86400e3 && BF.MAX_PAGES === 10);
   {
     const at = (d, hh, mm = 0) => Date.UTC(2026, 9, d, hh, mm);
-    check('the daily slot: due at 13:05 when the last look was yesterday; not at 12:59 after yesterday\'s look; not twice the same day; due after downtime', BF.dailyDue(at(27, 13, 5), at(26, 13, 1)) && !BF.dailyDue(at(27, 12, 59), at(26, 13, 1)) && !BF.dailyDue(at(27, 18), at(27, 13, 1)) && BF.dailyDue(at(29, 9), at(27, 13, 1)));
+    check('the slots: due at 01:05 after yesterday\'s 13:00 look and at 13:05 after the 01:00 one; not at 12:59 after 01:00; not twice in a slot; due after downtime', BF.lookDue(at(27, 1, 5), at(26, 13, 1)) && BF.lookDue(at(27, 13, 5), at(27, 1, 1)) && !BF.lookDue(at(27, 12, 59), at(27, 1, 1)) && !BF.lookDue(at(27, 18), at(27, 13, 1)) && BF.lookDue(at(29, 9), at(27, 13, 1)));
+    check('delivery: the 13:00 look delivers, the 01:00 look holds, and a look after a missed 13:00 delivers what was held', BF.deliverNow(at(27, 13, 5), null) && !BF.deliverNow(at(27, 1, 5), null) && !BF.deliverNow(at(27, 1, 5), { since: at(27, 1, 1) })
+      && BF.deliverNow(at(28, 2), { since: at(27, 1, 1) }) && !BF.deliverNow(at(28, 2), { since: at(28, 1, 1) }));
   }
   check('a price with a zero or unstated per-call figure is not a measurement', checkPrice(price) && !checkPrice({ ...price, credits: { ...price.credits, followings20: 0 } }) && !checkPrice({ ...price, basis: '' }));
 
@@ -3716,6 +3718,82 @@ console.log('86. the boot self-test is hermetic against the 24h budget: a full b
   check('index.js: the hermetic wrapper injects the spend alongside multipliers and the ladder', /const hermetic = \(fn\) => b\.withLadder\(\{\}, \(\) => b\.withMultipliers\(SYN_MULT, \(\) => b\.withSpent\(0, fn\)\)\)/.test(readFileSync('src/index.js', 'utf8')));
 }
 
+console.log('87. builder follows twice daily: the 01:00 look holds, the 13:00 look sends ONE message with both looks\' follows, nothing twice');
+{
+  const BF = await import('./src/sources/social/builder-follows.js');
+  const { followCycle, checkFollowConfig } = BF;
+  const REAL = JSON.parse(readFileSync('fixtures/twitterapi-followings-2026-10-27.json', 'utf8'));
+  const at = (d, hh, mm = 0) => Date.UTC(2026, 10, d, hh, mm); // November 2026
+  const U = (id, h, o = {}) => ({ ...REAL.followings[0], id: String(id), screen_name: h, userName: h, created_at: new Date(at(1, 0) - (o.age ?? 3) * 86400e3).toUTCString(),
+    followers_count: o.followers ?? 412, description: 'Onchain perps for everyone', url: 'https://newproject.xyz' });
+  const filler = (base) => Array.from({ length: 30 }, (_, i) => U(base + i, `old${base + i}`, { age: 3000, followers: 90000 }));
+  const cfg = checkFollowConfig({ accounts: [{ handle: 'toly', kind: 'founder', id: '1001' }, { handle: 'mert', kind: 'founder', id: '1002' }], capUsd: 40, approved: '2026-10-21' }).cfg;
+  const price = { measuredAt: '2026-10-21T12:00:00Z', basis: 'fixture', credits: { followings20: 60, followings200: 200, userInfo: 18, batchPerUser: 18, myInfo: 0 } };
+  const mk = () => {
+    const api = { pages: { toly: filler(5000), mert: filler(6000) }, status: 200, calls: 0 };
+    api.fetchJson = async (url) => {
+      api.calls++;
+      if (api.status !== 200) return { status: api.status, json: { message: 'API Key is invalid' } };
+      const u = new URL(url);
+      if (u.pathname === '/twitter/user/batch_info_by_ids') return { status: 200, json: { status: 'success', users: u.searchParams.get('userIds').split(',').map((id) => ({ id, userName: id === '1001' ? 'toly' : 'mert' })) } };
+      const all = api.pages[u.searchParams.get('userName')] ?? [], size = Number(u.searchParams.get('pageSize'));
+      return { status: 200, json: { status: 'success', followings: all.slice(0, size), has_next_page: false, next_cursor: '' } };
+    };
+    return api;
+  };
+  const look = async (api, state, now, deliver) => {
+    const sent = [], rows = [];
+    const r = await followCycle(state, { cfg, price, key: 'k', now, deliver, fetchJson: api.fetchJson, sleep: async () => {},
+      dispatch: async (a) => { sent.push(a); return true; }, dm: async () => true, record: (x) => rows.push(x), warn: async () => {} });
+    return { r, sent, rows };
+  };
+  const restart = (s) => JSON.parse(JSON.stringify(s)); // what save() then load() hands the next look
+
+  // THE CASE: baseline the day before; 01:00 one new follow (toly -> @alpha); 13:00 one more (mert -> @beta).
+  const api = mk();
+  let st = {};
+  await look(api, st, at(1, 13), true);
+  api.pages.toly = [U(701, 'alpha'), ...api.pages.toly];
+  const night = await look(api, st, at(2, 1), BF.deliverNow(at(2, 1, 2), st.follows.held));
+  check('01:00: the new follow is detected and recorded once, nothing is sent, and it is held in state for 13:00', night.r.newFollows === 1 && night.sent.length === 0 && night.rows.length === 1 && night.rows[0].action === 'queued for the daily message'
+    && night.r.held === 1 && st.follows.held?.entries?.length === 1 && st.follows.held.since === at(2, 1));
+  st = restart(st); // a restart between the looks: the held entry is in state, not in memory
+  api.pages.mert = [U(702, 'beta'), ...api.pages.mert];
+  const noon = await look(api, st, at(2, 13), BF.deliverNow(at(2, 13, 2), st.follows.held));
+  const m = noon.sent[0], L = m?.lines ?? [];
+  check('13:00: ONE message carrying both looks\' follows', noon.sent.length === 1 && m.title === '2 Nov · 2 new accounts followed' && m.dedupeKey === 'FOLLOWS:2026-11-02' && noon.r.listed === 2);
+  check('each follow appears exactly once: @alpha (from 01:00) and @beta (from 13:00)', L.filter((l) => l === '<b>@alpha — followed by @toly (founder)</b>').length === 1 && L.filter((l) => l === '<b>@beta — followed by @mert (founder)</b>').length === 1 && L.filter((l) => /^<b>@/.test(l)).length === 2);
+  check('the 01:00 follow is not detected again at 13:00 (still on toly\'s newest page): only @beta is new, recorded once', noon.r.newFollows === 1 && noon.rows.length === 1 && noon.rows[0].target === 'beta');
+  check('after the message nothing is held, both are listed in the convergence history, and the day counts 2 new · 2 listed', st.follows.held === null && !!st.follows.alerted['701'] && !!st.follows.alerted['702'] && st.follows.daily['2026-11-02'].new === 2 && st.follows.daily['2026-11-02'].alerted === 2);
+  const next = await look(api, st, at(3, 1), BF.deliverNow(at(3, 1, 2), st.follows.held));
+  check('the next 01:00 look, same pages: no new follows, nothing held, nothing sent', next.r.newFollows === 0 && next.sent.length === 0 && st.follows.held === null);
+
+  // CONVERGENCE ACROSS THE TWO LOOKS: toly at 01:00, mert at 13:00, the same account -> one entry naming both.
+  {
+    const a2 = mk(); let s2 = {};
+    await look(a2, s2, at(1, 13), true);
+    a2.pages.toly = [U(801, 'gamma'), ...a2.pages.toly];
+    await look(a2, s2, at(2, 1), false); s2 = restart(s2);
+    a2.pages.mert = [U(801, 'gamma'), ...a2.pages.mert];
+    const n2 = await look(a2, s2, at(2, 13), true), L2 = n2.sent[0]?.lines ?? [];
+    check('the same account followed at 01:00 by one watcher and at 13:00 by another: ONE convergence entry naming both, listed once', n2.sent.length === 1 && L2.filter((l) => /^<b>@gamma/.test(l)).length === 1 && L2[0] === '<b>@gamma — followed by @toly (founder), @mert (founder)</b>' && / · 1 by more than one watched account$/.test(n2.sent[0].title));
+  }
+  // A 13:00 look that fails still delivers what 01:00 held (the message is built on every exit).
+  {
+    const a3 = mk(); let s3 = {};
+    await look(a3, s3, at(1, 13), true);
+    a3.pages.toly = [U(901, 'delta'), ...a3.pages.toly];
+    await look(a3, s3, at(2, 1), false); s3 = restart(s3);
+    a3.status = 401;
+    const n3 = await look(a3, s3, at(2, 13), true);
+    check('a 13:00 look that fails on the key still sends the 01:00 follow, once, and flags the failure', n3.r.status === 'failed' && n3.sent.length === 1 && (n3.sent[0].lines ?? []).filter((l) => /^<b>@delta/.test(l)).length === 1 && s3.follows.held === null && !!s3.follows.failingSince);
+  }
+  // A missed 13:00 (bot down 12:00 to 02:00): the next look delivers the held entries rather than holding them another day.
+  check('missed 13:00: the 02:00 catch-up look on the next day delivers a hold from the previous 01:00', BF.lookDue(at(3, 2), at(2, 1, 1)) && BF.deliverNow(at(3, 2), { since: at(2, 1, 1) }));
+  // Cost of the second look: one page per watched account, the same as the first.
+  check('each look costs one newest page per watched account (no extra paging on an ordinary look)', noon.r.calls === 2 && night.r.calls === 2);
+}
+
 console.error = origErr;
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

@@ -4998,3 +4998,30 @@ ORDER/L3/REZ records). unlocks.json is git-tracked and nothing but promote-unloc
 (the bot writes overlays under data/), so none of these can fail by date or by the bot; each
 fails only in the commit that edits that row, which is when it should be looked at. The
 append-only verdict-annotations.json record checks are the same.
+
+## 2026-10-30 — BUILDER-FOLLOWS TWICE DAILY (01:00 and 13:00 UTC), ONE MESSAGE AT 13:00
+
+COST, MEASURED BEFORE SWITCHING (state.follows.spend and the [follows] log on the VPS). Since the
+switch to daily with 76 accounts there have been two looks:
+  28 Oct 13:00  76 calls, 0 overflow pages: 56 first looks at 200 (200 credits) + 20 at 60 = 12,400
+                credits ($0.124). One-off: a new account's first look is its baseline.
+  29 Oct 13:00  76 calls, 0 overflow pages, 76 x 60 = 4,560 credits ($0.0456). The steady state.
+Plus the weekly ID refresh, 76 x 18 = 1,368 credits (last 26 Oct). Reconciliation agreed both days:
+the balance fell 0.901x and 0.889x what the meter charged, so the meter (published price) runs
+~10% high and every figure below is conservative.
+PROJECTION at twice daily, 31-day month: 62 x 4,560 + 4.4 x 1,368 = 288,778 credits = $2.89/month.
+Theoretical worst case (every account overflowing the full 10 pages on every look, plus its ID
+check): 2,918,074 credits = $29.18/month. Under the $30 bar either way; the $40 cap still stops calls.
+BALANCE: 973,711 credits at the 29 Oct 13:01 reconciliation, ~969,151 after that look. At 9,315
+credits/day (metered) it lasts ~104 days, to about 11 Feb 2027; at the reconciled rate ~116 days,
+to about 23 Feb 2027.
+
+THE CHANGE. LOOK_AT_UTC_HOURS = [1, 13]; DAILY_AT_UTC_HOUR = 13 is now the message slot only.
+The 01:00 look detects, records and commits seen IDs as before, and HOLDS its entries in
+state.follows.held (persisted, so a restart between the looks loses nothing). The 13:00 look
+starts from the held entries, adds its own (a second watcher of a held account joins that entry:
+convergence across the two looks), and sends the ONE daily message. A follow is detected once
+(the seen set), so it is listed once. A 13:00 look that fails still delivers what was held; a
+look after a missed 13:00 delivers instead of holding a stale day. Reconciliation stays daily
+(RECONCILE_EVERY_MS 20 h). The first look after this deploy is a catch-up of the 01:00 slot: it
+holds, and the 13:00 message today carries both. Fixture 87.

@@ -1,5 +1,6 @@
 // BUILDER FOLLOWS — when a watched account follows a new X account, post it as a FACT (v0.34.0;
-// 76 verified accounts with kinds, a daily look and ONE daily message, cursor overflow and bio evidence 2026-10-27).
+// 76 verified accounts with kinds, a daily look and ONE daily message, cursor overflow and bio evidence 2026-10-27;
+// two looks a day, 01:00 and 13:00 UTC, still ONE message at 13:00, 2026-10-30).
 //
 // FIRST PAID DEPENDENCY. Operator-approved 2026-10-21, cap $40/month (builder-follows.json,
 // REMAINING-WORK-NOTES.md 2026-10-21). The cap is STRUCTURAL: every call is metered at the
@@ -35,8 +36,11 @@ export const API = 'https://api.twitterapi.io';
 export const PAGE_SIZE = 20;           // operator spec: newest page only, 20 per call
 export const BASELINE_PAGE_SIZE = 200; // FIRST look per account only: a deeper baseline means a re-follow
                                        // of an older account is already known, not "new" (re-follows: ignore)
-export const POLL_EVERY_MS = 24 * 3600e3; // operator spec 2026-10-27 (second): once daily (was hourly, then 3-hourly)
-export const DAILY_AT_UTC_HOUR = 13;      // the daily look and its message: 13:00 UTC (14:00 WAT, 09:00 New York)
+export const POLL_EVERY_MS = 12 * 3600e3; // operator spec 2026-10-30: twice daily (was hourly, then 3-hourly, then daily)
+export const LOOK_AT_UTC_HOURS = [1, 13]; // the two looks, UTC. Measured before switching: 4,560 credits a look
+                                          // (76 pages, no overflow), so twice daily is ~$2.9/month against the $40 cap
+export const DAILY_AT_UTC_HOUR = 13;      // the ONE daily message: 13:00 UTC (14:00 WAT, 09:00 New York). The 01:00
+                                          // look holds what it finds (state.follows.held) for this message
 export const ENTRY_MAX_LINES = 6;         // operator spec: six-line cap per entry in the daily message
 export const DIGEST_MAX_CHARS = 3500;     // total length cap (Telegram's limit is 4,096 with markup)
 export const MAX_PAGES = 10;            // operator spec 2026-10-27: overflow follows the cursor, at most 10 pages per account per check
@@ -348,8 +352,13 @@ export async function followCycle(state, deps = {}) {
   const ctx = { f, cfg, price, key, now: nowFn, fetchJson: deps.fetchJson ?? defaultFetchJson,
     sleep: deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))), calls: 0, warn: [] };
   const send = deps.dispatch ?? dispatch, record = deps.record ?? defaultRecord;
+  // HOLD (01:00) or DELIVER (13:00, the default). A held entry was detected and its ID committed to
+  // the watcher's seen set, so it is never detected again: it lives in state until the 13:00 message
+  // (a restart in between cannot lose it), and a second watcher at 13:00 joins the same entry.
+  const deliver = deps.deliver ?? true;
   const todays = new Map(); let mentionIndex = [];
-  const out = { status: 'ok', polled: 0, failed: [], baseline: [], newFollows: 0, sent: 0, listed: 0, shown: 0, more: 0, recorded: 0, saturated: [], incomplete: [], extraPages: 0, capped: false, calls: 0 };
+  for (const e of f.held?.entries ?? []) todays.set(e.t.id, e);
+  const out = { status: 'ok', polled: 0, failed: [], baseline: [], newFollows: 0, sent: 0, listed: 0, shown: 0, more: 0, recorded: 0, held: 0, saturated: [], incomplete: [], extraPages: 0, capped: false, calls: 0 };
   const day = () => (f.daily[dayKey(nowFn())] ??= { new: 0, fresh: 0, alerted: 0, edited: 0 });
   const fail = (kind, msg) => { f.lastError = { at: nowFn(), kind, msg }; f.failingSince ??= nowFn(); };
   // 4. The day's message, built on EVERY exit (a key failure halfway through still delivers what
@@ -382,7 +391,8 @@ export async function followCycle(state, deps = {}) {
   }
 
   const finish = async (status) => {
-    await flushDigest();
+    if (deliver) { await flushDigest(); f.held = null; }
+    else { f.held = todays.size ? { since: f.held?.since ?? nowFn(), entries: [...todays.values()] } : null; out.held = todays.size; }
     out.status = status; out.calls = ctx.calls;
     for (const s of ctx.warn) await (deps.warn ?? defaultWarn)(s, cfg.capUsd);
     if (status === 'ok' || status === 'partial') { f.lastOkAt = nowFn(); if (status === 'ok') { f.failingSince = null; f.lastError = null; } }
@@ -653,9 +663,10 @@ export function followStatus(state, now = Date.now(), deps = {}) {
   const d = f.daily?.[dayKey(now)] ?? { new: 0, fresh: 0, alerted: 0, edited: 0 };
   const sat = (f.saturated ?? []).filter((x) => now - x.at < 26 * 3600e3);
   const next = new Date(Date.UTC(new Date(now).getUTCFullYear(), new Date(now).getUTCMonth() + 1, 1)).toISOString().slice(0, 10);
-  const parts = [`Builder follows: ${resolved}/${c.cfg.accounts.length} watched, daily at ${String(DAILY_AT_UTC_HOUR).padStart(2, '0')}:00 UTC`,
+  const parts = [`Builder follows: ${resolved}/${c.cfg.accounts.length} watched, looks at ${LOOK_AT_UTC_HOURS.map((h) => String(h).padStart(2, '0') + ':00').join(' + ')} UTC, message at ${String(DAILY_AT_UTC_HOUR).padStart(2, '0')}:00`,
     `last good look ${age === null ? 'never' : age < 120 ? `${age}m` : `${(age / 60).toFixed(1)}h`} ago`,
     looking ? `today ${d.new} new · ${d.fresh} fresh · ${d.alerted} listed` : 'today: not looking — a zero here is not "no new follows"',
+    ...(f.held?.entries?.length ? [`${f.held.entries.length} held for the ${String(DAILY_AT_UTC_HOUR).padStart(2, '0')}:00 message`] : []),
     f.lastDigest ? `last daily message ${f.lastDigest.dayKey} (${f.lastDigest.total} entr${f.lastDigest.total === 1 ? 'y' : 'ies'}${f.lastDigest.total > f.lastDigest.shown ? `, ${f.lastDigest.total - f.lastDigest.shown} in the DM only` : ''})` : 'no daily message yet',
     `spend today $${usd(today).toFixed(2)} · yesterday $${usd(yday).toFixed(2)} · month $${usd(s.credits).toFixed(2)} of $${cap}`,
     `price ${price.credits.followings20} credits/call (${priceLabel})`];
@@ -686,13 +697,17 @@ export function volumeReview(daily, now = Date.now()) {
 
 // ---------------------------------------------------------------- the poller (own timer: a 2-minute cycle must not stall the 60 s loop)
 let timer = null, running = false;
-// Daily slot: the look runs once per UTC day at DAILY_AT_UTC_HOUR (or at the first tick after
-// it, if the bot was down). Pure.
-export function dailyDue(now, lastCycleAt) {
-  const d = new Date(now);
-  let slot = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), DAILY_AT_UTC_HOUR);
-  if (now < slot) slot -= 86400e3;
-  return (lastCycleAt ?? 0) < slot;
+// Slots: a look runs at each of LOOK_AT_UTC_HOURS (or at the first tick after one, if the bot was
+// down), at most once per slot. Pure.
+const slotAt = (now, hour) => { const d = new Date(now); let s = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), hour); if (now < s) s -= 86400e3; return s; };
+export function lookSlot(now) {
+  return LOOK_AT_UTC_HOURS.map((hour) => ({ hour, at: slotAt(now, hour) })).sort((a, b) => b.at - a.at)[0];
+}
+export function lookDue(now, lastCycleAt) { return (lastCycleAt ?? 0) < lookSlot(now).at; }
+// Deliver at the 13:00 look, or at any look whose held entries predate the last 13:00 slot (that
+// message was missed while the bot was down: send now rather than hold a stale day further). Pure.
+export function deliverNow(now, held) {
+  return lookSlot(now).hour === DAILY_AT_UTC_HOUR || (held?.since ?? Infinity) < slotAt(now, DAILY_AT_UTC_HOUR);
 }
 export async function pollFollows() {
   const st = getState(); const f = (st.follows ??= {});
@@ -703,7 +718,7 @@ export async function pollFollows() {
     if (Date.now() - f.pendingDigest.createdAt > 20 * 3600e3) { console.error(`[OPERATOR][follows] the ${f.pendingDigest.dayKey} daily message could not be delivered in 20 h; dropped (its follows are in data/builder-follows.jsonl)`); f.pendingDigest = null; save(); }
     else { const d = await deliverDigest(st); save(); if (d.status === 'sent') console.log('[follows] daily message delivered on retry'); }
   }
-  if (!dailyDue(Date.now(), f.lastCycleAt)) return; // persisted: a restart does not re-run (and re-pay) the day's look
+  if (!lookDue(Date.now(), f.lastCycleAt)) return; // persisted: a restart does not re-run (and re-pay) a slot's look
   delete f.priceProblem; // v0.34.0-v0.34.2 state: there is no measurement gate any more
   f.lastCycleAt = Date.now();
   let price = priceInEffect(loadPrice());
@@ -716,9 +731,9 @@ export async function pollFollows() {
     console.log(`[follows] reconciliation: ${rr.status}${d?.drop !== undefined ? ` · balance fell ${d.drop} · metered ${d.metered}${d.ratio !== undefined ? ` · ratio ${d.ratio.toFixed(3)}` : ''}${d.correction ? ` · meter corrected +${d.correction}` : ''}` : ''}${rr.msg ? ` · ${rr.msg}` : ''}`);
     if (rr.price) price = rr.price;
   }
-  const r = await followCycle(st, { cfg: c.cfg, price, key: config.twitterapiKey });
+  const r = await followCycle(st, { cfg: c.cfg, price, key: config.twitterapiKey, deliver: deliverNow(Date.now(), f.held) });
   save();
-  console.log(`[follows] ${r.status}: ${r.polled} polled · ${r.baseline.length ? `baseline ${r.baseline.length} · ` : ''}${r.newFollows} new · ${r.listed ?? 0} listed${r.more ? ` (${r.more} only in the DM)` : ''} · daily message ${r.sent ? 'sent' : (r.listed ? 'PENDING' : 'none')} · ${r.extraPages ? `${r.extraPages} overflow page(s) · ` : ''}${r.calls} call(s) · price ${price.source}${r.failed.length ? ` · failed ${r.failed.join(', ')}` : ''}${r.saturated.length ? ` · SATURATED ${r.saturated.join(', ')}` : ''}`);
+  console.log(`[follows] ${r.status}: ${r.polled} polled · ${r.baseline.length ? `baseline ${r.baseline.length} · ` : ''}${r.newFollows} new · ${r.listed ?? 0} listed${r.more ? ` (${r.more} only in the DM)` : ''} · daily message ${r.sent ? 'sent' : r.listed ? 'PENDING' : r.held ? `held (${r.held} entr${r.held === 1 ? 'y' : 'ies'} for ${String(DAILY_AT_UTC_HOUR).padStart(2, '0')}:00)` : 'none'} · ${r.extraPages ? `${r.extraPages} overflow page(s) · ` : ''}${r.calls} call(s) · price ${price.source}${r.failed.length ? ` · failed ${r.failed.join(', ')}` : ''}${r.saturated.length ? ` · SATURATED ${r.saturated.join(', ')}` : ''}`);
 }
 export function startBuilderFollows(checkEveryMs = 5 * 60e3) {
   if (timer) return timer;
@@ -726,6 +741,6 @@ export function startBuilderFollows(checkEveryMs = 5 * 60e3) {
   tick();
   timer = setInterval(tick, checkEveryMs); timer.unref?.();
   const c = loadFollowConfig();
-  console.log(`[follows] ${!c.ok ? `OFF (${c.why})` : !config.twitterapiKey ? 'OFF (no TWITTERAPI_KEY)' : `watching ${c.cfg.accounts.length} accounts daily at ${String(DAILY_AT_UTC_HOUR).padStart(2, '0')}:00 UTC · cap $${c.cfg.capUsd}/month`}`);
+  console.log(`[follows] ${!c.ok ? `OFF (${c.why})` : !config.twitterapiKey ? 'OFF (no TWITTERAPI_KEY)' : `watching ${c.cfg.accounts.length} accounts at ${LOOK_AT_UTC_HOURS.map((h) => String(h).padStart(2, '0') + ':00').join(' and ')} UTC, one message at ${String(DAILY_AT_UTC_HOUR).padStart(2, '0')}:00 · cap $${c.cfg.capUsd}/month`}`);
   return timer;
 }
