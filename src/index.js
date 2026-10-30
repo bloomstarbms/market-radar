@@ -176,7 +176,8 @@ function admitSelfTest() {
     const ba = b.budgetAudit(st.budgetLog, allOutcomes());
     const baIso = (ts) => ts.map((t) => new Date(t).toISOString().slice(5, 19)).join(', ');
     if (ba.unaccounted.length) console.error(`[OPERATOR][boot] budget-link: ${ba.unaccounted.length} of ${ba.entries} budget entries (24h) have no outcomes row: ${baIso(ba.unaccounted)}`);
-    else console.log(`[boot][diag] budget-link: ${ba.entries} budget entr${ba.entries === 1 ? 'y' : 'ies'} (24h), all accounted for by an outcomes row${ba.preLink.length ? ` · ${ba.preLink.length} from before the link, not judged: ${baIso(ba.preLink)}` : ''}`);
+    else if (ba.preLink.length) console.log(`[boot][diag] budget-link: ${ba.entries - ba.preLink.length} of ${ba.entries} budget entries (24h) accounted for by an outcomes row · ${ba.preLink.length} with none, from before the link (not judged): ${baIso(ba.preLink)}`);
+    else console.log(`[boot][diag] budget-link: ${ba.entries} budget entr${ba.entries === 1 ? 'y' : 'ies'} (24h), all accounted for by an outcomes row`);
     const failed = cases.filter(([n, v, ok]) => !ok(v));
     if (failed.length) {
       console.error('[OPERATOR][BOOT] admit() self-test FAILED: ' + failed.map(([n]) => n).join(', ') + ' — refusing to start with a broken dispatch path.');

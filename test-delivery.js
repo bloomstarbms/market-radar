@@ -3799,12 +3799,14 @@ console.log('88. every budget entry is accounted for by an outcomes row: a call 
   // (2026-10-30) The 20:59:23.793 UTC slot on 29 Oct was spent by a MULTIEX call (Q, B 72) that carried
   // no track: recordAlert skipped it, so the slot pointed at nothing. RULE: every budget entry has an
   // outcomes row (the row's `charged` is the entry's ts); a charge-bearing call without a track price is
-  // refused as a bug. FROZEN: the real 12-entry log and the 11 rows that were written for it.
+  // refused as a bug. FROZEN: the real 12-entry log and the real ts of the 11 rows written for it.
   const b = await import('./src/core/budget.js');
   const { multiexAlerts } = await import('./src/sources/cex/monitor.js');
   const REAL_LOG = [1793306306256, 1793306354247, 1793306355326, 1793306417434, 1793306426438, 1793306954543, 1793307563793, 1793308454157, 1793316254386, 1793326754683, 1793327320720, 1793328254590];
   const Q = 1793307563793, AT = Date.parse('2026-10-30T08:05:49Z');
-  const realRows = REAL_LOG.filter((t) => t !== Q).map((t) => ({ ts: t, type: 'CONFLUENCE', suppressed: null }));
+  // Read from the VPS outcomes table 30 Oct: each row landed 239-302 ms after its charge.
+  const REAL_ROW_TS = [1793306306534, 1793306354497, 1793306355598, 1793306417692, 1793306426740, 1793306954812, 1793308454436, 1793316254625, 1793326754967, 1793327321008, 1793328254851];
+  const realRows = REAL_ROW_TS.map((t) => ({ ts: t, type: 'CONFLUENCE', kind: 'CALL', suppressed: null }));
   const asWas = b.budgetAudit(REAL_LOG, realRows, AT);
   check('FROZEN, the real 29-30 Oct log: of 12 entries exactly one has no row, 20:59:23.793 UTC (Q), and before the link it is reported as pre-link, not failed', asWas.entries === 12 && asWas.preLink.length === 1 && asWas.preLink[0] === Q && asWas.unaccounted.length === 0 && new Date(Q).toISOString() === '2026-10-29T20:59:23.793Z');
   const linkedRow = { ts: REAL_LOG[0] - 60e3, charged: REAL_LOG[0] - 60e3, type: 'CONFLUENCE', suppressed: null };
@@ -3812,6 +3814,9 @@ console.log('88. every budget entry is accounted for by an outcomes row: a call 
   check('FROZEN, the same log once the link is in force: the audit fails on exactly that entry', withLink.unaccounted.length === 1 && withLink.unaccounted[0] === Q && withLink.preLink.length === 0);
   check('rule: a charged row accounts for its entry by `charged`, whatever its ts; a suppressed row never accounts for one', b.budgetAudit([5e12], [{ ts: 1, charged: 5e12 }], 5e12).unaccounted.length === 0
     && b.budgetAudit([5e12], [{ ts: 1, charged: 1 }, { ts: 5e12, suppressed: 'budget' }], 5e12).unaccounted.length === 1);
+  check('FROZEN, each real row sat 239-302 ms after its entry, and BEAM/SHIB (1.08 s apart) each claim their own row', REAL_LOG.filter((t) => t !== Q).every((t, i) => REAL_ROW_TS[i] - t >= 239 && REAL_ROW_TS[i] - t <= 302) && REAL_LOG[2] - REAL_LOG[1] === 1079);
+  check('rule, pre-link rows: one row accounts for one entry (two entries, one row -> one unaccounted); a FACT row or a row 2 s late accounts for none', b.budgetAudit([5e12, 5e12 + 500], [{ ts: 1, charged: 1 }, { ts: 5e12 + 250, kind: 'CALL' }], 5e12 + 1000).unaccounted.length === 1
+    && b.budgetAudit([5e12], [{ ts: 1, charged: 1 }, { ts: 5e12 + 250, kind: 'FACT' }], 5e12 + 1000).unaccounted.length === 1 && b.budgetAudit([5e12], [{ ts: 1, charged: 1 }, { ts: 5e12 + 2000, kind: 'CALL' }], 5e12 + 3000).unaccounted.length === 1);
   check('rule: only the last 24h is judged (an expired entry is not the table\'s problem)', b.budgetAudit([5e12 - 25 * 3600e3], [{ ts: 1, charged: 1 }], 5e12).entries === 0);
   // The cause: MULTIEX now carries the first confirming venue's track.
   const [mx] = multiexAlerts(new Map([['Q', { up: new Set(['mexc', 'gate', 'kucoin', 'bitget']), down: new Set(), track: { up: { kind: 'cex', exchange: 'mexc', symbol: 'QUSDT', price: 0.012 } } }]]));

@@ -372,18 +372,29 @@ function chargeBudget(at = Date.now()) {
 // EVERY BUDGET ENTRY IS ACCOUNTED FOR BY AN OUTCOMES ROW (2026-10-30). The 20:59 UTC slot on 29 Oct
 // was spent by a MULTIEX call (Q, B 72) that carried no track, so recordAlert skipped it and the slot
 // pointed at nothing: an alert that spends the budget and can never be judged. The link is explicit:
-// a charged row carries `charged` = the entry's timestamp. Rows from before the link account for an
-// entry by ts alone (the charge and the record landed in the same ms; 11 of 12 on 29-30 Oct did).
-// Entries older than the first linked row predate the link: reported as preLink, never failed. Pure.
+// a charged row carries `charged` = the entry's timestamp. A row from before the link accounts for
+// an entry if it is the first unclaimed pushed CALL row within LEGACY_LINK_MS after it, one row per
+// entry: measured on the 11 that had one, the row landed 239-302 ms after the charge (two state saves
+// in between), and the closest pair of entries was 1.08 s apart (BEAM, SHIB). An entry with no row at
+// all and older than the first linked row predates the link: reported as preLink, never failed. Pure.
+const LEGACY_LINK_MS = 2000;
 export function budgetAudit(budgetLog, rows, now = Date.now()) {
-  const live = (budgetLog || []).filter((t) => t >= now - WINDOW_MS);
-  const linked = new Set(), byTs = new Set();
+  const live = (budgetLog || []).filter((t) => t >= now - WINDOW_MS).sort((a, b) => a - b);
+  const linked = new Set(), legacy = [];
   let firstLink = Infinity;
   for (const r of rows || []) {
     if (typeof r.charged === 'number') { linked.add(r.charged); if (r.charged < firstLink) firstLink = r.charged; }
-    else if (!r.suppressed) byTs.add(r.ts);
+    else if (!r.suppressed && r.kind !== 'FACT' && r.ts >= now - WINDOW_MS) legacy.push(r.ts);
   }
-  const missing = live.filter((t) => !linked.has(t) && !byTs.has(t));
+  legacy.sort((a, b) => a - b);
+  const missing = [];
+  let j = 0;
+  for (const t of live) {
+    if (linked.has(t)) continue;
+    while (j < legacy.length && legacy[j] < t) j++;
+    if (j < legacy.length && legacy[j] - t < LEGACY_LINK_MS) { j++; continue; } // claimed: one row, one entry
+    missing.push(t);
+  }
   return { entries: live.length, unaccounted: missing.filter((t) => t >= firstLink), preLink: missing.filter((t) => t < firstLink), firstLink: Number.isFinite(firstLink) ? firstLink : null };
 }
 

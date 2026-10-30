@@ -5074,3 +5074,15 @@ THE DROP-LOG FLOOD. 30 Oct: 246 of the 3,000 drop-log entries were budget refusa
 candidates, one a minute (OCEAN 167 from 03:12, VIRTUAL 79 from 03:19 UTC). A budget refusal is now one
 entry per candidate per 24h window with count and lastTs, printed once; dropStats still counts
 refusals, so heartbeat numbers keep their meaning. Fixture 89: 50 polls -> 1 entry, count 50, 1 line.
+
+## 2026-10-30 — BUDGET AUDIT, PRE-LINK RULE FROM THE MEASURED GAP (correction to the entry above)
+
+The first budgetAudit() matched pre-link rows to budget entries by EQUAL ms, on an assumption that was
+not checked; fixture 88's FROZEN case encoded it with rows invented at the entries' own timestamps. The
+deploy's boot diag showed the assumption false: all 12 live entries came back unmatched (reported as
+pre-link, so nothing failed and the LIVE check passed for the wrong reason). Measured on the VPS table:
+each of the 11 rows landed 239-302 ms AFTER its charge (openThread saves state twice before
+recordAlert); Q has no row within 60 s. The rule is now: a pre-link entry is accounted for by the first
+unclaimed pushed CALL row within 2 s after it, one row per entry (the closest entries, BEAM and SHIB,
+are 1.08 s apart). FROZEN now uses the real row timestamps, and on them the audit names exactly one
+entry, 20:59:23.793 UTC. Rows written from now on carry the explicit link and do not need this rule.
