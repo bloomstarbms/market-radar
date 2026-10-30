@@ -5025,3 +5025,52 @@ convergence across the two looks), and sends the ONE daily message. A follow is 
 look after a missed 13:00 delivers instead of holding a stale day. Reconciliation stays daily
 (RECONCILE_EVERY_MS 20 h). The first look after this deploy is a catch-up of the 01:00 slot: it
 holds, and the 13:00 message today carries both. Fixture 87.
+
+## 2026-10-30 — THE 29 OCT CONFLUENCE BURST; EVERY BUDGET ENTRY LINKED TO A ROW; BUDGET REFUSALS COLLAPSED
+
+THE BURST (report only, CONFLUENCE scoring unchanged). 11 of the 12 B-tier slots 29 Oct 20:38 -> 30 Oct
+02:44 UTC were CONFLUENCE "accumulation + activity" on Ethereum; five (SUPER, BEAM, SHIB, EIGEN, FET)
+inside 2 minutes from 20:38. Not five signals: two shared inputs.
+  ACCUMULATION: ONE transaction. 0x53bd38b816c23e74134786c29a8c18d792777998a3b9326047b583100e88e2f3,
+  block 26300770, 20:24:23 UTC: Binance 14 (0x28c6c062...1d60) sent 63 tokens in one call to
+  0x5227f603c1ee34ce3c06efe6477003bdfccb2f8c, an address with no history before that block, which began
+  forwarding USDT six minutes later. 10 of the 11 calls (all but EPIC) rest on that transaction. EPIC
+  rests on the second batch, 0x4a4aed83...ad6b at 22:39:35 UTC: 122 tokens to another fresh address
+  (0xa97bf783...8d10), same operator key (nonce 11, then 16). Consistent with exchange wallet operations
+  (a sweep or rotation), not with buyers accumulating. The whale module (itself ladder-DISABLED; every
+  WHALE row says so) noted all ten at 20:29 UTC.
+  ACTIVITY: the DexScreener feed, not the market. Between two consecutive DEX polls ~20:36 UTC the 1h
+  change on Ethereum pairs flipped from negative everywhere (PEPE -4.8, SUPER -3.0) to positive
+  everywhere (Neiro +19, SUPER +10.6, BEAM +12, then FLOKI +23, SUPER +20). Binance spot over the same
+  minutes fell 3-7% (BTC -2.5%, ETH -3.2% 19:38 -> 20:38). The DEX priceUsd stamped on the calls was
+  9-22% ABOVE Binance spot (SUPER +14.4, SHIB +9.4, EIGEN +13.2, FET +16.4, PEPE +21.7). So the h1/h6
+  outcomes on the 20:38-20:49 calls (DEX -6 to -17% at +1h) mostly measure the feed correcting
+  (Binance -1 to -3% at +1h). The 02:19-02:44 calls (NMR, G, RED) were different: real volume
+  (22-24x, i.e. a day's volume in one hour on $100-260K pools) during a real sell-off (NMR -9%, RED -9%
+  1h), still riding the 20:24 transaction, six hours old. CONFLUENCE fires on falling prices too.
+  OUTCOMES: the bot's checkpoints are h1/h6/h24; there is no h72. Report-only scheduled tasks read them
+  at 24h and 72h (72h from Binance 1m candles and DexScreener, stated as such).
+  WHAT THE EVIDENCE SUPPORTS (not done; operator to decide): not a scoring change, input fixes:
+  (a) one transaction is one accumulation event, however many tokens it moves; a single transfer of
+  dozens of assets out of an exchange wallet is wallet management, not accumulation; (b) DEX priceH1 is
+  not trusted when the chain's whole watchlist moves together, or is checked against the CEX price the
+  bot already polls; (c) "accumulation + activity" with price falling is not the revival footprint the
+  engine describes. A score cut would have let these same 11 through at a lower number.
+
+THE 20:59 SLOT (29 Oct 20:59:23.793 UTC) was a MULTIEX call: "Q moving UP on 4 exchanges at once"
+(mexc, gate, kucoin, bitget), B 72. MULTIEX was dispatched with no track, so recordAlert skipped it and
+the slot pointed at nothing; it also meant the taxonomy, universe and executability gates that
+GATED_TYPES lists MULTIEX under never ran on it, since each keys on the track. FIX: MULTIEX carries the
+first confirming venue's track (monitor.js multiexAlerts, pure). Its thread key is now the venue symbol
+(QUSDT:UP), the same thread as a pushed PUMP of that symbol, so a MULTIEX on a live PUMP thread is an
+update, not a second call. RULE, structural: a budget-charged row carries `charged` = the budget
+entry's timestamp (the row's ts is the same instant); dispatch refuses a charge-bearing call with no
+track price as a counted [OPERATOR][BUG]; budgetAudit() is the check (fixture 88: FROZEN real log
+names exactly 20:59:23.793; end to end through the real dispatcher in a boot-check copy; LIVE: every
+entry of the last 24h accounted for). Entries older than the first linked row are reported as pre-link,
+not failed; the Q entry ages out at 20:59 UTC on 30 Oct. Boot logs the audit, non-fatal.
+
+THE DROP-LOG FLOOD. 30 Oct: 246 of the 3,000 drop-log entries were budget refusals of two CONFLUENCE
+candidates, one a minute (OCEAN 167 from 03:12, VIRTUAL 79 from 03:19 UTC). A budget refusal is now one
+entry per candidate per 24h window with count and lastTs, printed once; dropStats still counts
+refusals, so heartbeat numbers keep their meaning. Fixture 89: 50 polls -> 1 entry, count 50, 1 line.

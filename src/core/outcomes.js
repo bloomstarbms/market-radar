@@ -83,7 +83,7 @@ const save = () => guardedWrite(FILE, JSON.stringify(rows, null, 1));
 // later. So: keep the whitelist, make the omission LOUD. Anything a caller supplies
 // that is neither persisted nor deliberately transient is named once per process.
 const ROW_FIELDS = new Set(['ts', 'source', 'type', 'severity', 'title', 'btc', 'results', 'alpha',
-  'suppressed', 'score', 'mult', 'kind', 'collectedUnder', 'rug', 'mfe', 'mae']);
+  'suppressed', 'score', 'mult', 'kind', 'collectedUnder', 'rug', 'mfe', 'mae', 'charged']);
 // Transient by design: routing/formatting inputs that were never meant to persist.
 const NOT_PERSISTED = new Set(['lines', 'url', 'key', 'dedupeKey', 'cooldownMin', 'track',
   'snapshotTs', 'gate', 'assetClass', 'deferredEval', 'venue', 'delist', 'scoreBonus',
@@ -103,10 +103,12 @@ function warnDroppedFields(a) {
   }
 }
 
+// Returns the row written, or null. A budget-charged alert passes `charged` (the budget entry's
+// timestamp): the row takes it as its ts and keeps it as the link budgetAudit() checks.
 export function recordAlert(a) {
-  if (!a.track?.price) return;
+  if (!a.track?.price) return null;
   warnDroppedFields(a);
-  const row = { ts: Date.now(), source: a.source, type: a.type, severity: a.severity,
+  const row = { ts: a.charged ?? Date.now(), source: a.source, type: a.type, severity: a.severity,
     title: a.title, ...a.track, btc: 0, results: {}, alpha: {},
     // null when the alert was actually pushed; otherwise the suppression reason, so
     // pushed vs suppressed precision can be compared per module.
@@ -130,7 +132,8 @@ export function recordAlert(a) {
     // Contract-risk verdict at alert time, when one was computed. Recorded even on
     // blocked candidates so the screen accumulates a point-in-time calibration set
     // with forward outcomes attached.
-    rug: a.rug ?? null };
+    rug: a.rug ?? null,
+    ...(typeof a.charged === 'number' ? { charged: a.charged } : {}) };
   rows.push(row);
   btcPrice().then((p) => { if (p) { row.btc = p; save(); } }).catch(() => {});
   // 2000 was ~2.5 weeks of alerts and the cap was silently evicting the oldest rows
@@ -145,10 +148,11 @@ export function recordAlert(a) {
     try {
       appendFileSync(join(config.dataDir, 'outcomes-archive.jsonl'),
         evicted.map((r) => JSON.stringify(r)).join('\n') + '\n');
-    } catch (e) { console.error('[outcomes] archive append failed — keeping rows in memory:', e.message); return; }
+    } catch (e) { console.error('[outcomes] archive append failed — keeping rows in memory:', e.message); return row; }
     rows = rows.slice(-MAX_ROWS);
   }
   save();
+  return row;
 }
 
 async function currentPrice(r) {

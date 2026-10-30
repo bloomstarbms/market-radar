@@ -319,6 +319,15 @@ async function dispatchInner(alert) {
 
   const key = `${alert.source}:${alert.dedupeKey ?? `${alert.type}:${alert.key}`}`;
 
+  // A budget slot must be accounted for by an outcomes row, and recordAlert writes one only for an
+  // alert with a track price. 29 Oct 20:59 UTC: a MULTIEX call had no track, spent a slot, and left
+  // nothing to judge it by. A call that would do that is a detector bug: counted, loud, not pushed.
+  if (verdict.charge && !alert.track?.price) {
+    bugCount++;
+    console.error(`[OPERATOR][BUG] ${alert.source}:${alert.type} "${alert.title}" would spend a budget slot with no track price — no outcomes row could account for it, so it is not pushed`);
+    return false;
+  }
+
   if (verdict.mode === 'escalate') {
     const th = getThread(alert);
     const updated = escalateThread(alert, verdict.score);
@@ -402,7 +411,8 @@ async function dispatchInner(alert) {
       return false;
     }
   }
-  openThread(alert, verdict.score, ids, !!verdict.charge);
+  const chargedAt = verdict.charge ? Date.now() : null; // the budget entry and its outcomes row share it
+  openThread(alert, verdict.score, ids, chargedAt ?? false);
   // Keep the published text so a T+30m depth re-check (and cross-venue escalation)
   // can EDIT it rather than posting a second message.
   const th2 = getThread(alert);
@@ -410,6 +420,9 @@ async function dispatchInner(alert) {
   markAlerted(key);
   factCount += verdict.kind === 'FACT' ? 1 : 0;
   callCount += verdict.kind === 'FACT' ? 0 : 1;
-  if (alert.track) recordAlert({ ...alert, kind: verdict.kind ?? 'CALL', mult: multOf(alert) });
+  if (alert.track) {
+    const row = recordAlert({ ...alert, kind: verdict.kind ?? 'CALL', mult: multOf(alert), ...(chargedAt ? { charged: chargedAt } : {}) });
+    if (chargedAt && !row) console.error(`[OPERATOR][BUG] budget entry ${new Date(chargedAt).toISOString()} (${alert.type}) has no outcomes row`);
+  }
   return true;
 }

@@ -30,8 +30,10 @@ export async function pollCex() {
         if (alert) {
           if (alert.type === 'PUMP' || alert.type === 'DUMP') {
             const base = t.symbol.replace('USDT', '');
-            const m = moves.get(base) || { up: new Set(), down: new Set() };
-            (alert.type === 'PUMP' ? m.up : m.down).add(name);
+            const m = moves.get(base) || { up: new Set(), down: new Set(), track: {} };
+            const side = alert.type === 'PUMP' ? 'up' : 'down';
+            m[side].add(name);
+            m.track[side] ??= alert.track; // the first confirming venue's: MULTIEX is measured there
             moves.set(base, m);
           }
           if (await dispatch(alert)) alerts++;
@@ -50,11 +52,19 @@ export async function pollCex() {
       console.error(`[cex] ${name} poll failed:`, e.message);
     }
   }
+  for (const a of multiexAlerts(moves)) await dispatch(a);
+}
+
+// Pure (fixture 88). The alert carries the first confirming venue's track. Without one, a MULTIEX
+// call spent a B-tier slot that no outcomes row could account for (Q, 29 Oct 20:59 UTC), and the
+// taxonomy, universe and executability gates GATED_TYPES lists it under never ran: each keys on it.
+export function multiexAlerts(moves) {
+  const out = [];
   for (const [base, m] of moves) {
     const dir = m.up.size >= 3 ? 'up' : m.down.size >= 3 ? 'down' : null;
     if (!dir) continue;
     const venues = dir === 'up' ? [...m.up] : [...m.down];
-    await dispatch({
+    out.push({
       source: 'SIG', type: 'MULTIEX', severity: venues.length >= 4 ? 'HIGH' : 'MEDIUM',
       key: base, cooldownMin: 60,
       title: `${base} moving ${dir === 'up' ? 'UP' : 'DOWN'} on ${venues.length} exchanges at once`,
@@ -62,6 +72,8 @@ export async function pollCex() {
         `Confirmed across: ${venues.join(', ')}`,
         `A move on 3+ venues at once is real market-wide flow, not one exchange's wash trading`,
       ],
+      track: { ...m.track?.[dir] },
     });
   }
+  return out;
 }

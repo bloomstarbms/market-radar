@@ -293,23 +293,38 @@ export function tierOf(score) {
 // ---------------------------------------------------------------- drop log
 // Every suppressed candidate is recorded with a reason. Per spec §10 this is the most
 // useful debugging artifact in the system — it's where false negatives show up.
+// BUDGET REFUSALS COLLAPSE (2026-10-30). A refused candidate is offered again on every poll while
+// its signal stays live, so a full budget wrote the same refusal about once a minute: on 30 Oct 246 of
+// the 3,000 entries were two CONFLUENCE candidates (OCEAN 167, VIRTUAL 79), evicting the drops the log
+// exists to keep. A budget refusal is now ONE entry per candidate per budget window (24h from its first
+// refusal) carrying a running count and the last refusal's time, and it is printed once.
 function logDrop(alert, reason, detail = '') {
   const st = getState();
   st.dropLog ??= [];
-  st.dropLog.push({
-    ts: Date.now(), type: alert.type, key: alert.key ?? '', reason, detail,
-    symbol: alert.track?.symbol ?? alert.dedupeKey ?? '',
-  });
+  const now = Date.now();
+  const symbol = alert.track?.symbol ?? alert.dedupeKey ?? '';
+  const entry = { ts: now, type: alert.type, key: alert.key ?? '', reason, detail, symbol };
+  if (reason === 'budget') {
+    const cand = `${alert.type}:${alert.key ?? ''}:${symbol}`;
+    for (let i = st.dropLog.length - 1; i >= 0 && now - st.dropLog[i].ts < WINDOW_MS; i--) {
+      const d = st.dropLog[i];
+      if (d.reason === 'budget' && d.cand === cand) { d.count = (d.count ?? 1) + 1; d.lastTs = now; return; }
+    }
+    Object.assign(entry, { cand, count: 1, lastTs: now });
+  }
+  st.dropLog.push(entry);
   if (st.dropLog.length > 3000) st.dropLog = st.dropLog.slice(-3000);
-  console.log(`  [drop] ${alert.type} ${alert.track?.symbol ?? alert.key ?? ''} — ${reason}${detail ? ' ' + detail : ''}`);
+  console.log(`  [drop] ${alert.type} ${alert.track?.symbol ?? alert.key ?? ''} — ${reason}${detail ? ' ' + detail : ''}${reason === 'budget' ? ' (repeats counted on this entry for 24h, not logged)' : ''}`);
 }
 
 export function dropStats(hours = 24) {
   const cut = Date.now() - hours * 3600e3;
-  const rows = (getState().dropLog || []).filter((d) => d.ts >= cut);
+  // A collapsed budget entry stands for count refusals; the heartbeat still counts refusals.
+  const rows = (getState().dropLog || []).filter((d) => (d.lastTs ?? d.ts) >= cut);
   const by = {};
-  for (const d of rows) by[d.reason] = (by[d.reason] || 0) + 1;
-  return { total: rows.length, byReason: by };
+  let total = 0;
+  for (const d of rows) { const n = d.count ?? 1; by[d.reason] = (by[d.reason] || 0) + n; total += n; }
+  return { total, entries: rows.length, byReason: by };
 }
 
 // ---------------------------------------------------------------- budget
@@ -347,10 +362,29 @@ function spentIn24h() {
 //
 // A breaker that trips regularly is not protecting anything — it is diagnosing
 // miscalibration upstream. Hence the operator log on consecutive bound days.
-function chargeBudget() {
+// `at` is the timestamp the outcomes row carries as `charged`: the link budgetAudit() checks.
+function chargeBudget(at = Date.now()) {
   const st = getState();
   st.budgetLog ??= [];
-  st.budgetLog.push(Date.now());
+  st.budgetLog.push(at);
+}
+
+// EVERY BUDGET ENTRY IS ACCOUNTED FOR BY AN OUTCOMES ROW (2026-10-30). The 20:59 UTC slot on 29 Oct
+// was spent by a MULTIEX call (Q, B 72) that carried no track, so recordAlert skipped it and the slot
+// pointed at nothing: an alert that spends the budget and can never be judged. The link is explicit:
+// a charged row carries `charged` = the entry's timestamp. Rows from before the link account for an
+// entry by ts alone (the charge and the record landed in the same ms; 11 of 12 on 29-30 Oct did).
+// Entries older than the first linked row predate the link: reported as preLink, never failed. Pure.
+export function budgetAudit(budgetLog, rows, now = Date.now()) {
+  const live = (budgetLog || []).filter((t) => t >= now - WINDOW_MS);
+  const linked = new Set(), byTs = new Set();
+  let firstLink = Infinity;
+  for (const r of rows || []) {
+    if (typeof r.charged === 'number') { linked.add(r.charged); if (r.charged < firstLink) firstLink = r.charged; }
+    else if (!r.suppressed) byTs.add(r.ts);
+  }
+  const missing = live.filter((t) => !linked.has(t) && !byTs.has(t));
+  return { entries: live.length, unaccounted: missing.filter((t) => t >= firstLink), preLink: missing.filter((t) => t < firstLink), firstLink: Number.isFinite(firstLink) ? firstLink : null };
 }
 
 function noteBudgetBound() {
@@ -471,7 +505,7 @@ export function openThread(alert, score, messageIds, charge = false) {
     modules: [alert.type], score, messageIds: messageIds || [], updates: 0,
   };
   noteFire(alert);
-  if (charge) chargeBudget();
+  if (charge) chargeBudget(typeof charge === 'number' ? charge : Date.now());
   save();
 }
 

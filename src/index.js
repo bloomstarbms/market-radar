@@ -9,7 +9,7 @@ import { assertTierRoutes, checkClassifiersWired, checkVenueCollectors } from '.
 import { LISTING_TIER1 } from './core/dispatcher.js';
 import { checkPaginationGuards } from './core/pagination.js';
 import { notePulse } from './core/pulse.js';
-import { loadOutcomes, checkOutcomes, statsSummary, recordAlert, backupOutcomes } from './core/outcomes.js';
+import { loadOutcomes, checkOutcomes, statsSummary, recordAlert, backupOutcomes, allOutcomes } from './core/outcomes.js';
 import { getPairsForTokens, bestPairPerToken } from './sources/dex/dexscreener.js';
 import { checkRevival } from './sources/dex/revival.js';
 import { screen as screenContract } from './sources/dex/rugscreen.js';
@@ -172,6 +172,11 @@ function admitSelfTest() {
     // single-factor MEDIUM today. Logs, never exits — data is weather, not a bug.
     const liveScore = Math.round(b.scoreOf({ type: 'FUNDING', severity: 'MEDIUM' }));
     console.log(`[boot][diag] live-data: FUNDING-MEDIUM scores ${liveScore} with current multipliers (${liveScore >= 55 ? 'C-tier digest' : 'below-floor'}) — informational only`);
+    // Every budget entry accounted for by an outcomes row (fixture 88). Data, so it reports, never exits.
+    const ba = b.budgetAudit(st.budgetLog, allOutcomes());
+    const baIso = (ts) => ts.map((t) => new Date(t).toISOString().slice(5, 19)).join(', ');
+    if (ba.unaccounted.length) console.error(`[OPERATOR][boot] budget-link: ${ba.unaccounted.length} of ${ba.entries} budget entries (24h) have no outcomes row: ${baIso(ba.unaccounted)}`);
+    else console.log(`[boot][diag] budget-link: ${ba.entries} budget entr${ba.entries === 1 ? 'y' : 'ies'} (24h), all accounted for by an outcomes row${ba.preLink.length ? ` · ${ba.preLink.length} from before the link, not judged: ${baIso(ba.preLink)}` : ''}`);
     const failed = cases.filter(([n, v, ok]) => !ok(v));
     if (failed.length) {
       console.error('[OPERATOR][BOOT] admit() self-test FAILED: ' + failed.map(([n]) => n).join(', ') + ' — refusing to start with a broken dispatch path.');

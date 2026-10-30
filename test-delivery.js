@@ -3794,6 +3794,95 @@ console.log('87. builder follows twice daily: the 01:00 look holds, the 13:00 lo
   check('each look costs one newest page per watched account (no extra paging on an ordinary look)', noon.r.calls === 2 && night.r.calls === 2);
 }
 
+console.log('88. every budget entry is accounted for by an outcomes row: a call that spends a slot is a call that can be judged');
+{
+  // (2026-10-30) The 20:59:23.793 UTC slot on 29 Oct was spent by a MULTIEX call (Q, B 72) that carried
+  // no track: recordAlert skipped it, so the slot pointed at nothing. RULE: every budget entry has an
+  // outcomes row (the row's `charged` is the entry's ts); a charge-bearing call without a track price is
+  // refused as a bug. FROZEN: the real 12-entry log and the 11 rows that were written for it.
+  const b = await import('./src/core/budget.js');
+  const { multiexAlerts } = await import('./src/sources/cex/monitor.js');
+  const REAL_LOG = [1793306306256, 1793306354247, 1793306355326, 1793306417434, 1793306426438, 1793306954543, 1793307563793, 1793308454157, 1793316254386, 1793326754683, 1793327320720, 1793328254590];
+  const Q = 1793307563793, AT = Date.parse('2026-10-30T08:05:49Z');
+  const realRows = REAL_LOG.filter((t) => t !== Q).map((t) => ({ ts: t, type: 'CONFLUENCE', suppressed: null }));
+  const asWas = b.budgetAudit(REAL_LOG, realRows, AT);
+  check('FROZEN, the real 29-30 Oct log: of 12 entries exactly one has no row, 20:59:23.793 UTC (Q), and before the link it is reported as pre-link, not failed', asWas.entries === 12 && asWas.preLink.length === 1 && asWas.preLink[0] === Q && asWas.unaccounted.length === 0 && new Date(Q).toISOString() === '2026-10-29T20:59:23.793Z');
+  const linkedRow = { ts: REAL_LOG[0] - 60e3, charged: REAL_LOG[0] - 60e3, type: 'CONFLUENCE', suppressed: null };
+  const withLink = b.budgetAudit(REAL_LOG, [linkedRow, ...realRows], AT);
+  check('FROZEN, the same log once the link is in force: the audit fails on exactly that entry', withLink.unaccounted.length === 1 && withLink.unaccounted[0] === Q && withLink.preLink.length === 0);
+  check('rule: a charged row accounts for its entry by `charged`, whatever its ts; a suppressed row never accounts for one', b.budgetAudit([5e12], [{ ts: 1, charged: 5e12 }], 5e12).unaccounted.length === 0
+    && b.budgetAudit([5e12], [{ ts: 1, charged: 1 }, { ts: 5e12, suppressed: 'budget' }], 5e12).unaccounted.length === 1);
+  check('rule: only the last 24h is judged (an expired entry is not the table\'s problem)', b.budgetAudit([5e12 - 25 * 3600e3], [{ ts: 1, charged: 1 }], 5e12).entries === 0);
+  // The cause: MULTIEX now carries the first confirming venue's track.
+  const [mx] = multiexAlerts(new Map([['Q', { up: new Set(['mexc', 'gate', 'kucoin', 'bitget']), down: new Set(), track: { up: { kind: 'cex', exchange: 'mexc', symbol: 'QUSDT', price: 0.012 } } }]]));
+  check('MULTIEX as monitor.js builds it carries a track with a price (the 29 Oct Q shape had none)', mx?.type === 'MULTIEX' && mx.severity === 'HIGH' && mx.track?.exchange === 'mexc' && mx.track?.symbol === 'QUSDT' && mx.track?.price === 0.012);
+  check('three venues down -> one MULTIEX on the down side\'s track; two venues -> none', (() => { const m = new Map([['Z', { up: new Set(['a']), down: new Set(['gate', 'mexc', 'kucoin']), track: { up: { exchange: 'a', symbol: 'ZUSDT', price: 1 }, down: { exchange: 'gate', symbol: 'ZUSDT', price: 0.9 } } }], ['Y', { up: new Set(['a', 'b']), down: new Set(), track: { up: { price: 1 } } }]]); const r = multiexAlerts(m); return r.length === 1 && r[0].title === 'Z moving DOWN on 3 exchanges at once' && r[0].severity === 'MEDIUM' && r[0].track?.exchange === 'gate'; })());
+  // End to end, through the REAL dispatcher, in a boot-check copy (token blank, network stubbed).
+  const { makeCopy } = await import('./boot-check.js');
+  const { spawnSync } = await import('node:child_process');
+  const { rmSync: rm } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const dst = join(tmpdir(), 'mr-budget88-' + process.pid);
+  let R = null, raw = '';
+  try {
+    makeCopy(process.cwd(), dst, { note: () => {} });
+    const r = spawnSync(process.execPath, ['fixtures/budget-link-child.mjs'], { cwd: dst, encoding: 'utf8', env: { ...process.env, TELEGRAM_BOT_TOKEN: '' }, timeout: 120_000 });
+    raw = (r.stdout || '') + (r.stderr || '');
+    const line = raw.split('\n').find((l) => l.startsWith('FX88-RESULT '));
+    R = line ? JSON.parse(line.slice('FX88-RESULT '.length)) : null;
+  } finally { rm(dst, { recursive: true, force: true }); }
+  check('the child ran in the copy and reported', !!R, R ? undefined : raw.slice(-400));
+  if (R) {
+    check('MULTIEX through the real dispatcher: pushed, one budget entry, and an outcomes row on mexc:FX88USDT whose `charged` is that entry', R.multiex === true && R.rows.some((r) => r.type === 'MULTIEX' && r.exchange === 'mexc' && r.symbol === 'FX88USDT' && R.budgetLog.includes(r.charged) && r.ts === r.charged));
+    check('CONFLUENCE through the real engine: pushed, and its row carries the link too', R.confluence === true && R.rows.some((r) => r.type === 'CONFLUENCE' && r.address === '0xfx88confluence' && R.budgetLog.includes(r.charged)));
+    check('the 29 Oct shape (MULTIEX with no track) and a call with no price are refused as bugs and spend nothing', R.oldMultiex === false && R.noPrice === false && R.refusalBugs.length === 2 && R.refusalBugs.every((l) => /would spend a budget slot with no track price/.test(l)));
+    check('after the run: exactly 2 budget entries, and the audit finds every one accounted for', R.budgetLog.length === 2 && R.audit.entries === 2 && R.audit.unaccounted.length === 0 && R.audit.preLink.length === 0, JSON.stringify(R.audit));
+    check('no other bug line was raised on the way', R.bugs.length === 2);
+  }
+  // LIVE: the running bot's own log and table. Before the first linked row exists, older entries are
+  // reported as pre-link; from then on any unaccounted entry fails here.
+  const { allOutcomes } = await import('./src/core/outcomes.js');
+  const live = b.budgetAudit(getState().budgetLog, allOutcomes());
+  if (live.preLink.length) console.log(`     (LIVE: ${live.preLink.length} pre-link entr${live.preLink.length === 1 ? 'y' : 'ies'} not judged: ${live.preLink.map((t) => new Date(t).toISOString()).join(', ')})`);
+  check(`LIVE: every budget entry of the last 24h is accounted for by an outcomes row (${live.entries} entries)`, live.unaccounted.length === 0, live.unaccounted.map((t) => new Date(t).toISOString()).join(', '));
+}
+
+console.log('89. a budget refusal is logged once per candidate per budget window, with a running count, not on every poll');
+{
+  // (2026-10-30) On 30 Oct the drop log's 3,000 entries held 246 budget refusals of two CONFLUENCE
+  // candidates, one a minute (OCEAN 167 from 03:12 UTC, VIRTUAL 79 from 03:19 UTC). RULE: one entry per
+  // candidate per 24h window, count and lastTs updated in place, printed once.
+  const b = await import('./src/core/budget.js');
+  const st = getState();
+  st.dropLog ??= [];
+  const statsBefore = b.dropStats(24);
+  const cand = (k) => ({ source: 'SIG', type: 'CONFLUENCE', severity: 'HIGH', key: k, title: 'fx89', lines: [] });
+  const logs = [], origLog = console.log;
+  const refuse = (k) => b.withLadder({}, () => b.withMultipliers({ CONFLUENCE: 1 }, () => b.withSpent(b.DAILY_BUDGET, () => b.admit(cand(k)))));
+  let verdicts;
+  console.log = (...a) => logs.push(a.join(' '));
+  try { verdicts = Array.from({ length: 50 }, () => refuse('ethereum:0xfx89ocean')); } finally { console.log = origLog; }
+  const mine = (k) => st.dropLog.filter((d) => d.key === k);
+  const e = mine('ethereum:0xfx89ocean');
+  check('50 polls of the same refused candidate: all 50 refused for budget', verdicts.every((v) => !v.allow && v.reason === 'budget'));
+  check('...leave ONE drop-log entry with count 50, first and last refusal times kept', e.length === 1 && e[0].count === 50 && e[0].reason === 'budget' && e[0].lastTs >= e[0].ts);
+  check('...and print ONE [drop] line, not 50', logs.filter((l) => /\[drop\] CONFLUENCE/.test(l)).length === 1);
+  console.log = (...a) => logs.push(a.join(' '));
+  try { refuse('ethereum:0xfx89virtual'); refuse('ethereum:0xfx89virtual'); } finally { console.log = origLog; }
+  check('a second candidate gets its own entry (count 2); the first is untouched', mine('ethereum:0xfx89virtual').length === 1 && mine('ethereum:0xfx89virtual')[0].count === 2 && mine('ethereum:0xfx89ocean')[0].count === 50);
+  check('the heartbeat still counts refusals, not entries: two entries stand for +52 budget refusals', b.dropStats(24).byReason.budget - (statsBefore.byReason.budget ?? 0) === 52);
+  e[0].ts -= 25 * 3600e3; e[0].lastTs = e[0].ts;
+  console.log = (...a) => logs.push(a.join(' '));
+  try { refuse('ethereum:0xfx89ocean'); } finally { console.log = origLog; }
+  check('a refusal after the candidate\'s 24h window opens a new entry (count 1)', mine('ethereum:0xfx89ocean').length === 2 && mine('ethereum:0xfx89ocean')[1].count === 1);
+  // (the log sits at its 3,000 cap, so entries are counted by key, not by the log's length)
+  b.withLadder({ CONFLUENCE: 'DISABLED' }, () => b.withMultipliers({}, () => { console.log = () => {}; try { b.admit(cand('ethereum:0xfx89ocean')); b.admit(cand('ethereum:0xfx89ocean')); } finally { console.log = origLog; } }));
+  check('other drop reasons are unchanged: two ladder-disabled refusals are two entries', mine('ethereum:0xfx89ocean').filter((d) => d.reason === 'ladder-disabled').length === 2);
+  st.dropLog = st.dropLog.filter((d) => !/^ethereum:0xfx89/.test(d.key));
+  check('cleanup: the fixture\'s entries are gone from the drop log', st.dropLog.every((d) => !/^ethereum:0xfx89/.test(d.key)));
+}
+
 console.error = origErr;
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
