@@ -4961,3 +4961,40 @@ beyond it), never filled in as zero and never sent late. Fixture 84 on the real 
    fixtures: rewritten as a rule (the coverage line prints the count the split holds), with
    the real FF case frozen as its own fixture (both-differ by 28 days while ahead,
    single-source once past).
+
+## 2026-10-30 — SWEEP FOR CHECKS THAT PIN LIVE DATA (after the FF fixture)
+
+METHOD. Not by reading alone: boot-check made a copy (--copy-only) and the suite ran in it
+with the wall clock shifted by +1, 3, 7, 14, 30, 60, 90, 180, 365 and 730 days (a preload
+that moves Date.now() and new Date(); explicit dates untouched), on the desktop's data and on
+the VPS's live data. Then every LIVE/FROZEN check that reads a data file was traced to the
+file's writer, because a clock shift cannot show a check that fails when a file is rewritten.
+
+FOUND, FAILS BY DATE: none left in the suite. FF (v0.37.1) was the last; nothing else
+failed at any offset up to two years. (One check, the boot tmp sweep, fails under the shifted
+clock only because file mtimes do not shift; it is correct in real time.)
+
+FOUND, FAILING NOW, IN THE BOOT GATE: the admit() self-test injected multipliers and the
+ladder but read the LIVE 24h budget. The bot spent its 12 B-tier slots by 02:44 UTC on 30 Oct
+(the first frees at 20:38 UTC), so the provisional case came back budget-denied: on the VPS
+boot-check was red (suite 1217/2, no --once banner) and the preflight, systemd's
+ExecStartPre, would have refused any restart for those 18 hours. The running bot was not
+affected; a crash or deploy in that window would have left it down. Fixed: budget.js
+withSpent(n, fn), injected by the hermetic wrapper. Fixture 86: preflight passes with an empty
+budget, a full one, and the real 30 Oct log rebased to now (all three fail with the old
+wrapper); withSpent(0) admits the provisional case and withSpent(12) refuses it for budget.
+
+FOUND, FAILS ON PROGRESS (no date; the next detector run): two checks labelled FROZEN read
+regenerable reports. Fixture 46 read data/cliff-cluster-report.json (detect-cliff-cluster.js,
+last run 2026-10-01); fixture 65 read ENA's entry in data/cadence-report.json
+(detect-cadence.js / cadence-pass.js / bulk-scan.js, last 2026-09-13). Both reports are now
+fixtures (fixtures/cliff-cluster-report-2026-10-01.json, byte-identical;
+fixtures/cadence-report-ENA-2026-09-13.json), and the live reports get rules (verdicts the
+tool writes, 9-point grids with hits <= n; absent file tolerated).
+
+NOT CONVERTED, ON PURPOSE: checks that pin rows or counts of unlocks.json (the 6 verified rows,
+the 30 sourced ingests, EIGEN tolerance 0.13 n=11, ENA's two co-emitters, the four replay rows,
+ORDER/L3/REZ records). unlocks.json is git-tracked and nothing but promote-unlock.js writes it
+(the bot writes overlays under data/), so none of these can fail by date or by the bot; each
+fails only in the commit that edits that row, which is when it should be looked at. The
+append-only verdict-annotations.json record checks are the same.

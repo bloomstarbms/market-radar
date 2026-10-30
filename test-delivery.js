@@ -1698,11 +1698,15 @@ console.log('46. CONTRACT-CLIFF tier (Route 2) — enforcement:contract is EARNE
     clusterVerdicts(mk([10, 30]), cliffs).verified && !clusterVerdicts(mk([10]), cliffs).verified);
   check('n<3 never verifies however clean', !clusterVerdicts(mk([10, 30]), [day(10), day(30)]).verified);
 
-  // FROZEN: the live report's parameter grid. ORDER's vault replays >=2/3 under all 9
+  // FROZEN: the report's parameter grid. ORDER's vault replays >=2/3 under all 9
   // parameterisations; L3 (continuous claims, 2,367 recipients) never does. The sweep
   // showed the 20% clustering rate is NOT a parameter artefact — that is the finding
   // the next brief builds on, so it is pinned here.
-  const rep = JSON.parse(readFileSync('data/cliff-cluster-report.json', 'utf8'));
+  // (2026-10-30) These said FROZEN but read data/cliff-cluster-report.json, which
+  // detect-cliff-cluster.js rewrites on every run (last 2026-10-01): the next run would have
+  // failed them on progress. The 2026-10-01 report is now a fixture (byte-identical, sha1
+  // f9031f6d); the live file gets a RULE below.
+  const rep = JSON.parse(readFileSync('fixtures/cliff-cluster-report-2026-10-01.json', 'utf8'));
   const vault = rep.ORDER?.results?.find((r) => /^0x6d00268a/i.test(r.contract));
   // Observed grid: 7/8 6/8 5/8 7/8 6/8 5/8 6/8 5/8 4/8 — never below half, >=2/3 at 5 of 9
   // (including the declared w5/r3). The verdict is robust to the window, sensitive to
@@ -1713,6 +1717,11 @@ console.log('46. CONTRACT-CLIFF tier (Route 2) — enforcement:contract is EARNE
   check('FROZEN: L3 (continuous claims) never reaches 2/3 at any parameterisation', !!l3 && l3.grid.length === 9 && l3.grid.every((g) => g.hits / g.n < 2 / 3));
   check('FROZEN: REZ shows off-index clusters and no on-index ones (index dates wrong, not the method)',
     rep.REZ?.results?.[0]?.grid?.every((g) => g.hits === 0 && g.off > 0) === true);
+  check('LIVE: whatever the live cliff-cluster report holds, every result carries a verdict the tool writes, and every grid is 9 points with hits <= n', (() => {
+    let live; try { live = JSON.parse(readFileSync('data/cliff-cluster-report.json', 'utf8')); } catch { return true; } // absent on a fresh data dir: nothing to check
+    const V = new Set(['CLUSTERS-REPLAY', 'PARTIAL', 'NO-CLUSTERS', 'UNVERIFIED']);
+    return Object.values(live).every((s) => !s.results || s.results.every((r) => V.has(r.verdict) && (!r.grid || (r.grid.length === 9 && r.grid.every((g) => g.hits <= g.n)))));
+  })());
 
   // Bridge exclusion: the v0.29.0 STO false hit was a LayerZero adapter.
   const disc = { STO: { contracts: [{ addr: '0x' + '1'.repeat(40), bucket: 'C', pctSupply: 9, name: 'StakeStoneLayerZeroAdapter' }, { addr: '0x' + '2'.repeat(40), bucket: 'C', pctSupply: 5, name: 'TokenVesting' }] } };
@@ -2417,10 +2426,15 @@ console.log('65. RE-PROMOTION requires POST-DEMOTION evidence — the gate refus
   const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
   const st = loadWatchState();
   const liveEna = live.find((t) => t.sym === 'ENA');
-  const rep = JSON.parse(readFileSync('data/cadence-report.json', 'utf8')).ENA;
-  const w = (rep?.perWallet || []).find((x) => x.addr.toLowerCase() === liveEna?.cadence?.wallet?.toLowerCase());
+  // (2026-10-30) The FROZEN check read data/cadence-report.json, which detect-cadence.js,
+  // cadence-pass.js and bulk-scan.js rewrite (last 2026-09-13): a rescan of ENA would have
+  // failed it on progress. ENA's 2026-09-13 entry is now a fixture; the live rule reads the
+  // live report and tolerates its absence.
+  const wallet = (r) => (r?.perWallet || []).find((x) => x.addr.toLowerCase() === liveEna?.cadence?.wallet?.toLowerCase());
+  const wF = wallet(JSON.parse(readFileSync('fixtures/cadence-report-ENA-2026-09-13.json', 'utf8')).ENA);
+  const w = wallet((() => { try { return JSON.parse(readFileSync('data/cadence-report.json', 'utf8')).ENA; } catch { return null; } })());
   const septDem = { at: '2026-09-12T13:58', month: '2026-09', window: '2026-09-06..2026-09-10', kind: 'DEMOTE' };
-  check('FROZEN: ENA under its real September DEMOTE, against a report that still said CADENCE on the same history, is REFUSED re-promotion', w?.solo?.verdict === 'CADENCE' && repromotionProblems({ spec: liveEna.cadence, demotion: septDem, largestSeen: 5148798, emissions: w?.solo?.emissions }).length >= 1);
+  check('FROZEN: ENA under its real September DEMOTE, against a report that still said CADENCE on the same history, is REFUSED re-promotion', wF?.solo?.verdict === 'CADENCE' && repromotionProblems({ spec: liveEna.cadence, demotion: septDem, largestSeen: 5148798, emissions: wF?.solo?.emissions }).length >= 1);
   // LIVE, as a RULE not a snapshot: the gate's answer agrees with whatever the live state is.
   const liveDem = activeDemotions(live, st).ENA;
   const liveProblems = repromotionProblems({ spec: liveEna.cadence, demotion: liveDem ?? null, largestSeen: st.months?.ENA?.[liveDem?.month]?.largestSeen, emissions: w?.solo?.emissions });
@@ -3649,6 +3663,57 @@ console.log('85. DST — the ETF schedule is America/New_York wall-clock, never 
   const src = readFileSync('src/sources/etf/flows.js', 'utf8'), macro = readFileSync('src/sources/calendar/macro.js', 'utf8');
   check('no fixed offset in the ETF schedule: all three times go through etToUtc, which converts with America/New_York', /etToUtc\(D, WINDOW_OPENS_ET\)/.test(src) && /etToUtc\(addDays\(D, 1\), SEND_BY_ET\)/.test(src) && /etToUtc\(addDays\(D, 1\), RECHECK_UNTIL_ET\)/.test(src)
     && !/-0[45]:00|UTC-?[45]\b/.test(src) && /timeZone: 'America\/New_York'/.test(macro.split('export function etToUtc')[1].split('\n}')[0]));
+}
+
+console.log('86. the boot self-test is hermetic against the 24h budget: a full budget is weather, not a broken dispatch path');
+{
+  // (2026-10-30) The admit() self-test injected multipliers and the ladder but read the LIVE 24h
+  // spend. The bot spent its 12 B-tier slots by 02:44 UTC on 30 Oct (the first frees at 20:38 UTC),
+  // and from then the `provisional` case came back budget-denied: boot-check on the VPS went red
+  // (preflight exit 1, no --once banner) and the preflight, which is systemd's ExecStartPre, would
+  // have refused any restart for those 18 hours. RULE: the self-test passes whatever the budget
+  // holds. FROZEN: the real 12-entry log, rebased so the copy is in exactly that state.
+  const b = await import('./src/core/budget.js');
+  const { makeCopy } = await import('./boot-check.js');
+  const { spawnSync } = await import('node:child_process');
+  const { writeFileSync: wf, readFileSync: rf, existsSync: ex, rmSync: rm } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const REAL_AT = Date.parse('2026-10-30T08:05:49Z');
+  const REAL_LOG = [1793306306256, 1793306354247, 1793306355326, 1793306417434, 1793306426438, 1793306954543, 1793307563793, 1793308454157, 1793316254386, 1793326754683, 1793327320720, 1793328254590];
+  check('FROZEN, the real log: 12 entries, all inside the 24h before 08:05:49 UTC on 30 Oct, the first freeing at 20:38 UTC', REAL_LOG.length === b.DAILY_BUDGET && REAL_LOG.every((t) => t < REAL_AT && t >= REAL_AT - 24 * 3600e3) && new Date(REAL_LOG[0] + 24 * 3600e3).toISOString().slice(0, 16) === '2026-10-30T20:38');
+  const dst = join(tmpdir(), 'mr-budget86-' + process.pid);
+  const preflightWith = (budgetLog) => {
+    const p = join(dst, 'data', 'state.json');
+    const st = ex(p) ? JSON.parse(rf(p, 'utf8')) : {};
+    wf(p, JSON.stringify({ ...st, budgetLog }));
+    const r = spawnSync(process.execPath, ['src/index.js', '--preflight'], { cwd: dst, encoding: 'utf8', env: { ...process.env, TELEGRAM_BOT_TOKEN: '' }, timeout: 120_000 });
+    return { status: r.status, out: (r.stdout || '') + (r.stderr || '') };
+  };
+  try {
+    makeCopy(process.cwd(), dst, { note: () => {} });
+    const now = Date.now();
+    const cases = [
+      ['an empty budget', []],
+      ['a full budget (12 in the last hour)', Array.from({ length: b.DAILY_BUDGET }, (_, i) => now - (i + 1) * 60e3)],
+      ['the real 30 Oct log, rebased to now', REAL_LOG.map((t) => t - REAL_AT + now)],
+    ];
+    for (const [name, log] of cases) {
+      const r = preflightWith(log);
+      check(`preflight with ${name}: exit 0 and the self-test passes every path`, r.status === 0 && /\[boot\] admit\(\) self-test: 6\/6 paths OK/.test(r.out) && !/self-test FAILED/.test(r.out), r.out.match(/.*self-test.*/)?.[0]);
+    }
+  } finally { rm(dst, { recursive: true, force: true }); }
+  // The injection controls the path both ways, so the self-test still proves the budget branch exists.
+  const st = getState();
+  st.universe ??= {};
+  st.universe['st86:ST86USDT'] = { at: Date.now(), pass: true, status: 'PASS' };
+  const prov = (spent) => b.withLadder({}, () => b.withMultipliers({ PUMP: 0.83 }, () => b.withSpent(spent, () => b.admit({ source: 'CEX', type: 'PUMP', severity: 'HIGH', key: 'st86' + Math.random(), title: 'st86', lines: [], track: { kind: 'cex', exchange: 'st86', symbol: 'ST86USDT', price: 1 } }))));
+  const open = prov(0), full = prov(b.DAILY_BUDGET);
+  delete st.universe['st86:ST86USDT'];
+  check('withSpent(0): a gate-passing HIGH single is admitted provisional at B', open.allow && open.provisional && open.tier === 'B');
+  check('withSpent(12): the same candidate is refused for budget (the real path the live bot takes on a full day)', !full.allow && full.reason === 'budget');
+  check('the override is scoped: after withSpent returns, the live log counts again', (() => { const before = (st.budgetLog || []).length; b.withSpent(99, () => 0); return (st.budgetLog || []).length === before; })());
+  check('index.js: the hermetic wrapper injects the spend alongside multipliers and the ladder', /const hermetic = \(fn\) => b\.withLadder\(\{\}, \(\) => b\.withMultipliers\(SYN_MULT, \(\) => b\.withSpent\(0, fn\)\)\)/.test(readFileSync('src/index.js', 'utf8')));
 }
 
 console.error = origErr;

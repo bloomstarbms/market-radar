@@ -1,0 +1,934 @@
+{
+ "RE": {
+  "sym": "RE",
+  "pastCliffs": [
+   "2026-06-18",
+   "2026-07-18",
+   "2026-08-17"
+  ],
+  "futureCliffs": [
+   "2026-09-17"
+  ],
+  "results": [
+   {
+    "contract": "0xA600EC7Db69DFCD21f19face5B209a55EAb7a7C0",
+    "pctSupply": 34.04,
+    "verdict": "NO-CLUSTERS",
+    "baseline": 0,
+    "medianDaily": 0,
+    "perCliff": [
+     {
+      "cliff": "2026-06-18",
+      "inWindow": 0,
+      "ratio": 0,
+      "recipients": 0,
+      "cluster": false
+     },
+     {
+      "cliff": "2026-07-18",
+      "inWindow": 0,
+      "ratio": 0,
+      "recipients": 0,
+      "cluster": false
+     },
+     {
+      "cliff": "2026-08-17",
+      "inWindow": 0,
+      "ratio": 0,
+      "recipients": 0,
+      "cluster": false
+     }
+    ],
+    "n": 3,
+    "hits": 0,
+    "verified": false,
+    "distinctRecipients": 0,
+    "offIndexClusters": [],
+    "params": {
+     "windowDays": 5,
+     "minRatio": 3,
+     "minRecipients": 5
+    },
+    "grid": [
+     {
+      "windowDays": 3,
+      "minRatio": 2,
+      "hits": 0,
+      "n": 3,
+      "off": 0
+     },
+     {
+      "windowDays": 3,
+      "minRatio": 3,
+      "hits": 0,
+      "n": 3,
+      "off": 0
+     },
+     {
+      "windowDays": 3,
+      "minRatio": 5,
+      "hits": 0,
+      "n": 3,
+      "off": 0
+     },
+     {
+      "windowDays": 5,
+      "minRatio": 2,
+      "hits": 0,
+      "n": 3,
+      "off": 0
+     },
+     {
+      "windowDays": 5,
+      "minRatio": 3,
+      "hits": 0,
+      "n": 3,
+      "off": 0
+     },
+     {
+      "windowDays": 5,
+      "minRatio": 5,
+      "hits": 0,
+      "n": 3,
+      "off": 0
+     },
+     {
+      "windowDays": 7,
+      "minRatio": 2,
+      "hits": 0,
+      "n": 3,
+      "off": 0
+     },
+     {
+      "windowDays": 7,
+      "minRatio": 3,
+      "hits": 0,
+      "n": 3,
+      "off": 0
+     },
+     {
+      "windowDays": 7,
+      "minRatio": 5,
+      "hits": 0,
+      "n": 3,
+      "off": 0
+     }
+    ],
+    "pages": 1
+   }
+  ],
+  "at": "2026-09-05T17:26"
+ },
+ "L3": {
+  "sym": "L3",
+  "pastCliffs": [
+   "2026-06-30",
+   "2026-07-30",
+   "2026-08-29",
+   "2026-09-29"
+  ],
+  "futureCliffs": [
+   "2026-10-29"
+  ],
+  "results": [
+   {
+    "contract": "0x8E02d37b6Cad86039BDd11095b8c879B907F7D10",
+    "pctSupply": 9.24,
+    "verdict": "PARTIAL",
+    "baseline": 331715,
+    "medianDaily": 66343,
+    "perCliff": [
+     {
+      "cliff": "2026-06-30",
+      "inWindow": 473204,
+      "ratio": 1.43,
+      "recipients": 225,
+      "cluster": false
+     },
+     {
+      "cliff": "2026-07-30",
+      "inWindow": 5289884,
+      "ratio": 15.95,
+      "recipients": 193,
+      "cluster": true
+     },
+     {
+      "cliff": "2026-08-29",
+      "inWindow": 247763,
+      "ratio": 0.75,
+      "recipients": 160,
+      "cluster": false
+     },
+     {
+      "cliff": "2026-09-29",
+      "inWindow": 0,
+      "ratio": 0,
+      "recipients": 0,
+      "cluster": false
+     }
+    ],
+    "n": 4,
+    "hits": 1,
+    "verified": false,
+    "distinctRecipients": 2367,
+    "offIndexClusters": [
+     {
+      "from": "2026-06-16",
+      "inWindow": 12457731,
+      "ratio": 37.56,
+      "recipients": 170
+     },
+     {
+      "from": "2026-06-25",
+      "inWindow": 133491633,
+      "ratio": 402.43,
+      "recipients": 177
+     }
+    ],
+    "params": {
+     "windowDays": 5,
+     "minRatio": 3,
+     "minRecipients": 5
+    },
+    "grid": [
+     {
+      "windowDays": 3,
+      "minRatio": 2,
+      "hits": 1,
+      "n": 4,
+      "off": 5
+     },
+     {
+      "windowDays": 3,
+      "minRatio": 3,
+      "hits": 1,
+      "n": 4,
+      "off": 2
+     },
+     {
+      "windowDays": 3,
+      "minRatio": 5,
+      "hits": 1,
+      "n": 4,
+      "off": 2
+     },
+     {
+      "windowDays": 5,
+      "minRatio": 2,
+      "hits": 1,
+      "n": 4,
+      "off": 4
+     },
+     {
+      "windowDays": 5,
+      "minRatio": 3,
+      "hits": 1,
+      "n": 4,
+      "off": 2
+     },
+     {
+      "windowDays": 5,
+      "minRatio": 5,
+      "hits": 1,
+      "n": 4,
+      "off": 2
+     },
+     {
+      "windowDays": 7,
+      "minRatio": 2,
+      "hits": 1,
+      "n": 4,
+      "off": 3
+     },
+     {
+      "windowDays": 7,
+      "minRatio": 3,
+      "hits": 1,
+      "n": 4,
+      "off": 2
+     },
+     {
+      "windowDays": 7,
+      "minRatio": 5,
+      "hits": 1,
+      "n": 4,
+      "off": 2
+     }
+    ],
+    "pages": 0,
+    "activeDayFrac": 1,
+    "spanDays": 96
+   },
+   {
+    "contract": "0xA9D1e08C7793af67e9d92fe308d5697FB81d3E43",
+    "verdict": "UNVERIFIED",
+    "reason": "fetch did not reach 2026-06-28 (oldest 2026-07-20, 1 pages) — not evidence"
+   }
+  ],
+  "at": "2026-10-01T20:13"
+ },
+ "REZ": {
+  "sym": "REZ",
+  "pastCliffs": [
+   "2026-06-30",
+   "2026-07-30",
+   "2026-08-30",
+   "2026-09-29"
+  ],
+  "futureCliffs": [
+   "2026-10-30"
+  ],
+  "results": [
+   {
+    "contract": "0x9706128269F3476A1bd1a511c75BEa75422A1edB",
+    "pctSupply": 4.83,
+    "verdict": "NO-CLUSTERS",
+    "baseline": 8482143,
+    "medianDaily": 1696429,
+    "perCliff": [
+     {
+      "cliff": "2026-06-30",
+      "inWindow": 1333333,
+      "ratio": 0.16,
+      "recipients": 3,
+      "cluster": false
+     },
+     {
+      "cliff": "2026-07-30",
+      "inWindow": 3699094,
+      "ratio": 0.44,
+      "recipients": 4,
+      "cluster": false
+     },
+     {
+      "cliff": "2026-08-30",
+      "inWindow": 20416667,
+      "ratio": 2.41,
+      "recipients": 3,
+      "cluster": false
+     },
+     {
+      "cliff": "2026-09-29",
+      "inWindow": 0,
+      "ratio": 0,
+      "recipients": 0,
+      "cluster": false
+     }
+    ],
+    "n": 4,
+    "hits": 0,
+    "verified": false,
+    "distinctRecipients": 71,
+    "offIndexClusters": [
+     {
+      "from": "2026-04-30",
+      "inWindow": 118458864,
+      "ratio": 13.97,
+      "recipients": 23
+     },
+     {
+      "from": "2026-05-05",
+      "inWindow": 71395824,
+      "ratio": 8.42,
+      "recipients": 12
+     },
+     {
+      "from": "2026-05-10",
+      "inWindow": 40416667,
+      "ratio": 4.76,
+      "recipients": 11
+     },
+     {
+      "from": "2026-05-25",
+      "inWindow": 48491667,
+      "ratio": 5.72,
+      "recipients": 5
+     }
+    ],
+    "params": {
+     "windowDays": 5,
+     "minRatio": 3,
+     "minRecipients": 5
+    },
+    "grid": [
+     {
+      "windowDays": 3,
+      "minRatio": 2,
+      "hits": 0,
+      "n": 4,
+      "off": 5
+     },
+     {
+      "windowDays": 3,
+      "minRatio": 3,
+      "hits": 0,
+      "n": 4,
+      "off": 5
+     },
+     {
+      "windowDays": 3,
+      "minRatio": 5,
+      "hits": 0,
+      "n": 4,
+      "off": 5
+     },
+     {
+      "windowDays": 5,
+      "minRatio": 2,
+      "hits": 0,
+      "n": 4,
+      "off": 4
+     },
+     {
+      "windowDays": 5,
+      "minRatio": 3,
+      "hits": 0,
+      "n": 4,
+      "off": 4
+     },
+     {
+      "windowDays": 5,
+      "minRatio": 5,
+      "hits": 0,
+      "n": 4,
+      "off": 3
+     },
+     {
+      "windowDays": 7,
+      "minRatio": 2,
+      "hits": 0,
+      "n": 4,
+      "off": 4
+     },
+     {
+      "windowDays": 7,
+      "minRatio": 3,
+      "hits": 0,
+      "n": 4,
+      "off": 3
+     },
+     {
+      "windowDays": 7,
+      "minRatio": 5,
+      "hits": 0,
+      "n": 4,
+      "off": 2
+     }
+    ],
+    "pages": 0,
+    "activeDayFrac": 0.49,
+    "spanDays": 96
+   }
+  ],
+  "at": "2026-10-01T20:10"
+ },
+ "ORDER": {
+  "sym": "ORDER",
+  "pastCliffs": [
+   "2026-05-18",
+   "2026-06-01",
+   "2026-06-15",
+   "2026-06-29",
+   "2026-07-13",
+   "2026-07-27",
+   "2026-08-10",
+   "2026-08-24"
+  ],
+  "futureCliffs": [
+   "2026-09-07",
+   "2026-09-21",
+   "2026-10-05"
+  ],
+  "results": [
+   {
+    "contract": "0x17435cC940e03aA52c349738c72C7Aa44FfA6525",
+    "pctSupply": 13.92,
+    "verdict": "PARTIAL",
+    "baseline": 150320,
+    "medianDaily": 30064,
+    "perCliff": [
+     {
+      "cliff": "2026-05-18",
+      "inWindow": 225225,
+      "ratio": 1.5,
+      "recipients": 6,
+      "cluster": false
+     },
+     {
+      "cliff": "2026-06-01",
+      "inWindow": 188780,
+      "ratio": 1.26,
+      "recipients": 3,
+      "cluster": false
+     },
+     {
+      "cliff": "2026-06-15",
+      "inWindow": 525782,
+      "ratio": 3.5,
+      "recipients": 2,
+      "cluster": false
+     },
+     {
+      "cliff": "2026-06-29",
+      "inWindow": 384947,
+      "ratio": 2.56,
+      "recipients": 4,
+      "cluster": false
+     },
+     {
+      "cliff": "2026-07-13",
+      "inWindow": 46113,
+      "ratio": 0.31,
+      "recipients": 2,
+      "cluster": false
+     },
+     {
+      "cliff": "2026-07-27",
+      "inWindow": 143302,
+      "ratio": 0.95,
+      "recipients": 3,
+      "cluster": false
+     },
+     {
+      "cliff": "2026-08-10",
+      "inWindow": 1373570,
+      "ratio": 9.14,
+      "recipients": 4,
+      "cluster": false
+     },
+     {
+      "cliff": "2026-08-24",
+      "inWindow": 1167022,
+      "ratio": 7.76,
+      "recipients": 8,
+      "cluster": true
+     }
+    ],
+    "n": 8,
+    "hits": 1,
+    "verified": false,
+    "distinctRecipients": 55,
+    "offIndexClusters": [
+     {
+      "from": "2026-05-05",
+      "inWindow": 607740,
+      "ratio": 4.04,
+      "recipients": 12
+     },
+     {
+      "from": "2026-06-22",
+      "inWindow": 624066,
+      "ratio": 4.15,
+      "recipients": 13
+     },
+     {
+      "from": "2026-07-04",
+      "inWindow": 4514519,
+      "ratio": 30.03,
+      "recipients": 6
+     },
+     {
+      "from": "2026-07-20",
+      "inWindow": 4515018,
+      "ratio": 30.04,
+      "recipients": 14
+     },
+     {
+      "from": "2026-08-29",
+      "inWindow": 1529741,
+      "ratio": 10.18,
+      "recipients": 5
+     }
+    ],
+    "params": {
+     "windowDays": 5,
+     "minRatio": 3,
+     "minRecipients": 5
+    },
+    "grid": [
+     {
+      "windowDays": 3,
+      "minRatio": 2,
+      "hits": 0,
+      "n": 8,
+      "off": 7
+     },
+     {
+      "windowDays": 3,
+      "minRatio": 3,
+      "hits": 0,
+      "n": 8,
+      "off": 6
+     },
+     {
+      "windowDays": 3,
+      "minRatio": 5,
+      "hits": 0,
+      "n": 8,
+      "off": 5
+     },
+     {
+      "windowDays": 5,
+      "minRatio": 2,
+      "hits": 1,
+      "n": 8,
+      "off": 5
+     },
+     {
+      "windowDays": 5,
+      "minRatio": 3,
+      "hits": 1,
+      "n": 8,
+      "off": 5
+     },
+     {
+      "windowDays": 5,
+      "minRatio": 5,
+      "hits": 1,
+      "n": 8,
+      "off": 3
+     },
+     {
+      "windowDays": 7,
+      "minRatio": 2,
+      "hits": 2,
+      "n": 8,
+      "off": 4
+     },
+     {
+      "windowDays": 7,
+      "minRatio": 3,
+      "hits": 2,
+      "n": 8,
+      "off": 3
+     },
+     {
+      "windowDays": 7,
+      "minRatio": 5,
+      "hits": 2,
+      "n": 8,
+      "off": 1
+     }
+    ],
+    "pages": 0,
+    "activeDayFrac": 0.77,
+    "spanDays": 113
+   },
+   {
+    "contract": "0x6d00268a47D48474f999c18210c6877491AE6FB3",
+    "pctSupply": 13.17,
+    "verdict": "CLUSTERS-REPLAY",
+    "baseline": 97438,
+    "medianDaily": 19488,
+    "perCliff": [
+     {
+      "cliff": "2026-05-18",
+      "inWindow": 900950,
+      "ratio": 9.25,
+      "recipients": 16,
+      "cluster": true
+     },
+     {
+      "cliff": "2026-06-01",
+      "inWindow": 535541,
+      "ratio": 5.5,
+      "recipients": 16,
+      "cluster": true
+     },
+     {
+      "cliff": "2026-06-15",
+      "inWindow": 56354,
+      "ratio": 0.58,
+      "recipients": 5,
+      "cluster": false
+     },
+     {
+      "cliff": "2026-06-29",
+      "inWindow": 838437,
+      "ratio": 8.6,
+      "recipients": 11,
+      "cluster": true
+     },
+     {
+      "cliff": "2026-07-13",
+      "inWindow": 780403,
+      "ratio": 8.01,
+      "recipients": 10,
+      "cluster": true
+     },
+     {
+      "cliff": "2026-07-27",
+      "inWindow": 301314,
+      "ratio": 3.09,
+      "recipients": 12,
+      "cluster": true
+     },
+     {
+      "cliff": "2026-08-10",
+      "inWindow": 217878,
+      "ratio": 2.24,
+      "recipients": 10,
+      "cluster": false
+     },
+     {
+      "cliff": "2026-08-24",
+      "inWindow": 1388475,
+      "ratio": 14.25,
+      "recipients": 17,
+      "cluster": true
+     }
+    ],
+    "n": 8,
+    "hits": 6,
+    "verified": true,
+    "distinctRecipients": 80,
+    "offIndexClusters": [
+     {
+      "from": "2026-05-23",
+      "inWindow": 372804,
+      "ratio": 3.83,
+      "recipients": 10
+     },
+     {
+      "from": "2026-06-07",
+      "inWindow": 805111,
+      "ratio": 8.26,
+      "recipients": 8
+     },
+     {
+      "from": "2026-06-21",
+      "inWindow": 348464,
+      "ratio": 3.58,
+      "recipients": 10
+     },
+     {
+      "from": "2026-07-05",
+      "inWindow": 919805,
+      "ratio": 9.44,
+      "recipients": 11
+     },
+     {
+      "from": "2026-07-20",
+      "inWindow": 606871,
+      "ratio": 6.23,
+      "recipients": 12
+     },
+     {
+      "from": "2026-08-15",
+      "inWindow": 1174465,
+      "ratio": 12.05,
+      "recipients": 6
+     },
+     {
+      "from": "2026-08-30",
+      "inWindow": 3350488,
+      "ratio": 34.39,
+      "recipients": 12
+     }
+    ],
+    "params": {
+     "windowDays": 5,
+     "minRatio": 3,
+     "minRecipients": 5
+    },
+    "grid": [
+     {
+      "windowDays": 3,
+      "minRatio": 2,
+      "hits": 7,
+      "n": 8,
+      "off": 16
+     },
+     {
+      "windowDays": 3,
+      "minRatio": 3,
+      "hits": 6,
+      "n": 8,
+      "off": 15
+     },
+     {
+      "windowDays": 3,
+      "minRatio": 5,
+      "hits": 5,
+      "n": 8,
+      "off": 11
+     },
+     {
+      "windowDays": 5,
+      "minRatio": 2,
+      "hits": 7,
+      "n": 8,
+      "off": 9
+     },
+     {
+      "windowDays": 5,
+      "minRatio": 3,
+      "hits": 6,
+      "n": 8,
+      "off": 7
+     },
+     {
+      "windowDays": 5,
+      "minRatio": 5,
+      "hits": 5,
+      "n": 8,
+      "off": 7
+     },
+     {
+      "windowDays": 7,
+      "minRatio": 2,
+      "hits": 6,
+      "n": 8,
+      "off": 7
+     },
+     {
+      "windowDays": 7,
+      "minRatio": 3,
+      "hits": 5,
+      "n": 8,
+      "off": 7
+     },
+     {
+      "windowDays": 7,
+      "minRatio": 5,
+      "hits": 4,
+      "n": 8,
+      "off": 6
+     }
+    ],
+    "pages": 0,
+    "activeDayFrac": 0.88,
+    "spanDays": 113
+   }
+  ],
+  "at": "2026-09-05T21:36"
+ },
+ "ACX": {
+  "sym": "ACX",
+  "pastCliffs": [
+   "2026-06-01",
+   "2026-07-01",
+   "2026-08-01",
+   "2026-08-31"
+  ],
+  "futureCliffs": [
+   "2026-10-01"
+  ],
+  "results": [
+   {
+    "contract": "0x4761ddb8649345756A211925420106C919B23083",
+    "pctSupply": 7.94,
+    "verdict": "NO-CLUSTERS",
+    "baseline": 0,
+    "medianDaily": 0,
+    "perCliff": [
+     {
+      "cliff": "2026-06-01",
+      "inWindow": 0,
+      "ratio": 0,
+      "recipients": 0,
+      "cluster": false
+     },
+     {
+      "cliff": "2026-07-01",
+      "inWindow": 0,
+      "ratio": 0,
+      "recipients": 0,
+      "cluster": false
+     },
+     {
+      "cliff": "2026-08-01",
+      "inWindow": 0,
+      "ratio": 0,
+      "recipients": 0,
+      "cluster": false
+     },
+     {
+      "cliff": "2026-08-31",
+      "inWindow": 0,
+      "ratio": 0,
+      "recipients": 0,
+      "cluster": false
+     }
+    ],
+    "n": 4,
+    "hits": 0,
+    "verified": false,
+    "distinctRecipients": 0,
+    "offIndexClusters": [],
+    "params": {
+     "windowDays": 5,
+     "minRatio": 3,
+     "minRecipients": 5
+    },
+    "grid": [
+     {
+      "windowDays": 3,
+      "minRatio": 2,
+      "hits": 0,
+      "n": 4,
+      "off": 0
+     },
+     {
+      "windowDays": 3,
+      "minRatio": 3,
+      "hits": 0,
+      "n": 4,
+      "off": 0
+     },
+     {
+      "windowDays": 3,
+      "minRatio": 5,
+      "hits": 0,
+      "n": 4,
+      "off": 0
+     },
+     {
+      "windowDays": 5,
+      "minRatio": 2,
+      "hits": 0,
+      "n": 4,
+      "off": 0
+     },
+     {
+      "windowDays": 5,
+      "minRatio": 3,
+      "hits": 0,
+      "n": 4,
+      "off": 0
+     },
+     {
+      "windowDays": 5,
+      "minRatio": 5,
+      "hits": 0,
+      "n": 4,
+      "off": 0
+     },
+     {
+      "windowDays": 7,
+      "minRatio": 2,
+      "hits": 0,
+      "n": 4,
+      "off": 0
+     },
+     {
+      "windowDays": 7,
+      "minRatio": 3,
+      "hits": 0,
+      "n": 4,
+      "off": 0
+     },
+     {
+      "windowDays": 7,
+      "minRatio": 5,
+      "hits": 0,
+      "n": 4,
+      "off": 0
+     }
+    ],
+    "pages": 1
+   }
+  ],
+  "at": "2026-09-05T17:38"
+ }
+}

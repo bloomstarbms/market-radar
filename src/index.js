@@ -153,8 +153,10 @@ function admitSelfTest() {
     // behaviour), and the self-test's PUMP cases — hermetic against multipliers only —
     // dropped as ladder-disabled and crash-looped the boot on a data state. Any live
     // state a gate reads is a clock that will eventually strike; inject all of it.
+    // 30 Oct: and the 24h budget. With 12 B-tier alerts spent the provisional case came back
+    // budget-denied and the gate refused every boot until the first slot freed (fixture 86).
     const SYN_MULT = { PUMP: 0.83, CONFLUENCE: 1.2 };
-    const hermetic = (fn) => b.withLadder({}, () => b.withMultipliers(SYN_MULT, fn));
+    const hermetic = (fn) => b.withLadder({}, () => b.withMultipliers(SYN_MULT, () => b.withSpent(0, fn)));
     const cases = [
       ['fact-path', b.admit({ source: 'CEX', type: 'SUSPENSION', severity: 'HIGH', key: 'st' + Math.random(), title: 'selftest', lines: [] }),
         (v) => v.allow && v.kind === 'FACT' && v.charge === false && v.score === undefined],

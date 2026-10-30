@@ -313,7 +313,18 @@ export function dropStats(hours = 24) {
 }
 
 // ---------------------------------------------------------------- budget
+// Test-only spend injection, same shape as withLadder and withMultipliers (2026-10-30): the
+// self-test's provisional case read the LIVE 24h spend, so once the bot had spent its 12
+// B-tier slots (02:44 UTC on 30 Oct; the first freed at 20:38 UTC) the gate refused the boot,
+// and the preflight that is systemd's ExecStartPre, for 18 hours on a DATA state with no code
+// change. Any live state a gate reads is a clock that will eventually strike; inject all of it.
+let spentOverride = null;
+export function withSpent(n, fn) {
+  spentOverride = n;
+  try { return fn(); } finally { spentOverride = null; }
+}
 function spentIn24h() {
+  if (spentOverride !== null) return spentOverride;
   const st = getState();
   const cut = Date.now() - WINDOW_MS;
   st.budgetLog = (st.budgetLog || []).filter((t) => t >= cut);
