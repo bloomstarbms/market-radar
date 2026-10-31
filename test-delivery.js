@@ -3888,6 +3888,154 @@ console.log('89. a budget refusal is logged once per candidate per budget window
   check('cleanup: the fixture\'s entries are gone from the drop log', st.dropLog.every((d) => !/^ethereum:0xfx89/.test(d.key)));
 }
 
+console.log('90. one transaction is one whale event, and a withdrawal to an address with no history is exchange-internal, not accumulation');
+{
+  // (2026-10-31) 29 Oct: Binance 14 (0x28c6c062…1d60) sent 63 tokens to 0x5227f603… in ONE tx at 20:24:23
+  // UTC, 12 of them on the watchlist, and 122 tokens to 0xa97bf783… at 22:39:35 UTC, 6 on the watchlist.
+  // Neither address had a token transfer, a transaction or an internal transaction before its block
+  // (Etherscan, read 31 Oct). All 11 CONFLUENCE calls of 29-30 Oct rested on one of these two txs.
+  const w = await import('./src/sources/chain/whale.js');
+  const c = await import('./src/core/confluence.js');
+  const BINANCE14 = '0x28c6c06298d514db089934071355e5743bf21d60';
+  const REAL = [
+    { hash: '0x53bd38b816c23e74134786c29a8c18d792777998a3b9326047b583100e88e2f3', to: '0x5227f603c1ee34ce3c06efe6477003bdfccb2f8c', block: 26300770, tokens: {
+      PEPE: '0x6982508145454ce325ddbe47a25d4ec3d2311933', ZRO: '0x6985884c4392d348587b19cb9eaaf157f13271cd', FET: '0xaea46a60368a7bd060eec7df8cba43b7ef41ad85', BEAM: '0x62d0a8458ed7719fdaf978fe5929c6d342b0bfce',
+      EIGEN: '0xec53bf9167f50cdeb3ae105f56099aaab9061f83', CRV: '0xd533a949740bb3306d119cc777fa900ba034cd52', SHIB: '0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce', RED: '0xc43c6bfeda065fe2c4c11765bf838789bd0bb5de',
+      NMR: '0x1776e1f26f98b1a5df9cd347953a26dd3cb46671', G: '0x9c7beba8f6ef6643abd725e45a4e8387ef260649', SUPER: '0xe53ec727dbdeb9e2d5456c3be40cff031ab40a55', CVX: '0x4e3fbd56cd56c3e72c1403e103b45db9da5b9d2b' } },
+    { hash: '0x4a4aed833556814c16fe176fc8abc70ce124eadc73da3bcdf42a67ef44f9ad6b', to: '0xa97bf7836f8a08f9ed91d41453d371493fae8d10', block: 26301444, tokens: {
+      VIRTUAL: '0x44ff8620b8ca30902395a7bd3f2407e1a091bf73', OCEAN: '0x967da4048cd07ab37855c090aaf366e4ce1b9f48', NEIRO: '0x812ba41e071c7b7fa4ebcfb62df5f45f6fa853ee',
+      EPIC: '0x94314a14df63779c99c0764a30e0cd22fa78fc0e', IQ: '0x579cea1889991f68acc35ff5c3dd0621ff29b0c9', TURTLE: '0x66fd8de541c0594b4dccdfc13bf3a390e50d3afd' } },
+  ];
+  // PEPE's row as Etherscan's tokentx returned it (the fields mapExplorerTx reads).
+  const row = { blockNumber: '26300770', timeStamp: '1793305463', hash: REAL[0].hash, from: BINANCE14, to: REAL[0].to, value: '7175249471426366625166645550511', tokenDecimal: '18' };
+  const m = w.mapExplorerTx('ethereum', row);
+  check('mapExplorerTx carries the block (the history question is about the address BEFORE it)', m.block === 26300770 && m.hash === REAL[0].hash && m.to === REAL[0].to);
+  check('Binance 14 -> 0x5227f603… is a WITHDRAWAL by the wallet table: this is what fed CONFLUENCE', /WITHDRAWAL/.test(w.classifyDirection(BINANCE14, REAL[0].to).dir));
+  // The explorer's answers, frozen: "No transactions found" to all three questions, for both addresses.
+  const asked = [];
+  for (const tx of REAL) tx.history = await w.addressHistory('ethereum', tx.to, tx.block, 'etherscan', { get: async (q) => { asked.push(q); return []; } });
+  check('FROZEN: both destinations are fresh, asked tokentx, txlist and txlistinternal up to the block before the tx', REAL.every((t) => t.history === 'fresh') && asked.length === 6
+    && ['tokentx', 'txlist', 'txlistinternal'].every((a) => asked.filter((q) => q.includes(`action=${a}&`)).length === 2) && asked.every((q) => /endblock=(26300769|26301443)&/.test(q)));
+  check('...and cached per (address, block): the other 11 tokens of the batch cost no call', (await w.addressHistory('ethereum', REAL[0].to, REAL[0].block, 'etherscan', { get: async () => { throw new Error('must not be asked'); } })) === 'fresh');
+  const used = await w.addressHistory('ethereum', '0xfx90used', 100, 'etherscan', { get: async (q) => (q.includes('action=txlist&') ? [{ hash: '0xold' }] : []) });
+  let calls = 0;
+  const failed = await w.addressHistory('ethereum', '0xfx90fail', 100, 'etherscan', { get: async () => { calls++; throw new Error('timeout'); } });
+  const failedAgain = await w.addressHistory('ethereum', '0xfx90fail', 100, 'etherscan', { get: async () => { calls++; return []; } });
+  check('an address with any earlier transaction is used; a failed call is unknown and NOT cached (the next look asks again)', used === 'used' && failed === 'unknown' && failedAgain === 'fresh' && calls === 4);
+  check('no history route (Solana via Helius, Moralis chains) or no block -> unknown', (await w.addressHistory('solana', 'x', 5, 'helius')) === 'unknown' && (await w.addressHistory('bsc', '0x1', 5, 'moralis')) === 'unknown' && (await w.addressHistory('ethereum', '0x1', null, 'etherscan')) === 'unknown');
+  check('label: fresh -> exchange-internal; used and unknown -> accumulation (unknown keeps the behaviour it had)', w.withdrawalLabel('fresh') === 'exchange-internal' && w.withdrawalLabel('used') === 'accumulation' && w.withdrawalLabel('unknown') === 'accumulation');
+  // Through the engine: every watchlist token of both txs noted the way whale.js now notes them.
+  const st = getState();
+  const saved = st.whaleEvents;
+  const all = REAL.flatMap((tx) => Object.entries(tx.tokens).map(([sym, a]) => ({ tx, sym, key: `ethereum:${a}` })));
+  try {
+    st.whaleEvents = {};
+    for (const { tx, sym, key } of all) c.noteWhale(key, { direction: 'Binance → wallet (to a fresh address)', exchange: 'Binance', usd: 1e6, symbol: sym, isWithdrawal: true, hash: tx.hash, label: w.withdrawalLabel(tx.history), history: tx.history });
+    const evs = Object.values(st.whaleEvents);
+    check('REAL: the 0x53bd38b8… tx is ONE event listing its 12 watchlist tokens, the EPIC batch ONE listing 6', evs.length === 2 && evs.find((e) => e.hash === REAL[0].hash)?.tokens && Object.keys(evs.find((e) => e.hash === REAL[0].hash).tokens).length === 12 && Object.keys(evs.find((e) => e.hash === REAL[1].hash).tokens).length === 6);
+    check('REAL: both are labelled exchange-internal, and they produce 0 accumulation events: not one of the 18 tokens is CONFLUENCE-eligible', evs.every((e) => e.label === 'exchange-internal') && all.filter(({ key }) => c.accumulationFor(key)).length === 0);
+    check('REAL: EPIC (the 22:39:35 batch) is not eligible either', !c.accumulationFor('ethereum:' + REAL[1].tokens.EPIC));
+    // What the same two txs were before the fix: one event per token, each eligible.
+    st.whaleEvents = {};
+    for (const { sym, key } of all) c.noteWhale(key, { direction: 'Binance → wallet (WITHDRAWAL)', exchange: 'Binance', usd: 1e6, symbol: sym, isWithdrawal: true });
+    check('MUTATION (the old shape: no hash, no label): the same 2 txs become 18 events and 18 eligible tokens', Object.keys(st.whaleEvents).length === 18 && all.filter(({ key }) => c.accumulationFor(key)).length === 18);
+  } finally { st.whaleEvents = saved; }
+  const src = readFileSync('src/sources/chain/whale.js', 'utf8');
+  check('whale.js asks the history question and passes the hash and the label to noteWhale', /addressHistory\(chainId, tx\.to, tx\.block, source\)/.test(src) && /noteWhale\(key, \{[^}]*hash: tx\.hash, label, history \}\)/.test(src));
+}
+
+console.log('91. CONFLUENCE uses a DEX 1h change only when the CEX price agrees with it, and not when the chain\'s 1h flipped in one poll');
+{
+  // (2026-10-31) The price branch (DEX 1h >= +8%) carried SUPER, BEAM, EIGEN, FET and PEPE on 29 Oct
+  // 20:38-20:49 UTC while Binance fell. FROZEN: each call's DEX price and 1h as logged, against the
+  // Binance 1m close at the call minute and 60 min before (BEAM: Bybit, Bitget and MEXC; EPIC: MEXC,
+  // Gate, KuCoin; neither is on Binance spot).
+  const x = await import('./src/core/cexref.js');
+  const bin = (price, h1) => ({ price, h1, venues: ['binance'] });
+  const BURST = { SUPER: [0.196, 10.56, bin(0.1712, -3.49)], EIGEN: [0.218, 8.67, bin(0.194, -3.53)], FET: [0.1992, 11.41, bin(0.1719, -3.32)], PEPE: [0.000005961, 13.23, bin(0.00000493, -6.27)], SHIB: [0.000005241, 6.25, bin(0.00000481, -2.63)] };
+  const v = Object.fromEntries(Object.entries(BURST).map(([s, [p, h, ref]]) => [s, x.dexH1Check({ dexH1: h, dexPrice: p, cex: ref })]));
+  check('FROZEN: SUPER, EIGEN, FET, PEPE, SHIB: DEX price 9-21% above Binance, so the DEX 1h is not used', Object.values(v).every((r) => !r.use && r.why === 'premium' && r.premium > 8.9 && r.premium < 21));
+  const beam = x.consensus([{ exchange: 'mexc', price: 0.007322, h1: -0.79 }, { exchange: 'bybit', price: 0.003367, h1: -1.29 }, { exchange: 'bitget', price: 0.003374, h1: -0.97 }]);
+  check('FROZEN: BEAM\'s venues: MEXC\'s BEAMUSDT (2.2x the others) is another asset on that ticker and is set aside; Bybit/Bitget agree', beam && beam.venues.join() === 'bybit,bitget' && beam.dropped.join() === 'mexc' && Math.abs(beam.price - 0.0033705) < 1e-9);
+  const vb = x.dexH1Check({ dexH1: 12.41, dexPrice: 0.00382, cex: beam });
+  check('FROZEN: BEAM +12.41% at a DEX price 13% above Bybit/Bitget: not used', !vb.use && vb.why === 'premium');
+  const epic = x.consensus([{ exchange: 'mexc', price: 0.1036, h1: 2.47 }, { exchange: 'gate', price: 0.1037, h1: 2.56 }, { exchange: 'kucoin', price: 0.104, h1: 2.77 }]);
+  check('FROZEN: EPIC\'s DEX +8.02% at a price 1.4% below its venues, same direction: used (only the event rule stops EPIC)', x.dexH1Check({ dexH1: 8.02, dexPrice: 0.1022, cex: epic }).use === true);
+  const LATER = { CVX: [2.014, -2.56, bin(2.063, -0.53)], NMR: [8.74, -9.05, bin(9.2, -1.71)], G: [0.003136, 0.56, bin(0.00334, 0.3)], RED: [0.1086, -8.71, bin(0.1196, -7.14)] };
+  check('FROZEN: CVX, NMR, G, RED: DEX below Binance and the same direction: used (these fired on volume, not price)', Object.values(LATER).every(([p, h, ref]) => x.dexH1Check({ dexH1: h, dexPrice: p, cex: ref }).use));
+  check('rule: within 5% but opposite directions -> not used; within 5% and agreeing -> used', x.dexH1Check({ dexH1: 9, dexPrice: 1.01, cex: bin(1, -2) }).why === 'direction' && x.dexH1Check({ dexH1: 9, dexPrice: 1.01, cex: bin(1, 2) }).use);
+  check('rule: exactly +5% is allowed, +5.1% is not', x.dexH1Check({ dexH1: 9, dexPrice: 1.05, cex: bin(1, 2) }).use && !x.dexH1Check({ dexH1: 9, dexPrice: 1.051, cex: bin(1, 2) }).use);
+  check('rule: no CEX reference -> used (the check needs a reference); a CEX quote 2x away is another token on that ticker -> used, said so', x.dexH1Check({ dexH1: 9, dexPrice: 1, cex: null }).why === 'no-cex' && x.dexH1Check({ dexH1: 9, dexPrice: 3, cex: bin(1, -2) }).why === 'other-asset');
+  check('rule: two venues that disagree by more than 25% give no reference', x.consensus([{ exchange: 'a', price: 1, h1: 1 }, { exchange: 'b', price: 2, h1: 1 }]) === null);
+  // The live series: one hour of the CEX quotes the poll already reads, for watchlist symbols only.
+  x.watchSymbols('fx91chain', ['FXNINETYONE']);
+  const t0 = 5e12;
+  for (let i = 0; i <= 62; i++) { x.noteCexPrice('binance', 'FXNINETYONEUSDT', 1 - i * 0.0005, t0 + i * 60e3); x.noteCexPrice('bybit', 'FXNINETYONEUSDT', 1 - i * 0.0005, t0 + i * 60e3); }
+  x.noteCexPrice('binance', 'NOTWATCHEDUSDT', 1, t0);
+  const ref = x.cexRef('FXNINETYONE', t0 + 62 * 60e3, ['binance', 'bybit']);
+  check('cexRef: one hour of real-shaped polls -> the consensus price and a 1h change from the sample 60 min back', ref && Math.abs(ref.price - 0.969) < 1e-9 && ref.h1 < -2.9 && ref.h1 > -3.1 && ref.venues.join() === 'binance,bybit');
+  check('cexRef: a symbol the DEX watchlist does not name is never recorded; a quote 5 min stale is no reference', x.cexRef('NOTWATCHED', t0, ['binance']) === null && x.cexRef('FXNINETYONE', t0 + 68 * 60e3, ['binance', 'bybit']) === null);
+  x.watchSymbols('fx91chain', []);
+  // Chain flip: the 20:36 poll is NOT on disk in full. bot.log keeps the top three movers by |1h| per
+  // poll; these are the four ethereum polls before SUPER fired, as logged. The poll before the flip had
+  // no token beyond 4.83% either way; two polls later SUPER, BEAM and five others read +6% to +23%.
+  const LOGGED = [[['NST', -4.11], ['PEPE', -3.04], ['SUPER', -3.02]], [['PEPE', -4.83], ['SUPER', -3.02], ['FLUID', -2.93]], [['Neiro', 19.21], ['Mog', 9.34], ['SHIB', 6.14]], [['LON', 12.11], ['SUPER', 10.56], ['BEAM', 7.51]]];
+  check('RECORD: the logged polls bound the flip (every token within ±4.83% in poll 2, the top three all ≥ +6% in polls 3 and 4)', LOGGED[1].every(([, h]) => Math.abs(h) <= 4.83) && LOGGED[2].concat(LOGGED[3]).every(([, h]) => h >= 6));
+  const poll = (n, up) => Object.fromEntries(Array.from({ length: n }, (_, i) => ['0x' + i, i < up ? 5 : -3]));
+  check('rule: 34 of 48 flipped (71%) -> distrusted; 28 of 48 (58%) -> not; exactly 60% -> not (over 60% is the line)', x.chainFlip(poll(48, 0), poll(48, 34)).distrust && !x.chainFlip(poll(48, 0), poll(48, 28)).distrust && !x.chainFlip(poll(10, 0), poll(10, 6)).distrust && x.chainFlip(poll(10, 0), poll(10, 7)).distrust);
+  check('rule: under 5 comparable tokens is never a chain flip; a token at 0 on either side is not compared', !x.chainFlip(poll(4, 0), poll(4, 4)).distrust && x.chainFlip({ a: 0, b: -1 }, { a: 5, b: 2 }).compared === 1);
+  const idx = readFileSync('src/index.js', 'utf8');
+  check('the DEX poll logs every poll\'s sign-flip count, logs the per-token figures in full when it distrusts, and hands the verdict to CONFLUENCE', /sign flipped on \$\{flip\.flipped\}\/\$\{flip\.compared\} since last poll/.test(idx) && /DEX 1h distrusted this poll/.test(idx) && /h1Distrusted: flip\.distrust/.test(idx));
+  // Through the engine (no dispatch reached): SUPER's real inputs with an accumulation event standing.
+  const c = await import('./src/core/confluence.js');
+  const st = getState(); const saved = st.whaleEvents;
+  const logs = [], origLog = console.log;
+  try {
+    st.whaleEvents = {};
+    c.noteWhale('ethereum:0xfx91super', { direction: 'Binance → wallet (WITHDRAWAL)', exchange: 'Binance', usd: 1.14e6, symbol: 'SUPER', isWithdrawal: true, hash: '0xfx91', label: 'accumulation' });
+    const sup = { chainId: 'ethereum', baseToken: { address: '0xfx91super', symbol: 'SUPER' }, priceUsd: '0.1960', liquidity: { usd: 3.64e6 }, url: '' };
+    const inp = { volH1: 18.5e3, volAvgH1: 18.5e3 / 3.8, priceH1: 10.56 };
+    console.log = (...a) => logs.push(a.join(' '));
+    const r1 = await c.checkConfluence(sup, { ...inp, cex: BURST.SUPER[2] });
+    const r2 = await c.checkConfluence(sup, { ...inp, cex: BURST.SUPER[2] });
+    const r3 = await c.checkConfluence(sup, { ...inp, cex: null, h1Distrusted: true });
+    console.log = origLog;
+    check('SUPER\'s real 20:38 inputs: with the DEX 1h set aside, $18.5K/h at 3.8x is not activity -> no call', r1 === false && r2 === false && r3 === false);
+    check('the drop is logged once per event and reason, not on every poll', logs.filter((l) => /\[confluence\] SUPER .*DEX 1h \+10\.56% not used/.test(l)).length === 2 && logs.some((l) => /above the 5% limit/.test(l)) && logs.some((l) => /flipped sign/.test(l)));
+  } finally { console.log = origLog; st.whaleEvents = saved; }
+}
+
+console.log('92. whale events are state: a restart does not erase what CONFLUENCE sees, and one transaction fires once');
+{
+  // (2026-10-31) Events lived in a module Map; the two restarts of 30 Oct (13:19, 13:24 UTC) each erased
+  // every event CONFLUENCE had. Three separate processes on one boot-check copy: a real restart each time.
+  const { makeCopy } = await import('./boot-check.js');
+  const { spawnSync } = await import('node:child_process');
+  const { rmSync: rm } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const dst = join(tmpdir(), 'mr-whale92-' + process.pid);
+  const R = {};
+  let raw = '';
+  try {
+    makeCopy(process.cwd(), dst, { note: () => {} });
+    for (const mode of ['one', 'two', 'three']) {
+      const r = spawnSync(process.execPath, ['fixtures/whale-persist-child.mjs', mode], { cwd: dst, encoding: 'utf8', env: { ...process.env, TELEGRAM_BOT_TOKEN: '' }, timeout: 120_000 });
+      raw += (r.stdout || '') + (r.stderr || '');
+      const line = (r.stdout || '').split('\n').find((l) => l.startsWith('FX92-RESULT '));
+      R[mode] = line ? JSON.parse(line.slice('FX92-RESULT '.length)) : null;
+    }
+  } finally { rm(dst, { recursive: true, force: true }); }
+  check('the three child processes ran in the copy and reported', R.one && R.two && R.three, raw.slice(-400));
+  if (R.one && R.two && R.three) {
+    check('event, restart, event: CONFLUENCE sees both (A read back from state.json, B noted after)', R.one.eventsA === 1 && R.two.afterRestartA.join() === '0xfx92a' && R.two.seen.join() === '0xfx92a,0xfx92b');
+    check('...and fires on both: the event from before the restart is as live as the one after', R.two.firedA === true && R.two.firedB === true);
+    check('one tx, three watchlist tokens: one event listing three, ONE call (the first token), the other two find it consumed', R.two.batchEvents.join() === '3' && R.two.firedC.join() === 'true,false,false');
+    check('the same tx seen again by a later poll does not revive the consumed event', R.two.revived === false);
+    check('after a second restart the consumed events are still consumed: nothing fires twice across restarts', R.three.left.length === 3 && R.three.left.every((e) => e.consumed) && R.three.accumA === false);
+  }
+}
+
 console.error = origErr;
 console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

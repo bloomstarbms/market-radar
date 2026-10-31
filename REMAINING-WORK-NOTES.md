@@ -5086,3 +5086,36 @@ recordAlert); Q has no row within 60 s. The rule is now: a pre-link entry is acc
 unclaimed pushed CALL row within 2 s after it, one row per entry (the closest entries, BEAM and SHIB,
 are 1.08 s apart). FROZEN now uses the real row timestamps, and on them the audit names exactly one
 entry, 20:59:23.793 UTC. Rows written from now on carry the explicit link and do not need this rule.
+
+## 2026-10-31 — CONFLUENCE INPUT FIXES: ONE TX ONE EVENT, EXCHANGE-INTERNAL, DEX 1h CHECKED, EVENTS PERSISTED
+
+Scoring unchanged. Fixtures 90-92.
+
+1. ONE TRANSACTION, ONE EVENT. Whale events are keyed by tx hash and list every watchlist token the tx
+   moved; an event fires CONFLUENCE at most once, and consumption is a mark, so a later token of the same
+   tx cannot revive it. A withdrawal whose destination had no token transfer, transaction or internal
+   transaction before the tx block (whale.js addressHistory: three Etherscan/Blockscout calls, cached per
+   address and block) is labelled exchange-internal and is not accumulation. Read 31 Oct: 0x53bd38b8…
+   (20:24:23 UTC, Binance 14 -> 0x5227f603…, 63 tokens, 12 on the watchlist) and 0x4a4aed83… (22:39:35
+   UTC, Binance 14 -> 0xa97bf783…, 122 tokens, 6 on the watchlist): both destinations fresh. No history
+   route for Solana (Helius) or the Moralis chains: 'unknown', which keeps the old behaviour.
+2. DEX 1h CHECKED AGAINST CEX (core/cexref.js). The CEX poll records one hour of quotes for the symbols
+   the DEX watchlist resolves to; the reference is the venues' consensus (a venue >25% from the median is
+   another asset on the ticker: MEXC's BEAMUSDT was 2.2x Bybit's and Bitget's). The DEX 1h is not used if
+   the DEX price is >5% above the reference or the 1h directions disagree; logged once per event and
+   reason. A CEX quote 2x from the DEX price is another token, not a reference. Chain flip: >60% of a
+   chain's watchlist (min 5 tokens) changing 1h sign in one poll distrusts that chain's DEX 1h for that
+   poll. THE 20:36 POLL IS NOT ON DISK IN FULL: bot.log kept the top three movers per poll, so fixture 91
+   freezes those lines as a record and tests the rule on constructed polls. Every poll now logs its flip
+   count, and a distrusted poll logs every token's prev -> now, so the next one will be on disk.
+3. EVENTS ARE STATE (state.json whaleEvents, 12h window, 500 cap). Fixture 92: three processes on one
+   copy (event, restart, event: both seen, both fire; consumed stays consumed across a second restart).
+
+REPLAY of the 11 calls through the fixed engine (real inputs, real dispatch, hermetic):
+before the fix 11/11 (reproduces what happened) · all fixes 0/11 · item 1 alone 0/11 · one-tx-one-event
+without the label 2/11 (SUPER, EPIC) · CEX check alone 6/11 (SHIB, CVX, EPIC, NMR, G, RED: these fired
+on volume, which the check does not touch; SUPER, BEAM, EIGEN, FET, PEPE were the price branch).
+
+NOT DONE, operator to choose: falling price as "activity" (wording vs exclusion; with exclusion, CVX,
+NMR, RED and SHIB would not have fired, and NMR and RED had the best 24h outcomes of the 11), and
+whether the ladder-off WHALE module may keep feeding CONFLUENCE.

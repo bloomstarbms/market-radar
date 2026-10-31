@@ -5,6 +5,7 @@ import { checkListings } from './listings.js';
 import { dispatch } from '../../core/dispatcher.js';
 import { config } from '../../config.js';
 import { notePulse } from '../../core/pulse.js';
+import { noteCexPrice } from '../../core/cexref.js';
 
 const lastFingerprint = new Map(); // exchange -> sum of all 24h volumes last poll
 
@@ -26,6 +27,7 @@ export async function pollCex() {
       let alerts = 0;
       for (const listing of checkListings(name, tickers)) if (await dispatch(listing)) alerts++;
       for (const t of tickers) {
+        noteCexPrice(name, t.symbol, t.price); // the reference CONFLUENCE checks DEX 1h figures against
         const alert = checkPump(name, t);
         if (alert) {
           if (alert.type === 'PUMP' || alert.type === 'DUMP') {

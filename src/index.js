@@ -24,6 +24,7 @@ import { pollCascade } from './sources/cex/cascade.js';
 import { pollHyperliquid } from './sources/perp/hyperliquid.js';
 import { checkWhales } from './sources/chain/whale.js';
 import { checkConfluence } from './core/confluence.js';
+import { watchSymbols, chainFlip, FLIP_SHARE } from './core/cexref.js';
 import { pollMacro, verifyCalendar } from './sources/calendar/macro.js';
 import { pollEvents } from './sources/calendar/events.js';
 import { pollUnlocks } from './sources/calendar/unlocks.js';
@@ -48,13 +49,25 @@ function loadWatchlist() {
   return byChain;
 }
 
+const prevH1 = new Map(); // chainId -> { address: DEX 1h } from the previous poll (chainFlip)
 async function pollDex() {
   const byChain = loadWatchlist();
   for (const [chainId, addrs] of Object.entries(byChain)) {
     try {
       const pairs = await getPairsForTokens(chainId, addrs);
       const best = bestPairPerToken(pairs);
-      console.log(`[dex] ${chainId}: ${Object.keys(best).length}/${addrs.length} tokens found`);
+      watchSymbols(chainId, Object.values(best).map((p) => p.baseToken?.symbol).filter(Boolean));
+      // The chain's 1h sign flips since the last poll. Over 60% of the watchlist at once is the feed,
+      // not the market (29 Oct 20:36 UTC): CONFLUENCE does not use this chain's DEX 1h this poll, and
+      // the per-token figures are logged in full, so the next one is on disk (the log kept only the
+      // top three movers per poll, which is all there is of 20:36).
+      const curH1 = Object.fromEntries(Object.values(best).map((p) => [p.baseToken.address, p.priceChange?.h1 || 0]));
+      const prev = prevH1.get(chainId);
+      const flip = chainFlip(prev, curH1);
+      prevH1.set(chainId, curH1);
+      const h1s = Object.values(curH1);
+      console.log(`[dex] ${chainId}: ${Object.keys(best).length}/${addrs.length} tokens found · 1h up ${h1s.filter((h) => h > 0).length} / down ${h1s.filter((h) => h < 0).length}${flip.compared ? ` · sign flipped on ${flip.flipped}/${flip.compared} since last poll` : ''}`);
+      if (flip.distrust) console.log(`[dex] ${chainId}: DEX 1h distrusted this poll (sign flipped on ${flip.flipped} of ${flip.compared}, over ${Math.round(100 * FLIP_SHARE)}%); prev -> now: ${Object.values(best).filter((p) => prev?.[p.baseToken.address] && curH1[p.baseToken.address]).map((p) => `${p.baseToken.symbol} ${prev[p.baseToken.address]} -> ${curH1[p.baseToken.address]}`).join(', ')}`);
       notePulse(`dex:${chainId}`);
       if (config.debug) {
         const top = Object.values(best).map(p => ({ s: p.baseToken.symbol, h1: p.priceChange?.h1 || 0, v: p.volume?.h1 || 0 }))
@@ -87,6 +100,7 @@ async function pollDex() {
           volH1: pair.volume?.h1 || 0,
           volAvgH1: (pair.volume?.h24 || 0) / 24,
           priceH1: pair.priceChange?.h1 || 0,
+          h1Distrusted: flip.distrust,
         })) alertCount++;
       }
     } catch (e) {

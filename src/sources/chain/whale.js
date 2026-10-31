@@ -171,13 +171,16 @@ export function mapExplorerTx(chainId, tx) {
     from: tx.from, to: tx.to,
     amount: Number(tx.value) / 10 ** Number(tx.tokenDecimal || 18),
     hash: tx.hash,
+    block: Number(tx.blockNumber) || null,
     explorer: `https://${SCANNER[chainId] || 'etherscan.io'}/tx/${tx.hash}`,
   };
 }
-export function explorerUrl(chainId, tokenAddress, source, cfg = config) {
-  const q = `module=account&action=tokentx&contractaddress=${tokenAddress}&page=1&offset=${RULES.maxTxPerPoll}&sort=desc`;
+export function explorerQueryUrl(chainId, source, q, cfg = config) {
   if (source === 'blockscout') return `https://${BLOCKSCOUT_HOSTS[chainId]}/api?${q}`;
   return `https://api.etherscan.io/v2/api?chainid=${CHAIN_IDS[chainId]}&${q}&apikey=${cfg.etherscanKey}`;
+}
+export function explorerUrl(chainId, tokenAddress, source, cfg = config) {
+  return explorerQueryUrl(chainId, source, `module=account&action=tokentx&contractaddress=${tokenAddress}&page=1&offset=${RULES.maxTxPerPoll}&sort=desc`, cfg);
 }
 // Both APIs answer status "0" for an empty result ("No transactions found" on
 // Etherscan, "No token transfers found" on Blockscout): an empty list, not an error.
@@ -211,19 +214,49 @@ export function budgetAllows(source, now = Date.now(), budget = BUDGET, paused =
 }
 // Blockscout says "Too many requests" in the body; Etherscan/Helius/Moralis say 429.
 export function isRateLimited(msg) { return /429|too many requests/i.test(String(msg)); }
-async function explorerTransfers(chainId, tokenAddress, source) {
+async function explorerGet(chainId, source, q) {
   const wait = lastCall[source] + SPACING_MS[source] - Date.now();
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
   lastCall[source] = Date.now();
-  const res = await fetch(explorerUrl(chainId, tokenAddress, source));
+  const res = await fetch(explorerQueryUrl(chainId, source, q));
   if (source === 'blockscout') { const p = pauseFromHeaders((h) => res.headers?.get?.(h)); if (p) sourcePausedUntil.blockscout = p; }
   if (res.status === 429) { // honour the window the server states, not a guessed 5 min
     const e = new Error('429 too many requests'); e.resetMs = Number(res.headers?.get?.('x-ratelimit-reset')) || 0; throw e;
   }
   const json = await res.json();
   if (json.status !== '1' && !isEmptyExplorerAnswer(json)) throw new Error(json.result || json.message);
-  return (Array.isArray(json.result) ? json.result : []).map((tx) => mapExplorerTx(chainId, tx));
+  return Array.isArray(json.result) ? json.result : [];
 }
+async function explorerTransfers(chainId, tokenAddress, source) {
+  const q = `module=account&action=tokentx&contractaddress=${tokenAddress}&page=1&offset=${RULES.maxTxPerPoll}&sort=desc`;
+  return (await explorerGet(chainId, source, q)).map((tx) => mapExplorerTx(chainId, tx));
+}
+
+// Did `addr` exist on-chain before `block`? 'fresh': no token transfer, transaction or internal
+// transaction before it. 'used': at least one. 'unknown': no history route for the chain (Moralis,
+// Solana), the source's window budget is spent, or a call failed; unknown is never cached. One answer
+// per (address, block), so a batch moving 63 tokens to one address costs three calls, not 189.
+// 29 Oct: Binance 14 sent 63 tokens to 0x5227f603… in one tx (20:24:23 UTC) and 122 to 0xa97bf783…
+// (22:39:35 UTC); neither address had any history. That is the exchange moving its own coins.
+const historyCache = new Map(); // `${chainId}:${addr}:${block}` -> 'fresh' | 'used'
+export async function addressHistory(chainId, addr, block, source, deps = {}) {
+  if (!addr || !block || (source !== 'etherscan' && source !== 'blockscout')) return 'unknown';
+  const k = `${chainId}:${String(addr).toLowerCase()}:${block}`;
+  if (historyCache.has(k)) return historyCache.get(k);
+  const get = deps.get ?? ((q) => { if (!budgetAllows(source)) throw new Error('budget'); return explorerGet(chainId, source, q); });
+  let verdict = 'fresh';
+  for (const action of ['tokentx', 'txlist', 'txlistinternal']) {
+    let rows;
+    try { rows = await get(`module=account&action=${action}&address=${addr}&startblock=0&endblock=${block - 1}&page=1&offset=1&sort=asc`); } catch { return 'unknown'; }
+    if (rows.length) { verdict = 'used'; break; }
+  }
+  historyCache.set(k, verdict);
+  if (historyCache.size > 2000) historyCache.delete(historyCache.keys().next().value);
+  return verdict;
+}
+// Pure: what a withdrawal is for CONFLUENCE. An exchange wallet paying an address that did not exist
+// before is the exchange's own operation, not accumulation.
+export function withdrawalLabel(history) { return history === 'fresh' ? 'exchange-internal' : 'accumulation'; }
 
 async function moralisTransfers(chainId, tokenAddress) {
   const res = await fetch(`https://deep-index.moralis.io/api/v2.2/erc20/${tokenAddress}/transfers?chain=${MORALIS_CHAINS[chainId]}&limit=${RULES.maxTxPerPoll}&order=DESC`, {
@@ -248,6 +281,7 @@ async function moralisTransfers(chainId, tokenAddress) {
     from: tx.from_address, to: tx.to_address,
     amount: Number(tx.value) / 10 ** Number(tx.token_decimals ?? 18),
     hash: tx.transaction_hash,
+    block: Number(tx.block_number) || null,
     explorer: `https://${scan}/tx/${tx.transaction_hash}`,
   }));
 }
@@ -288,6 +322,7 @@ async function solanaTransfers(mint) {
         from: tt.fromUserAccount, to: tt.toUserAccount,
         amount: Number(tt.tokenAmount),
         hash: tx.signature,
+        block: tx.slot ?? null,
         explorer: `https://solscan.io/tx/${tx.signature}`,
       });
     }
@@ -381,7 +416,14 @@ export async function checkWhales(pair) {
     const isWithdrawal = /WITHDRAWAL/.test(dir);
     if (isWithdrawal) {
       const exch = (dir.split('\u2192')[0] || '').trim() || 'exchange';
-      noteWhale(key, { direction: dir, exchange: exch, usd, symbol: pair.baseToken.symbol, isWithdrawal: true });
+      const history = await addressHistory(chainId, tx.to, tx.block, source);
+      const label = withdrawalLabel(history);
+      if (label === 'exchange-internal') {
+        dir = dir.replace('(WITHDRAWAL)', '(to a fresh address)');
+        hint = 'the address had no history before this tx \u2014 the exchange moving its own coins, not accumulation';
+      }
+      // The tx hash makes one transaction one event, however many watchlist tokens it moves.
+      noteWhale(key, { direction: dir, exchange: exch, usd, symbol: pair.baseToken.symbol, isWithdrawal: true, hash: tx.hash, label, history });
     }
     await dispatch({
       source: 'CHAIN', type: 'WHALE', severity: sev, key, dedupeKey: `WHALE:${key}`, cooldownMin: RULES.tokenCooldownMin,
