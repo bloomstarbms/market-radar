@@ -5119,3 +5119,27 @@ on volume, which the check does not touch; SUPER, BEAM, EIGEN, FET, PEPE were th
 NOT DONE, operator to choose: falling price as "activity" (wording vs exclusion; with exclusion, CVX,
 NMR, RED and SHIB would not have fired, and NMR and RED had the best 24h outcomes of the 11), and
 whether the ladder-off WHALE module may keep feeding CONFLUENCE.
+
+## 2026-10-31 — BUILDER FOLLOWS: EVERY ACCOUNT A LINK TO ITS X PROFILE
+
+Telegram turns a bare "@handle" into a link to the TELEGRAM user of that name. Every account in the
+follows message (followed account, watchers, earlier watchers, @mentions inside a quoted bio and in
+"Bio mentions") is now <a href="https://x.com/HANDLE">Display name</a>. Display names: the followed
+account's from the API's `name` (present on the real response; the 27 Oct fixture was trimmed to the
+fields then read and has none, so it renders with the handle, no @, as the spec's fallback); watchers'
+from builder-follows.json. Names are HTML-escaped (& < > "), handles URL-encoded in the href. A bio cut at
+100 characters inside a mention drops the stub rather than linking a different account. The operator
+line reads "(handle X, ID N)" and no longer carries a bare x.com URL.
+
+Parse mode was already HTML on every send; nothing to switch. Previews were already off on every send via
+disable_web_page_preview, the field Bot API 7.0 replaced; all three send paths now use
+link_preview_options { is_disabled: true } (same effect, the current field). The lint now reads the
+visible text (tags removed, entities decoded), per entry and for the whole message. Length: the channel
+message stays under its 3,500 cap with markup counted (Telegram's 4,096 counts visible text, so this is
+conservative), overflow is "+N more" with the full list in DM chunks split at entry boundaries; an entry,
+and so a link, is never split. There is no edit path for this message since the daily message (v0.35);
+convergence and late (01:00) additions render inside it, and a delivery retry resends the stored lines.
+
+Not changed: the heartbeat's follows flags still name accounts as @handle (a different DM message);
+routes.js still describes FOLLOW as "a second watcher within 7d EDITS the original", stale since v0.35.
+No website or example card exists in this repo.

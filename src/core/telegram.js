@@ -43,7 +43,8 @@ export function fallbackDecision(streak, lastAt, now = Date.now()) { return stre
 export function fallbackText(n, sinceTs, err) { return `[radar] ${n} sends failed since ${new Date(sinceTs).toISOString().slice(0, 16)}Z, last error: ${String(err || 'unknown').replace(/\s+/g, ' ').slice(0, 80)}`; }
 export function deliveryStreak() { return { failStreak, failSince, lastFallbackAt, lastSendError }; }
 export function resetDeliveryStreak() { failStreak = 0; failSince = 0; lastFallbackAt = 0; lastSendError = ''; }
-async function sendPlain(chatId, text) { return tg('sendMessage', { chat_id: chatId, text, disable_web_page_preview: true }); } // no parse_mode: nothing to parse
+const NO_PREVIEW = Object.freeze({ is_disabled: true }); // no preview card on any message (account links, charts, explorers)
+async function sendPlain(chatId, text) { return tg('sendMessage', { chat_id: chatId, text, link_preview_options: NO_PREVIEW }); } // no parse_mode: nothing to parse
 
 async function tg(method, payload) {
   if (typeof payload?.text === 'string' && payload.parse_mode === 'HTML') payload = { ...payload, text: safeHtml(payload.text) };
@@ -58,7 +59,7 @@ async function tg(method, payload) {
 }
 
 export async function sendTo(chatId, text) {
-  return tg('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', disable_web_page_preview: true });
+  return tg('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', link_preview_options: NO_PREVIEW });
 }
 
 // Returns [{chatId, messageId}] so a follow-up can EDIT this message rather than
@@ -133,7 +134,7 @@ export async function editBroadcast(messageIds, text) {
   const res = await Promise.allSettled(messageIds.map(({ chatId, messageId }) =>
     tg('editMessageText', {
       chat_id: chatId, message_id: messageId, text,
-      parse_mode: 'HTML', disable_web_page_preview: true,
+      parse_mode: 'HTML', link_preview_options: NO_PREVIEW,
     })));
   const ok = res.some((r) => r.status === 'fulfilled' && r.value?.ok);
   const networkDown = !ok && res.every((r) => r.status === 'rejected');

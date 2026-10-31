@@ -28,6 +28,8 @@ const { dispatch } = await import('./src/core/dispatcher.js');
 
 let failures = 0;
 const check = (name, cond) => { console.log(`  ${cond ? 'PASS' : 'FAIL'}  ${name}`); if (!cond) failures++; };
+// An account as the follows message renders it (2026-10-31): a link to its X profile, never a bare @handle.
+const XL = (h, n) => `<a href="https://x.com/${h}">${n ?? h}</a>`;
 
 console.log('1. broadcast() under total send failure');
 const ids = await broadcast('delivery self-test — should never appear in Telegram');
@@ -2881,7 +2883,7 @@ console.log('76. after N consecutive failed broadcasts the DM gets a PLAINTEXT l
   const txt = tgm.fallbackText(574, Date.parse('2026-10-01T09:45:00Z'), "Bad Request: can't parse entities: Unsupported start tag \"\" at byte offset 2237 and more text that should be cut");
   check('text: count, since-time, first 80 chars of the error — and no "<" or HTML anywhere in it', /^\[radar\] 574 sends failed since 2026-10-01T09:45Z, last error: Bad Request: can't parse entities/.test(txt) && !/[<>]/.test(txt) && txt.length < 160);
   const src = readFileSync('src/core/telegram.js', 'utf8');
-  check('sendPlain sends with NO parse_mode, and tg() escapes only HTML-mode text (the plain line is sent byte-for-byte)', /async function sendPlain[^\n]*\{ return tg\('sendMessage', \{ chat_id: chatId, text, disable_web_page_preview: true \}\)/.test(src) && /payload\.parse_mode === 'HTML'\) payload = \{ \.\.\.payload, text: safeHtml/.test(src));
+  check('sendPlain sends with NO parse_mode, and tg() escapes only HTML-mode text (the plain line is sent byte-for-byte)', /async function sendPlain[^\n]*\{ return tg\('sendMessage', \{ chat_id: chatId, text, link_preview_options: NO_PREVIEW \}\)/.test(src) && /payload\.parse_mode === 'HTML'\) payload = \{ \.\.\.payload, text: safeHtml/.test(src));
   // Execution: a recorder in place of fetch; Telegram "rejects" every HTML send; the third broadcast produces exactly one plain DM.
   const recorded = [];
   const saved = globalThis.fetch;
@@ -3213,7 +3215,7 @@ console.log('82. builder follows: baseline silent, ONE daily message (convergenc
     check('the REAL response: a followings array, a boolean has_next_page and a string cursor (the shape overflow paging reads)', Array.isArray(REAL.followings) && REAL.followings.length === 20 && typeof REAL.has_next_page === 'boolean' && REAL.next_cursor_type === 'string');
     check('every real record reads: numeric id, a handle, an age from X\'s classic created_at, a numeric follower count', REAL.followings.every((u) => { const t = accountFacts(u, atCapture); return /^\d+$/.test(t.id) && t.handle && t.ageDays !== null && Number.isInteger(t.followers); }));
     check('a real record renders as a daily entry and passes the lint (a listed website is the t.co link the API returns; there is no entities field)', (() => { const u = REAL.followings[0], m = followMessage(entry(u, [{ handle: 'solana', kind: 'chain' }], atCapture), { mentionIndex: IDX });
-      return followProblems([m.title, ...m.lines].join('\n')).length === 0 && m.title === `@${u.screen_name} — followed by @solana (chain)` && !('entities' in u); })());
+      return followProblems([m.title, ...m.lines].join('\n')).length === 0 && m.title === `${XL(u.screen_name)} — followed by ${XL('solana')} (chain)` && !('entities' in u); })());
   }
 
   check('freshness constants are declared with a basis line (≤90 days OR ≤5,000 followers)', FRESH_MAX_AGE_DAYS === 90 && FRESH_MAX_FOLLOWERS === 5000 && /operator spec 2026-10-21/.test(FRESH_MAX_AGE_BASIS) && /operator spec 2026-10-21/.test(FRESH_MAX_FOLLOWERS_BASIS));
@@ -3266,7 +3268,7 @@ console.log('82. builder follows: baseline silent, ONE daily message (convergenc
   r = await h.run();
   const a = h.sent[0];
   check('one new fresh follow → ONE daily message, a FACT from SOCIAL/FOLLOW keyed to the day, with one entry', r.sent === 1 && h.sent.length === 1 && a.source === 'SOCIAL' && a.type === 'FOLLOW' && a.kind === 'FACT' && a.dedupeKey === 'FOLLOWS:2026-10-22' && r.listed === 1);
-  check('the entry, facts only: "@newproject — followed by @toly (founder)" / "Account 4 days old · 412 followers" / bio · website', a.title === '22 Oct · 1 new account followed' && a.lines[0] === '<b>@newproject — followed by @toly (founder)</b>' && a.lines[1] === 'Account 4 days old · 412 followers' && a.lines[2] === 'Onchain perps for everyone · https://newproject.xyz' && a.lines.length === 3);
+  check('the entry, facts only: "@newproject — followed by @toly (founder)" / "Account 4 days old · 412 followers" / bio · website', a.title === '22 Oct · 1 new account followed' && a.lines[0] === `<b>${XL('newproject')} — followed by ${XL('toly')} (founder)</b>` && a.lines[1] === 'Account 4 days old · 412 followers' && a.lines[2] === 'Onchain perps for everyone · https://newproject.xyz' && a.lines.length === 3);
   check('after the baseline the newest page is 20 per call, and no handle-ID refresh repeats within the week', api.log.slice(before).filter((u) => /followings/.test(u)).every((u) => /pageSize=20$/.test(u)) && !api.log.slice(before).some((u) => /batch_info/.test(u)));
   check('rendered, it carries the follow tag, no "chart" link and no conviction', (() => { const t = formatAlert(a, { kind: 'FACT' }); return /\[👀 BUILDER FOLLOWS\]<\/b> 22 Oct · 1 new account followed/.test(t) && !/chart<\/a>/.test(t) && !/conviction/.test(t); })());
   check('and the follow is recorded as queued for that message', h.rows.length === 1 && h.rows[0].action === 'queued for the daily message' && h.rows[0].fresh === true);
@@ -3278,8 +3280,8 @@ console.log('82. builder follows: baseline silent, ONE daily message (convergenc
   r = await h.run();
   {
     const L = h.sent[0]?.lines ?? [];
-    check('a second watcher within 7 days → a CONVERGENCE entry listed first, naming the earlier watcher with its date; the single follow after it', h.sent.length === 1 && L[0] === '<b>@newproject — followed by @mert (founder), @toly (founder, 22 Oct)</b>'
-      && L.indexOf('<b>@solo — followed by @toly (founder)</b>') > 0 && h.sent[0].title === '23 Oct · 2 new accounts followed · 1 by more than one watched account');
+    check('a second watcher within 7 days → a CONVERGENCE entry listed first, naming the earlier watcher with its date; the single follow after it', h.sent.length === 1 && L[0] === `<b>${XL('newproject')} — followed by ${XL('mert')} (founder), ${XL('toly')} (founder, 22 Oct)</b>`
+      && L.indexOf(`<b>${XL('solo')} — followed by ${XL('toly')} (founder)</b>`) > 0 && h.sent[0].title === '23 Oct · 2 new accounts followed · 1 by more than one watched account');
   }
   {
     const stC = {}, apiC = mkApi({ toly: filler(5000, 30), mert: filler(6000, 30) }, ids);
@@ -3288,7 +3290,7 @@ console.log('82. builder follows: baseline silent, ONE daily message (convergenc
     apiC.pages.mert = [U(901, 'both'), ...apiC.pages.mert];
     const hC = harness(apiC, stC, T0 + 86400e3); await hC.run();
     const L = hC.sent[0]?.lines ?? [];
-    check('two watchers the SAME day → one entry naming both, listed before the single follows', hC.sent.length === 1 && L[0] === '<b>@both — followed by @toly (founder), @mert (founder)</b>' && L.indexOf('<b>@single1 — followed by @toly (founder)</b>') > 0);
+    check('two watchers the SAME day → one entry naming both, listed before the single follows', hC.sent.length === 1 && L[0] === `<b>${XL('both')} — followed by ${XL('toly')} (founder), ${XL('mert')} (founder)</b>` && L.indexOf(`<b>${XL('single1')} — followed by ${XL('toly')} (founder)</b>`) > 0);
   }
   h = harness(api, st, T0 + 3 * 86400e3);
   api.pages.mert = [api.pages.mert[1], api.pages.mert[0], ...api.pages.mert.slice(2)]; // position change only
@@ -3350,12 +3352,12 @@ console.log('82. builder follows: baseline silent, ONE daily message (convergenc
     check('60 entries: the channel message stays under the cap (and Telegram\'s 4,096) and ends "+N more"; every entry ≤ 6 lines', d.more > 0 && d.shown + d.more === 60 && d.lines.at(-1) === `+${d.more} more` && channel.length < 4096
       && d.title.length + d.lines.reduce((x, l) => x + l.length + 3, 0) <= BF.DIGEST_MAX_CHARS && many.every((m) => BF.entryLines(m).length <= BF.ENTRY_MAX_LINES));
     check('the six-line cap is enforced, not assumed', BF.entryLines({ title: 't', lines: Array(9).fill('x') }).length === 6);
-    check('the operator DM gets the FULL list: every one of the 60 entries, in chunks under the cap', many.every((m, i) => chunks.some((c) => c.lines.includes(`<b>@proj${i} — followed by @toly (founder)</b>`)))
+    check('the operator DM gets the FULL list: every one of the 60 entries, in chunks under the cap', many.every((m, i) => chunks.some((c) => c.lines.includes(`<b>${XL('proj' + i)} — followed by ${XL('toly')} (founder)</b>`)))
       && chunks.every((c) => c.title.length + c.lines.reduce((x, l) => x + l.length + 3, 0) <= BF.DIGEST_MAX_CHARS) && /full list · 21 Oct \(1\/\d\)/.test(chunks[0].title));
     const stM = JSON.parse(JSON.stringify(st)), apiM = mkApi({ ...api.pages, toly: [...Array.from({ length: 60 }, (_, i) => U(81000 + i, `fresh${i}`, { age: 9 })), ...api.pages.toly] }, ids);
     const hM = harness(apiM, stM, T0 + 5 * 86400e3), rM = await hM.run();
     check('end to end, 60 fresh follows in a day: ONE channel message with "+N more", and the full list sent to the DM', hM.sent.length === 1 && /^\+\d+ more$/.test(hM.sent[0].lines.at(-1)) && rM.listed === 60 && rM.more > 0 && hM.dms.length >= 1
-      && Array.from({ length: 60 }).every((_, i) => hM.dms.some((x) => x.l.includes(`<b>@fresh${i} — followed by @toly (founder)</b>`))) && followProblems([hM.sent[0].title, ...hM.sent[0].lines].join('\n')).length === 0);
+      && Array.from({ length: 60 }).every((_, i) => hM.dms.some((x) => x.l.includes(`<b>${XL('fresh' + i)} — followed by ${XL('toly')} (founder)</b>`))) && followProblems([hM.sent[0].title, ...hM.sent[0].lines].join('\n')).length === 0);
   }
   // the same saturation caused by a handle that moved to another account: no alerts, re-baseline
   const st2 = JSON.parse(JSON.stringify(st));
@@ -3396,8 +3398,8 @@ console.log('82. builder follows: baseline silent, ONE daily message (convergenc
     const ff = (bio) => accountFacts(U(9100, 'newthing', { bio, url: null }), T0);
     const E = (bio) => { const t = ff(bio); return { t, fr: freshness(t), watchers: [{ handle: 'solana', kind: 'chain' }], earlier: [] }; };
     const m1 = followMessage(E('Perps built on Solana, launching on Pump.fun and @base'), { mentionIndex: idx });
-    check('KIND renders as a fact about the watcher: "@newthing — followed by @solana (chain)"', m1.title === '@newthing — followed by @solana (chain)');
-    check('BIO EVIDENCE is quoted in the bio\'s own words: "Bio mentions: Solana, Pump.fun, @base"', m1.lines.at(-1) === 'Bio mentions: Solana, Pump.fun, @base' && followProblems(renderMessage(m1, 'public').text).length === 0);
+    check('KIND renders as a fact about the watcher: "@newthing — followed by @solana (chain)"', m1.title === `${XL('newthing')} — followed by ${XL('solana')} (chain)`);
+    check('BIO EVIDENCE is quoted in the bio\'s own words: "Bio mentions: Solana, Pump.fun, @base"', m1.lines.at(-1) === `Bio mentions: Solana, Pump.fun, ${XL('base')}` && followProblems(renderMessage(m1, 'public').text).length === 0);
     const m2 = followMessage(E('Home base for traders. Drift into the sky with Phantom energy.'), { mentionIndex: idx });
     check('no mention adds no line — and ordinary words never count as a chain or project (base, sky, Phantom, Drift)', !m2.lines.some((l) => /^Bio mentions/.test(l)));
     const m3 = followMessage(E('Strategic partnership with Solana'), { mentionIndex: idx });
@@ -3424,7 +3426,7 @@ console.log('82. builder follows: baseline silent, ONE daily message (convergenc
     const pendingLine = followStatus(st6, T0 + 6 * 86400e3, { cfgResult: { ok: true, cfg }, key: 'k', price }).line;
     const d6 = await BF.deliverDigest(st6, deps6), d6b = await BF.deliverDigest(st6, deps6);
     check('an undelivered daily message stays PENDING (flagged on the heartbeat) and is delivered on retry, exactly once', r6.sent === 0 && /daily message is not delivered yet \(1 attempt\(s\)\)/.test(pendingLine)
-      && d6.status === 'sent' && d6b.status === 'none' && sent6.length === 1 && sent6[0].lines[0] === '<b>@fresh2 — followed by @mert (founder)</b>' && !st6.follows.pendingDigest && st6.follows.lastDigest.total === 1);
+      && d6.status === 'sent' && d6b.status === 'none' && sent6.length === 1 && sent6[0].lines[0] === `<b>${XL('fresh2')} — followed by ${XL('mert')} (founder)</b>` && !st6.follows.pendingDigest && st6.follows.lastDigest.total === 1);
   }
   {
     // ZERO PRICE ON DISK AT BOOT: the v0.34.0 file, byte-for-byte in shape. It is "no price", never "free".
@@ -3762,7 +3764,7 @@ console.log('87. builder follows twice daily: the 01:00 look holds, the 13:00 lo
   const noon = await look(api, st, at(2, 13), BF.deliverNow(at(2, 13, 2), st.follows.held));
   const m = noon.sent[0], L = m?.lines ?? [];
   check('13:00: ONE message carrying both looks\' follows', noon.sent.length === 1 && m.title === '2 Nov · 2 new accounts followed' && m.dedupeKey === 'FOLLOWS:2026-11-02' && noon.r.listed === 2);
-  check('each follow appears exactly once: @alpha (from 01:00) and @beta (from 13:00)', L.filter((l) => l === '<b>@alpha — followed by @toly (founder)</b>').length === 1 && L.filter((l) => l === '<b>@beta — followed by @mert (founder)</b>').length === 1 && L.filter((l) => /^<b>@/.test(l)).length === 2);
+  check('each follow appears exactly once: @alpha (from 01:00) and @beta (from 13:00)', L.filter((l) => l === `<b>${XL('alpha')} — followed by ${XL('toly')} (founder)</b>`).length === 1 && L.filter((l) => l === `<b>${XL('beta')} — followed by ${XL('mert')} (founder)</b>`).length === 1 && L.filter((l) => /^<b><a href=/.test(l)).length === 2);
   check('the 01:00 follow is not detected again at 13:00 (still on toly\'s newest page): only @beta is new, recorded once', noon.r.newFollows === 1 && noon.rows.length === 1 && noon.rows[0].target === 'beta');
   check('after the message nothing is held, both are listed in the convergence history, and the day counts 2 new · 2 listed', st.follows.held === null && !!st.follows.alerted['701'] && !!st.follows.alerted['702'] && st.follows.daily['2026-11-02'].new === 2 && st.follows.daily['2026-11-02'].alerted === 2);
   const next = await look(api, st, at(3, 1), BF.deliverNow(at(3, 1, 2), st.follows.held));
@@ -3776,7 +3778,7 @@ console.log('87. builder follows twice daily: the 01:00 look holds, the 13:00 lo
     await look(a2, s2, at(2, 1), false); s2 = restart(s2);
     a2.pages.mert = [U(801, 'gamma'), ...a2.pages.mert];
     const n2 = await look(a2, s2, at(2, 13), true), L2 = n2.sent[0]?.lines ?? [];
-    check('the same account followed at 01:00 by one watcher and at 13:00 by another: ONE convergence entry naming both, listed once', n2.sent.length === 1 && L2.filter((l) => /^<b>@gamma/.test(l)).length === 1 && L2[0] === '<b>@gamma — followed by @toly (founder), @mert (founder)</b>' && / · 1 by more than one watched account$/.test(n2.sent[0].title));
+    check('the same account followed at 01:00 by one watcher and at 13:00 by another: ONE convergence entry naming both, listed once', n2.sent.length === 1 && L2.filter((l) => /^<b><a href="https:\/\/x\.com\/gamma"/.test(l)).length === 1 && L2[0] === `<b>${XL('gamma')} — followed by ${XL('toly')} (founder), ${XL('mert')} (founder)</b>` && / · 1 by more than one watched account$/.test(n2.sent[0].title));
   }
   // A 13:00 look that fails still delivers what 01:00 held (the message is built on every exit).
   {
@@ -3786,7 +3788,7 @@ console.log('87. builder follows twice daily: the 01:00 look holds, the 13:00 lo
     await look(a3, s3, at(2, 1), false); s3 = restart(s3);
     a3.status = 401;
     const n3 = await look(a3, s3, at(2, 13), true);
-    check('a 13:00 look that fails on the key still sends the 01:00 follow, once, and flags the failure', n3.r.status === 'failed' && n3.sent.length === 1 && (n3.sent[0].lines ?? []).filter((l) => /^<b>@delta/.test(l)).length === 1 && s3.follows.held === null && !!s3.follows.failingSince);
+    check('a 13:00 look that fails on the key still sends the 01:00 follow, once, and flags the failure', n3.r.status === 'failed' && n3.sent.length === 1 && (n3.sent[0].lines ?? []).filter((l) => /^<b><a href="https:\/\/x\.com\/delta"/.test(l)).length === 1 && s3.follows.held === null && !!s3.follows.failingSince);
   }
   // A missed 13:00 (bot down 12:00 to 02:00): the next look delivers the held entries rather than holding them another day.
   check('missed 13:00: the 02:00 catch-up look on the next day delivers a hold from the previous 01:00', BF.lookDue(at(3, 2), at(2, 1, 1)) && BF.deliverNow(at(3, 2), { since: at(2, 1, 1) }));
@@ -4034,6 +4036,72 @@ console.log('92. whale events are state: a restart does not erase what CONFLUENC
     check('the same tx seen again by a later poll does not revive the consumed event', R.two.revived === false);
     check('after a second restart the consumed events are still consumed: nothing fires twice across restarts', R.three.left.length === 3 && R.three.left.every((e) => e.consumed) && R.three.accumA === false);
   }
+}
+
+console.log('93. builder follows: every account is a link to its X profile, never a bare @handle; names escaped; previews off; the lint reads the visible text');
+{
+  // (2026-10-31) Telegram turns "@handle" into a link to the TELEGRAM user of that name. Every account,
+  // follower and followed, is <a href="https://x.com/HANDLE">Display name</a>; no name: the handle, no @.
+  const bf = await import('./src/sources/social/builder-follows.js');
+  const { formatAlert } = await import('./src/core/dispatcher.js');
+  const tgm = await import('./src/core/telegram.js');
+  const { followProblems } = await import('./src/core/prose-lint.js');
+  const REAL = JSON.parse(readFileSync('fixtures/twitterapi-followings-2026-10-27.json', 'utf8'));
+  const cfg = bf.loadFollowConfig('builder-follows.json').cfg;
+  const at = Date.parse(REAL.capturedAt);
+  const sol = cfg.accounts.find((a) => a.handle === 'solana');
+  const opts = { mentionIndex: bf.buildMentionIndex(cfg.accounts), names: bf.watcherNames(cfg.accounts) };
+  const mk = (u, watchers, earlier = []) => { const t = bf.accountFacts(u, at); return bf.followMessage({ t, fr: bf.freshness(t), watchers, earlier }, opts); };
+  const LINK = /<a href="https:\/\/x\.com\/[A-Za-z0-9_%]+">[^<]*<\/a>/g;
+  const bare = (html) => /(?<![A-Za-z0-9_])@[A-Za-z0-9_]/.test(bf.visibleText(html)) || /(?<![A-Za-z0-9_/])@[A-Za-z0-9_]/.test(String(html).replace(/href="[^"]*"/g, ''));
+  const wellFormed = (html) => { const n = (html.match(/<a\b/g) || []).length; return n === (html.match(/<\/a>/g) || []).length && n === (html.match(LINK) || []).length; };
+  // FROZEN: the real 27 Oct followings record (no display name in the capture), followed by the real @solana.
+  const u = REAL.followings[0];
+  const m = mk(u, [{ id: sol.id, handle: 'solana', kind: 'chain' }]);
+  check('REAL record: the followed account links to its X profile with the handle as text (no name captured), the watcher with its config name',
+    m.title === `${XL(u.screen_name)} — followed by ${XL('solana', 'Solana')} (chain)`, m.title);
+  check('REAL record: the @mentions in its own bio ("@alchemy … @celo @kernel0x @magiceden") are X links too, none left bare', ['alchemy', 'celo', 'kernel0x', 'magiceden'].every((h) => m.lines[1].includes(XL(h))) && !bare(m.lines[1]));
+  const d = bf.digestMessage(at, [m]);
+  const pub = formatAlert({ source: 'SOCIAL', type: 'FOLLOW', severity: 'MEDIUM', title: d.title, lines: d.lines, operatorLines: d.operatorLines }, { kind: 'FACT' }, 'public');
+  const opr = formatAlert({ source: 'SOCIAL', type: 'FOLLOW', severity: 'MEDIUM', title: d.title, lines: d.lines, operatorLines: [...d.operatorLines, ...m.operatorLines] }, { kind: 'FACT' }, 'operator');
+  check('channel and operator DM renderings: every <a> is a whole, working x.com link, and safeHtml (the send path) leaves them byte-for-byte', wellFormed(pub) && wellFormed(opr) && tgm.safeHtml(pub) === pub && tgm.safeHtml(opr) === opr && (pub.match(LINK) || []).length === 6);
+  check('no bare @handle anywhere: channel, operator DM, its full-list chunk', !bare(pub) && !bare(opr) && bf.fullListChunks(at, d).every((c) => !bare([c.title, ...c.lines].join('\n'))));
+  check('the operator line names the handle without an @ and no longer carries a bare x.com URL', m.operatorLines[0].startsWith(`${XL(u.screen_name)} (handle ${u.screen_name}, ID ${u.id})`) && !/ · https:\/\/x\.com/.test(m.operatorLines[0]));
+  // A display name with &, <, > and quotes; a handle with a quote cannot break out of the href.
+  const odd = mk({ ...u, name: 'Liz & <Co> "dev"' }, [{ id: sol.id, handle: 'solana', kind: 'chain' }]);
+  check('a display name with & < > and quotes is escaped in the link text', odd.title.startsWith(`<a href="https://x.com/${u.screen_name}">Liz &amp; &lt;Co&gt; &quot;dev&quot;</a> — followed by`) && tgm.safeHtml(odd.title) === odd.title);
+  check('...and reads as written: the visible text is Liz & <Co> "dev"', bf.visibleText(odd.title).startsWith('Liz & <Co> "dev" — followed by Solana (chain)'));
+  check('a handle with a quote or & is URL-encoded in the href, so it cannot close the attribute', bf.xLink('a"b&c', null) === '<a href="https://x.com/a%22b%26c">a&quot;b&amp;c</a>' && bf.xLink('@lead') === XL('lead'));
+  check('convergence keeps the links: both watchers, the earlier one with its date', mk(u, [{ id: sol.id, handle: 'solana', kind: 'chain' }], [{ handle: 'toly', kind: 'founder', at: at - 86400e3 }]).title.endsWith(`${XL('solana', 'Solana')} (chain), ${XL('toly', 'Anatoly Yakovenko')} (founder, 26 Oct)`));
+  check('a bio cut at 100 characters inside a mention drops the stub instead of linking a different account', (() => { const b = 'x'.repeat(95) + ' @kernel0x builds'; const mm = mk({ ...u, description: b }, [{ handle: 'solana', kind: 'chain' }]); return !/x\.com\/ker"/.test(mm.lines[1]) && !mm.lines[1].includes('@') && !/kern/.test(mm.lines[1]); })());
+  // The lint reads what the reader sees.
+  check('the lint runs on the visible text: the real entry passes it, and the source lints visibleText(...) for each entry and the whole message',
+    followProblems(bf.visibleText([m.title, ...m.lines].join('\n'))).length === 0
+    && (readFileSync('src/sources/social/builder-follows.js', 'utf8').match(/followProblems\(visibleText\(/g) || []).length === 2);
+  const tripped = mk({ ...u, name: 'Close now' }, [{ handle: 'solana', kind: 'chain' }]);
+  check('a display name the lint bars is still caught through the link markup', followProblems(bf.visibleText(tripped.title)).length > 0);
+  // Previews off on every send, the current Bot API field.
+  const sent = [], origFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => { sent.push({ url: String(url), body: JSON.parse(init.body) }); return { status: 200, json: async () => ({ ok: true, result: { message_id: 7 } }) }; };
+  try { await tgm.sendTo('fx93', pub); await tgm.editBroadcast([{ chatId: 'fx93', messageId: 7 }], pub); } finally { globalThis.fetch = origFetch; }
+  check('previews are off: sendMessage and editMessageText both carry link_preview_options { is_disabled: true }, in HTML parse mode, links intact',
+    sent.length === 2 && /sendMessage$/.test(sent[0].url) && /editMessageText$/.test(sent[1].url) && sent.every((x) => x.body.link_preview_options?.is_disabled === true && x.body.parse_mode === 'HTML' && x.body.text === pub));
+  check('no send path still uses the replaced disable_web_page_preview field', !/disable_web_page_preview/.test(readFileSync('src/core/telegram.js', 'utf8')));
+  // Length: links add characters. The channel message stays under Telegram's 4,096 with every link
+  // whole ("+N more"); the operator's full list splits at entry boundaries, every chunk under 4,096.
+  const many = Array.from({ length: 80 }, (_, i) => mk({ ...u, id: String(900000 + i), screen_name: `proj_${i}_xxxxxx`, userName: `proj_${i}_xxxxxx`, name: `Project & Co ${i} <beta> "${'n'.repeat(20)}"` }, [{ id: sol.id, handle: 'solana', kind: 'chain' }], [{ handle: 'toly', kind: 'founder', at: at - 86400e3 }]));
+  const dm = bf.digestMessage(at, many), chunks = bf.fullListChunks(at, dm);
+  const pubM = formatAlert({ source: 'SOCIAL', type: 'FOLLOW', severity: 'MEDIUM', title: dm.title, lines: dm.lines, operatorLines: dm.operatorLines }, { kind: 'FACT' }, 'public');
+  const oprM = formatAlert({ source: 'SOCIAL', type: 'FOLLOW', severity: 'MEDIUM', title: dm.title, lines: dm.lines, operatorLines: dm.operatorLines }, { kind: 'FACT' }, 'operator');
+  const chunkTexts = chunks.map((c) => formatAlert({ source: 'SYS', type: 'FOLLOWS', severity: 'LOW', title: c.title, lines: c.lines }));
+  check('80 long-named entries: the channel and operator renderings stay under 4,096 (markup counted) with every link whole and "+N more"', pubM.length <= 4096 && oprM.length <= 4096 && wellFormed(pubM) && wellFormed(oprM) && dm.more > 0 && dm.lines.at(-1) === `+${dm.more} more`);
+  check('...the full list splits into DM chunks at entry boundaries: each under 4,096, each link whole, every entry in exactly one chunk', chunks.length > 1 && chunkTexts.every((t) => t.length <= 4096 && wellFormed(t))
+    && many.every((x) => chunks.filter((c) => c.lines.includes(`<b>${x.title}</b>`)).length === 1));
+  // A retry re-sends what was stored: the pending digest holds the linked lines, so a resend keeps them.
+  const st93 = { follows: { pendingDigest: { dayKey: '2026-10-27', title: d.title, lines: d.lines, operatorLines: d.operatorLines, total: 1, shown: 1, chunks: [] } } };
+  const got = [];
+  await bf.deliverDigest(st93, { dispatch: async (a) => { got.push(a); return true; }, now: at });
+  check('a delivery retry sends the stored linked lines unchanged', got.length === 1 && got[0].lines[0] === `<b>${m.title}</b>` && wellFormed(got[0].lines.join('\n')));
 }
 
 console.error = origErr;

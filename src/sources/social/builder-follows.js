@@ -201,6 +201,7 @@ export function accountFacts(u, now) {
   return {
     id: String(u?.id ?? u?.id_str ?? ''),
     handle: String(u?.screen_name ?? u?.userName ?? u?.username ?? ''),
+    name: u?.name ? [...String(u.name).replace(/\s+/g, ' ').trim()].slice(0, 50).join('') || null : null,
     ageDays: Number.isFinite(created) ? Math.max(0, Math.floor((now - created) / 86400e3)) : null,
     followers: fc === null || fc === undefined || fc === '' || !Number.isFinite(Number(fc)) ? null : Number(fc),
     bio, website: website ? String(website) : null,
@@ -215,7 +216,20 @@ export function freshness(f) {
 }
 
 // ---------------------------------------------------------------- pure: messages
-const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+// ACCOUNT LINKS (2026-10-31). Every account in the message, follower and followed, is
+// <a href="https://x.com/HANDLE">Display name</a>, never a bare @handle: Telegram turns "@handle" into
+// a link to the TELEGRAM user of that name, a different person. No display name: the handle without
+// the @. The handle is URL-encoded in the href, the name HTML-escaped in the text.
+export function xLink(handle, name) {
+  const h = String(handle ?? '').replace(/^@/, '');
+  return `<a href="https://x.com/${encodeURIComponent(h)}">${esc(name || h)}</a>`;
+}
+// @mentions inside already-escaped text (a bio, "Bio mentions") become the same links.
+const MENTION_RX = /(?<![A-Za-z0-9_])@([A-Za-z0-9_]{1,15})(?![A-Za-z0-9_])/g;
+export const linkMentions = (escaped) => String(escaped).replace(MENTION_RX, (_, h) => xLink(h));
+// The text a reader sees: tags removed, entities decoded. The lint reads this, not the markup.
+export const visibleText = (s) => String(s).replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
 const fmt = (x) => x.toLocaleString('en-US');
 export function ageText(d) {
   if (d === 0) return 'less than a day';
@@ -256,21 +270,30 @@ export function bioMentions(bio, index) {
 // the bio is WITHHELD rather than quoted, and its mentions with it: nothing in this message
 // may read as backing.
 const dayLabel = (ms) => { const d = new Date(ms); return `${d.getUTCDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getUTCMonth()]}`; };
-const who = (w, withDate) => `@${w.handle}${w.kind || withDate ? ` (${[w.kind, withDate ? dayLabel(w.at) : null].filter(Boolean).join(', ')})` : ''}`;
-// entry: { t: accountFacts, fr: freshness, watchers: [{ handle, kind }], earlier: [{ handle, kind, at }] }
-export function followMessage(entry, { mentionIndex = [] } = {}) {
+const who = (w, name, withDate) => `${xLink(w.handle, name)}${w.kind || withDate ? ` (${[w.kind, withDate ? dayLabel(w.at) : null].filter(Boolean).join(', ')})` : ''}`;
+// Display names of the watched accounts, from the config, by ID and by handle.
+export function watcherNames(accounts) {
+  const m = new Map();
+  for (const a of accounts ?? []) if (a.name) { if (a.id) m.set(String(a.id), a.name); m.set(String(a.handle).toLowerCase(), a.name); }
+  return m;
+}
+// entry: { t: accountFacts, fr: freshness, watchers: [{ id, handle, kind }], earlier: [{ id, handle, kind, at }] }
+export function followMessage(entry, { mentionIndex = [], names = new Map() } = {}) {
   const f = entry.t;
-  const bio = [...f.bio].slice(0, 100).join('');
+  const nameOf = (w) => w.name ?? names.get(String(w.id)) ?? names.get(String(w.handle).toLowerCase()) ?? null;
+  let bio = [...f.bio].slice(0, 100).join('');
+  // a cut inside a mention would link a different account ("@kernel0x" cut to "@kerne"): drop the stub
+  if ([...f.bio].length > 100 && /[A-Za-z0-9_]/.test([...f.bio][100])) bio = bio.replace(/@[A-Za-z0-9_]*$/, '').trimEnd();
   const bioHit = f.bio ? (f.bio.match(FOLLOW_CLAIM) || f.bio.match(DIRECTION)) : null;
   const facts = [f.ageDays !== null ? `Account ${ageText(f.ageDays)} old` : 'Account age not listed',
     f.followers !== null ? `${fmt(f.followers)} follower${f.followers === 1 ? '' : 's'}` : 'follower count not listed'].join(' · ');
-  const about = [bio && !bioHit ? esc(bio) : null, f.website ? esc(f.website) : null].filter(Boolean).join(' · ');
+  const about = [bio && !bioHit ? linkMentions(esc(bio)) : null, f.website ? esc(f.website) : null].filter(Boolean).join(' · ');
   const mentions = bioHit ? [] : bioMentions(f.bio, mentionIndex);
-  const by = [...entry.watchers.map((w) => who(w, false)), ...(entry.earlier ?? []).map((w) => who(w, true))].join(', ');
+  const by = [...entry.watchers.map((w) => who(w, nameOf(w), false)), ...(entry.earlier ?? []).map((w) => who(w, nameOf(w), true))].join(', ');
   return {
-    title: `@${f.handle} — followed by ${by}`,
-    lines: [facts, ...(about ? [about] : []), ...(mentions.length ? [`Bio mentions: ${mentions.map(esc).join(', ')}`] : [])],
-    operatorLines: [`@${f.handle} (ID ${f.id}) fresh because: ${entry.fr.why}${bioHit ? ` · bio withheld, and any bio mentions with it: it contains "${bioHit[0]}"` : ''} · https://x.com/${f.handle}`],
+    title: `${xLink(f.handle, f.name)} — followed by ${by}`,
+    lines: [facts, ...(about ? [about] : []), ...(mentions.length ? [`Bio mentions: ${mentions.map((x) => linkMentions(esc(x))).join(', ')}`] : [])],
+    operatorLines: [`${xLink(f.handle, f.name)} (handle ${esc(f.handle)}, ID ${f.id}) fresh because: ${esc(entry.fr.why)}${bioHit ? ` · bio withheld, and any bio mentions with it: it contains "${esc(bioHit[0])}"` : ''}`],
     convergence: entry.watchers.length + (entry.earlier ?? []).length >= 2,
   };
 }
@@ -356,7 +379,7 @@ export async function followCycle(state, deps = {}) {
   // the watcher's seen set, so it is never detected again: it lives in state until the 13:00 message
   // (a restart in between cannot lose it), and a second watcher at 13:00 joins the same entry.
   const deliver = deps.deliver ?? true;
-  const todays = new Map(); let mentionIndex = [];
+  const todays = new Map(); let mentionIndex = [], names = new Map();
   for (const e of f.held?.entries ?? []) todays.set(e.t.id, e);
   const out = { status: 'ok', polled: 0, failed: [], baseline: [], newFollows: 0, sent: 0, listed: 0, shown: 0, more: 0, recorded: 0, held: 0, saturated: [], incomplete: [], extraPages: 0, capped: false, calls: 0 };
   const day = () => (f.daily[dayKey(nowFn())] ??= { new: 0, fresh: 0, alerted: 0, edited: 0 });
@@ -368,8 +391,8 @@ export async function followCycle(state, deps = {}) {
     if (!todays.size) return;
     const msgs = [];
     for (const e of todays.values()) {
-      const m = followMessage(e, { mentionIndex });
-      const problems = followProblems([m.title, ...m.lines].join('\n'));
+      const m = followMessage(e, { mentionIndex, names });
+      const problems = followProblems(visibleText([m.title, ...m.lines].join('\n')));
       if (problems.length) { console.error(`[OPERATOR][follows] entry @${e.t.handle} dropped from the daily message: ${problems.join('; ')}`); continue; }
       msgs.push(m);
       const prior = f.alerted[e.t.id]; // listed: the convergence history for later days
@@ -379,7 +402,7 @@ export async function followCycle(state, deps = {}) {
     todays.clear();
     if (!msgs.length) return;
     const d = digestMessage(nowFn(), msgs);
-    const whole = followProblems([d.title, ...d.lines].join('\n'));
+    const whole = followProblems(visibleText([d.title, ...d.lines].join('\n')));
     if (whole.length) { console.error(`[OPERATOR][follows] daily message refused: ${whole.join('; ')}`); return; }
     if (f.pendingDigest) console.error(`[OPERATOR][follows] the ${f.pendingDigest.dayKey} daily message was never delivered; replaced by today's`);
     f.pendingDigest = { dayKey: dayKey(nowFn()), createdAt: nowFn(), title: d.title, lines: d.lines, operatorLines: d.operatorLines, total: d.total, shown: d.shown,
@@ -430,6 +453,7 @@ export async function followCycle(state, deps = {}) {
   }
   const watched = cfg.accounts.map((ca) => { const a = f.accounts[ca.id ?? f.byHandle[ca.handle.toLowerCase()]]; if (a) a.kind = ca.kind; return a; }).filter(Boolean);
   mentionIndex = buildMentionIndex(cfg.accounts);
+  names = watcherNames(cfg.accounts);
 
   // 2. ID -> current handle (handles change; IDs do not). Daily, and on a saturated page.
   const refresh = async (accts) => {
