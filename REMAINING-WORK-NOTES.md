@@ -5196,3 +5196,168 @@ under a capturing redirect its own PASS/FAIL text landed in the capture a later 
 Proof (copies): fixture 94's tiny-text check moved inside its void-muted try, the same-text guard
 deleted. Old check(): "1 FAILURE(S)", exit 1, and no FAIL line anywhere in the output. New check():
 "FAIL  a text too short to split, refused as too long, is not resent as it was", exit 1.
+
+## 2026-11-02 — HEARTBEAT ITEMS: EIGEN/ZRO/ENA REPORTED; THE UNLOCK LIST STOPPED CARRYING EVENTS; CLIFF CLI STALE CACHE; DRILL
+
+REPORT ONLY, NOTHING VOIDED OR RE-PROMOTED (operator reads first):
+- EIGEN 2026-10 PARTIAL is REAL, not an artefact. Both metronomes paid on the 30th, single-day
+  batches (peak day = window total on each wallet, so not the ENA peak-day class): 0x34BcF805
+  7,215,987 to 56 recipients (63 in Aug, 64 in Sep), 0x3De6b6b1 992,189. Family 8,208,175 vs the
+  8,278,115 floor (tolerance 0.13 on 9,515,075): short 69,940. Third falling month (9.28M, 8.81M,
+  8.21M). detect-cadence EIGEN: family MONTH-END x14 through 2026-10-30, both wallets CADENCE x14.
+  The schedule neither stopped nor moved; it is shrinking (fewer recipients). No transfers on 11-02.
+- ZRO is not a cadence demotion: type review-expired (reviewBy 2026-09-22, demoted 2026-09-23), no
+  window, no largestSeen. detect-cadence ZRO --top 27: family FIXED-DAY day 20 x14 (mean 1.32M,
+  cv 0.40), one wallet 0x637ca60D CADENCE day~20 x14 (mean 1.31M) — a metronome the 2026-09
+  operator note said did not exist ("NO observable emission cadence"), likely because the old
+  peak-day significance floor hid it. ~1.3M/mo is a floor, not the published schedule.
+- ENA 2026-10 (+1444% = peakRatio 15.443): one real distribution, not a migration. 0x54B8 was
+  topped up 395.5M from 0xdeDc (278M 10-02, 117.5M 10-05), then paid 186,387,859 on 10-06 in 28
+  transfers to 26 recipients, none a family wallet. 23 of 26 had been paid monthly Jun-Sep and
+  carried 103.8M; eleven got EXACTLY 18.00x their usual month (81.0M) — reads as 18 months released
+  at once. Three new addresses carried 82.6M; two forwarded within hours to exchanges: 0x399FE0E5
+  (56.2M) -> 0x947Ca841 -> Binance 14 hot wallet by 08:52, 0x7d8cd3D7 (21.2M) -> 0xE9293cC4 -> OKX
+  154 in 5M lots over 10-06..10-09. The duplicated-looking row on 10-08 is nine real logs in one tx.
+- FOUND: the window's LAST day is scored while it is still running. end = expected + grace at
+  00:00, PENDING only while now <= end, but the window includes that day. ENA's October stamp was
+  written 10-09T03:59 and counted 887,353 for 10-09; 0x54B8 sent two more that day (06:07, 20:12).
+  EIGEN's stamp was written 11-02T05:22 (nothing moved on 11-02). Not changed: operator decides.
+
+THE UNLOCK LIST STOPPED CARRYING EVENTS (index 31d old, 0 future events of 522):
+- Route A (headed Chrome) returned 371 protocols and NO events. The per-protocol relay variant then
+  tripped Cloudflare's interactive challenge after ~50 quick loads; stopped, not worked around.
+- Route B per-protocol in the browser pane, one page every 2s: 49 protocols (same set as 10-01),
+  1,416 events, 970 future, 38 with a future event (the list carried ~30 days; pages carry the full
+  schedule). PARITY on events both captures saw (07-05..10-01): 47 identical, APT +1 event, BERA
+  revised amounts. MOVE and INJ list slugs 404; their pages are /unlocks/movement and
+  /unlocks/injective-orderbook (tokens match the list entries).
+- Re-ingest: 30 sourced rows, no key dropped, no stage changed, 29 gained future events.
+- Floor re-derived 0.0587 -> 0.0597 (n 30), re-recorded. CFG (median just under 0.0597, now
+  STANDARD) defaults LOGGED at the next re-ingest — operator call.
+- GUARD: fetchIndex() refuses a list carrying events for < 20 protocols (embedProblem). Without it
+  the weekly pollSourceRecheck — 403 today — would, the day the VPS gets through, DEMOTE every
+  sourced row "source lists no upcoming batch events", one DM each. Fixture 96, real capture.
+- L3/REZ "dates MOVED": re-run and re-stamped, then UNDONE — both were scored from caches ending
+  2026-09-05 (pages 0, 0x/0r on 09-29 and 10-29/30): detect-cliff-cluster's CLI passed no needUpTo
+  and cacheSatisfies() reads that as "no requirement". Fixed (needUpTo = newest cliff + 7d, capped
+  at today; fixture 97). Re-run and re-stamp after this deploy.
+
+RESTORE DRILL: all checks passed against outcomes-2026-11-02.json (12,636 rows, 109.9d); the
+previous drill was 2026-08-16. Drift/week 0.0074 at n 2,951 (0.0921 at n 1,677).
+
+keep-set.mjs:
+```js
+// The keep-set exactly as fetch-unlock-index.js builds it: every unlocks.json sym + every symbol in
+// the current index. Read-only.   node keep-set.mjs <unlocks.json> <unlock-index.json> <out.json>
+import { readFileSync, writeFileSync } from 'node:fs';
+const [u, i, out] = process.argv.slice(2);
+const k = new Set();
+for (const t of JSON.parse(readFileSync(u, 'utf8')).tokens) k.add(t.sym);
+for (const p of JSON.parse(readFileSync(i, 'utf8')).protocols) k.add(p.symbol);
+writeFileSync(out, JSON.stringify([...k].sort()));
+const idx = JSON.parse(readFileSync(i, 'utf8'));
+console.log(`keep-set ${k.size} symbols · current index: ${idx.protocols.length} protocols, ${idx.protocols.reduce((s, p) => s + p.events.length, 0)} events, fetchedAt ${idx.fetchedAt}`);
+```
+
+The pane job (paste in the browser pane on any defillama.com/unlocks/<protocol> page; set KEEP):
+```js
+// Poll window.__P until done; then window.__B64 holds the gzip+base64 blob. SLUGS overrides list slugs that 404.
+const KEEP = new Set([/* the keep-set array */]);
+const SLUGS = { MOVE: 'movement', INJ: 'injective-orderbook' };
+window.__P = { done: false, n: 0, stop: null, failed: [], noSlug: [] };
+window.__job = (async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const nd = async (path) => {
+    const r = await fetch(path, { credentials: 'same-origin' });
+    const html = await r.text();
+    const title = (html.match(/<title>([^<]*)/) || [])[1] || '';
+    if (r.status !== 200) return { status: r.status, title };
+    const m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+    if (!m) return { status: 200, noNext: true, title };
+    return { status: 200, j: JSON.parse(m[1]) };
+  };
+  const challenged = (d) => [403, 429, 503].includes(d.status) || /just a moment/i.test(d.title || '');
+  const list = await nd('/unlocks');
+  if (!list.j) { window.__P.stop = 'list: ' + JSON.stringify(list); window.__P.done = true; return; }
+  const data = list.j.props.pageProps.data, g = list.j.props.pageProps.generatedAtSec;
+  const now = Math.floor(Date.now() / 1000), LO = now - 130 * 86400, HI = now + 410 * 86400;
+  const cats = [], ci = (c) => { let i = cats.indexOf(c); if (i < 0) { cats.push(c); i = cats.length - 1; } return i; };
+  const P = [];
+  for (const p of data) {
+    const sym = (p.tSymbol || '').toUpperCase();
+    if (!KEEP.has(sym)) continue;
+    const slug = SLUGS[sym] || p.protocolSlug;
+    if (!slug) { window.__P.noSlug.push(sym); continue; }
+    const d = await nd('/unlocks/' + slug);
+    if (challenged(d)) { window.__P.stop = `challenge at ${sym}: ${d.status} ${d.title} — stopped, not retried`; break; }
+    const ev = d.j?.props?.pageProps?.emissions?.events;
+    if (!Array.isArray(ev)) { window.__P.failed.push(`${sym}(${slug}): ${d.status}${d.noNext ? ' no __NEXT_DATA__' : ''}`); await sleep(2000); continue; }
+    const E = ev.filter((e) => e.timestamp >= LO && e.timestamp <= HI).map((e) => [e.timestamp, e.unlockType, Array.isArray(e.noOfTokens) ? Number(e.noOfTokens[e.noOfTokens.length - 1] || 0) : Number(e.noOfTokens || 0), ci(e.category), e.rateDurationDays ?? null]);
+    P.push([p.name, sym, p.token, p.gecko_id ?? null, p.circSupply ?? null, p.totalLocked ?? null, p.maxSupply ?? null, E, ev.length]);
+    window.__P.n++;
+    await sleep(2000);
+  }
+  window.__C = { f: new Date().toISOString().slice(0, 16), g, cats, P, listed: data.length, slugs: SLUGS };
+  const gz = await new Response(new Blob([new TextEncoder().encode(JSON.stringify(window.__C))]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();
+  let s = ''; const u8 = new Uint8Array(gz); for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  window.__B64 = btoa(s);
+  window.__P.done = true;
+})().catch((e) => { window.__P.stop = 'threw: ' + e.message; window.__P.done = true; });
+// Per-piece hashes, to check each carried piece as it lands:
+//   const h = async (s) => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+//   for (let i = 0; i < __B64.length; i += 2900) console.log(i, await h(__B64.slice(i, i + 2900)));
+```
+
+build-index.mjs (desktop; argv: pane.b64[,more.b64] keep.json old-index.json out.json):
+```js
+// Desktop half of the per-protocol pane route (2026-11-02). Decodes the pane's gzip+base64 (the gzip
+// CRC fails loud on any slip), rebuilds the raw DefiLlama shape, and runs the BOT'S OWN trim() from
+// fetch-unlock-index.js over the keep-set — the pane only pre-filtered dates to a superset window.
+// Then validates against the previous index. Writes only <out>.
+//   node build-index.mjs <pane.b64> <keep.json> <old-index.json> <out-index.json>
+import { readFileSync, writeFileSync } from 'node:fs';
+import { gunzipSync } from 'node:zlib';
+import { pathToFileURL } from 'node:url';
+const [b64, keepF, oldF, outF] = process.argv.slice(2);
+const { trim } = await import(pathToFileURL('C:/Users/bloom/OneDrive/Desktop/market-radar/fetch-unlock-index.js').href);
+// <pane.b64> may be several comma-separated blobs (each with its own cats table); the first sets fetchedAt.
+const blobs = b64.split(',').map((f) => JSON.parse(gunzipSync(Buffer.from(readFileSync(f, 'utf8').replace(/\s+/g, ''), 'base64')).toString()));
+const C = blobs[0];
+const data = [];
+for (const B of blobs) {
+  console.log(`decoded: ${B.P.length} protocols (${B.P.map((p) => p[1]).join(',').slice(0, 80)}…) from a list of ${B.listed}, fetched ${B.f}, generatedAtSec ${B.g} (${new Date(B.g * 1000).toISOString()})${B.slugs ? ' · slugs ' + JSON.stringify(B.slugs) : ''}`);
+  for (const [name, tSymbol, token, gecko_id, circSupply, totalLocked, maxSupply, E] of B.P) {
+    if (data.some((d) => d.tSymbol === tSymbol)) { console.error(`REFUSED: ${tSymbol} in two blobs`); process.exit(2); }
+    data.push({ name, tSymbol, token, gecko_id, circSupply, totalLocked, maxSupply,
+      events: E.map(([timestamp, unlockType, n, ci, rd]) => ({ timestamp, unlockType, noOfTokens: [n], category: B.cats[ci], ...(rd !== null ? { rateDurationDays: rd } : {}) })) });
+  }
+}
+const keep = new Set(JSON.parse(readFileSync(keepF, 'utf8')));
+const out = trim(data, C.g, keep);
+out.fetchedAt = C.f;
+out.source = 'defillama.com/unlocks/<protocol> __NEXT_DATA__ props.pageProps.emissions.events via browser pane (the list stopped embedding events 2026-11) — INDEX ONLY: every field is a CLAIM attributed to DefiLlama, never a verified fact';
+out.note = 'events merged by (timestamp,type), categories joined, past window 120d, future 400d; trimmed by fetch-unlock-index.js trim(); carried from the browser pane as gzip+base64 (CRC-checked)';
+const nEv = out.protocols.reduce((s, p) => s + p.events.length, 0);
+if (out.protocols.length < 20 || nEv < 50) { console.error(`REFUSED: implausibly small (${out.protocols.length} protocols, ${nEv} events)`); process.exit(2); }
+const old = JSON.parse(readFileSync(oldF, 'utf8'));
+const now = Date.now() / 1000;
+const horizon = (ix) => { const ends = ix.protocols.map((p) => Math.max(0, ...p.events.filter((e) => e.t > now).map((e) => e.t))).filter((t) => t > 0).sort((a, b) => a - b); return ends.length ? ((ends[Math.floor(ends.length / 2)] - now) / 86400).toFixed(1) : 'none'; };
+const fut = (ix) => ix.protocols.reduce((s, p) => s + p.events.filter((e) => e.t > now).length, 0);
+console.log(`OLD ${old.fetchedAt}: ${old.protocols.length} protocols, ${old.protocols.reduce((s, p) => s + p.events.length, 0)} events, ${fut(old)} future, with a future event: ${old.protocols.filter((p) => p.events.some((e) => e.t > now)).length}`);
+console.log(`NEW ${out.fetchedAt}: ${out.protocols.length} protocols, ${nEv} events, ${fut(out)} future, with a future event: ${out.protocols.filter((p) => p.events.some((e) => e.t > now)).length}`);
+const os = new Set(old.protocols.map((p) => p.symbol)), ns = new Set(out.protocols.map((p) => p.symbol));
+console.log('symbols only in OLD:', [...os].filter((s) => !ns.has(s)).join(', ') || 'none', '· only in NEW:', [...ns].filter((s) => !os.has(s)).join(', ') || 'none');
+// PARITY: events both captures could see — after the new past-window start, before the old fetch.
+const lo = now - 120 * 86400, hi = Date.parse(old.fetchedAt + 'Z') / 1000;
+let same = 0, diff = 0; const diffs = [];
+for (const p of out.protocols) {
+  const q = old.protocols.find((x) => x.symbol === p.symbol); if (!q) continue;
+  const key = (e) => `${e.t}|${e.type}|${e.n}`;
+  const a = new Set(p.events.filter((e) => e.t >= lo && e.t < hi).map(key)), b = new Set(q.events.filter((e) => e.t >= lo && e.t < hi).map(key));
+  const eq = a.size === b.size && [...a].every((k) => b.has(k));
+  if (eq) same++; else { diff++; diffs.push(`${p.symbol}: new ${a.size} / old ${b.size}`); }
+}
+console.log(`PARITY (events between ${new Date(lo * 1000).toISOString().slice(0, 10)} and the old fetch, ${new Date(hi * 1000).toISOString().slice(0, 10)}): ${same} protocols identical, ${diff} differ${diffs.length ? ': ' + diffs.join(' · ') : ''}`);
+writeFileSync(outF, JSON.stringify(out));
+console.log('wrote', outF);
+```

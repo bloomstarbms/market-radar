@@ -1,7 +1,7 @@
 {
  "comment": "Token unlock watchlist. Two entry types: 'monthlyDay' = recurring cliff on that day each month (most vesting contracts release monthly); 'date' = one-off YYYY-MM-DD. Bot pings 7 days and 3 days before. verified:true = confirmed against cryptorank.io/token-unlock on 2026-08-01; others are recurring-schedule estimates — check the date on cryptorank before acting.",
  "source": "https://cryptorank.io/token-unlock (free public page)",
- "lastReviewed": "2026-10-01 (mechanism L3 via promote-unlock.js)",
+ "lastReviewed": "2026-11-02 (sourced RE via promote-unlock.js)",
  "tokens": [
   {
    "sym": "EIGEN",
@@ -64,14 +64,8 @@
    "name": "ZetaChain",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1783008147,
-     "type": "cliff",
-     "n": 44260417,
-     "cats": "ecosystem+noncirculating+farming+insiders"
-    },
     {
      "t": 1785637890,
      "type": "cliff",
@@ -89,6 +83,90 @@
      "type": "cliff",
      "n": 44260417,
      "cats": "ecosystem+noncirculating+farming+insiders"
+    },
+    {
+     "t": 1793527119,
+     "type": "cliff",
+     "n": 44260417,
+     "cats": "ecosystem+noncirculating+farming+insiders"
+    },
+    {
+     "t": 1796156862,
+     "type": "cliff",
+     "n": 44260417,
+     "cats": "ecosystem+noncirculating+farming+insiders"
+    },
+    {
+     "t": 1798786605,
+     "type": "cliff",
+     "n": 21802083,
+     "cats": "ecosystem+noncirculating+farming"
+    },
+    {
+     "t": 1801416348,
+     "type": "cliff",
+     "n": 21802083,
+     "cats": "ecosystem+noncirculating+farming"
+    },
+    {
+     "t": 1804046091,
+     "type": "cliff",
+     "n": 21802083,
+     "cats": "ecosystem+noncirculating+farming"
+    },
+    {
+     "t": 1806675834,
+     "type": "cliff",
+     "n": 21802083,
+     "cats": "ecosystem+noncirculating+farming"
+    },
+    {
+     "t": 1809305577,
+     "type": "cliff",
+     "n": 21802083,
+     "cats": "ecosystem+noncirculating+farming"
+    },
+    {
+     "t": 1811935320,
+     "type": "cliff",
+     "n": 21802083,
+     "cats": "ecosystem+noncirculating+farming"
+    },
+    {
+     "t": 1814565063,
+     "type": "cliff",
+     "n": 19177083,
+     "cats": "noncirculating+farming"
+    },
+    {
+     "t": 1817194806,
+     "type": "cliff",
+     "n": 19177083,
+     "cats": "noncirculating+farming"
+    },
+    {
+     "t": 1819824549,
+     "type": "cliff",
+     "n": 19177083,
+     "cats": "noncirculating+farming"
+    },
+    {
+     "t": 1822454292,
+     "type": "cliff",
+     "n": 19177083,
+     "cats": "noncirculating+farming"
+    },
+    {
+     "t": 1825084035,
+     "type": "cliff",
+     "n": 19177083,
+     "cats": "noncirculating+farming"
+    },
+    {
+     "t": 1827713778,
+     "type": "cliff",
+     "n": 19177083,
+     "cats": "noncirculating+farming"
     }
    ],
    "chain": "ethereum",
@@ -97,8 +175,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0xf091867ec603a6628ed83d274e835539d82e9cc8",
-   "circSupply": 1605992573.4851606,
-   "totalLocked": 494011911.7425852,
+   "circSupply": 1699113094.3799505,
+   "totalLocked": 400891390.84779525,
    "maxSupply": 2100004485.2277458
   },
   {
@@ -114,14 +192,8 @@
    "name": "Maverick Protocol",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1782910833,
-     "type": "cliff",
-     "n": 45650080,
-     "cats": "farming+insiders+privateSale"
-    },
     {
      "t": 1785540576,
      "type": "cliff",
@@ -151,6 +223,90 @@
      "type": "cliff",
      "n": 9300080,
      "cats": "farming+insiders"
+    },
+    {
+     "t": 1796059548,
+     "type": "cliff",
+     "n": 9300080,
+     "cats": "farming+insiders"
+    },
+    {
+     "t": 1798689291,
+     "type": "cliff",
+     "n": 45650080,
+     "cats": "farming+insiders+privateSale"
+    },
+    {
+     "t": 1801319034,
+     "type": "cliff",
+     "n": 9300080,
+     "cats": "farming+insiders"
+    },
+    {
+     "t": 1803948777,
+     "type": "cliff",
+     "n": 9300080,
+     "cats": "farming+insiders"
+    },
+    {
+     "t": 1806537600,
+     "type": "cliff",
+     "n": 10271509,
+     "cats": "insiders+farming"
+    },
+    {
+     "t": 1809208263,
+     "type": "cliff",
+     "n": 9300080,
+     "cats": "farming+insiders"
+    },
+    {
+     "t": 1811838006,
+     "type": "cliff",
+     "n": 9300080,
+     "cats": "farming+insiders"
+    },
+    {
+     "t": 1814426829,
+     "type": "cliff",
+     "n": 10271509,
+     "cats": "insiders+farming"
+    },
+    {
+     "t": 1817097492,
+     "type": "cliff",
+     "n": 9300080,
+     "cats": "farming+insiders"
+    },
+    {
+     "t": 1819727235,
+     "type": "cliff",
+     "n": 9300080,
+     "cats": "farming+insiders"
+    },
+    {
+     "t": 1822316058,
+     "type": "cliff",
+     "n": 971429,
+     "cats": "insiders"
+    },
+    {
+     "t": 1822356978,
+     "type": "cliff",
+     "n": 9300080,
+     "cats": "farming+insiders"
+    },
+    {
+     "t": 1824986721,
+     "type": "cliff",
+     "n": 9300080,
+     "cats": "farming+insiders"
+    },
+    {
+     "t": 1827616464,
+     "type": "cliff",
+     "n": 9300080,
+     "cats": "farming+insiders"
     }
    ],
    "chain": "ethereum",
@@ -159,8 +315,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0x7448c7456a97769f6cd04f1e83a4a23ccdc46abd",
-   "circSupply": 1066438123.1180384,
-   "totalLocked": 933561876.8819616,
+   "circSupply": 1118858804.4543412,
+   "totalLocked": 881141195.5456588,
    "maxSupply": 2000000000
   },
   {
@@ -226,14 +382,8 @@
    "name": "zkSync",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1781696242,
-     "type": "cliff",
-     "n": 173038250,
-     "cats": "privateSale+insiders"
-    },
     {
      "t": 1784325985,
      "type": "cliff",
@@ -257,6 +407,84 @@
      "type": "cliff",
      "n": 173038250,
      "cats": "privateSale+insiders"
+    },
+    {
+     "t": 1794844957,
+     "type": "cliff",
+     "n": 173038250,
+     "cats": "privateSale+insiders"
+    },
+    {
+     "t": 1797474700,
+     "type": "cliff",
+     "n": 173038250,
+     "cats": "privateSale+insiders"
+    },
+    {
+     "t": 1800104443,
+     "type": "cliff",
+     "n": 173038250,
+     "cats": "privateSale+insiders"
+    },
+    {
+     "t": 1802734186,
+     "type": "cliff",
+     "n": 173038250,
+     "cats": "privateSale+insiders"
+    },
+    {
+     "t": 1805363929,
+     "type": "cliff",
+     "n": 173038250,
+     "cats": "privateSale+insiders"
+    },
+    {
+     "t": 1807993672,
+     "type": "cliff",
+     "n": 173038250,
+     "cats": "privateSale+insiders"
+    },
+    {
+     "t": 1810623415,
+     "type": "cliff",
+     "n": 173038250,
+     "cats": "privateSale+insiders"
+    },
+    {
+     "t": 1813253158,
+     "type": "cliff",
+     "n": 173038250,
+     "cats": "privateSale+insiders"
+    },
+    {
+     "t": 1815882901,
+     "type": "cliff",
+     "n": 173038250,
+     "cats": "privateSale+insiders"
+    },
+    {
+     "t": 1818512644,
+     "type": "cliff",
+     "n": 173038250,
+     "cats": "privateSale+insiders"
+    },
+    {
+     "t": 1821142387,
+     "type": "cliff",
+     "n": 173038250,
+     "cats": "privateSale+insiders"
+    },
+    {
+     "t": 1823772130,
+     "type": "cliff",
+     "n": 173038250,
+     "cats": "privateSale+insiders"
+    },
+    {
+     "t": 1826401873,
+     "type": "cliff",
+     "n": 173038250,
+     "cats": "privateSale+insiders"
     }
    ],
    "chain": "unconfirmed",
@@ -264,8 +492,8 @@
    "note": "",
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
-   "circSupply": 7040496750,
-   "totalLocked": 13959503250,
+   "circSupply": 7213535000,
+   "totalLocked": 13786465000,
    "maxSupply": 21000000000
   },
   {
@@ -303,14 +531,8 @@
    "name": "Cyber",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1781468862,
-     "type": "cliff",
-     "n": 886117,
-     "cats": "noncirculating+insiders"
-    },
     {
      "t": 1784098605,
      "type": "cliff",
@@ -334,6 +556,84 @@
      "type": "cliff",
      "n": 511117,
      "cats": "noncirculating+insiders"
+    },
+    {
+     "t": 1794617577,
+     "type": "cliff",
+     "n": 3854450,
+     "cats": "Uncategorized+noncirculating+insiders+privateSale"
+    },
+    {
+     "t": 1797247320,
+     "type": "cliff",
+     "n": 511117,
+     "cats": "noncirculating+insiders"
+    },
+    {
+     "t": 1799877063,
+     "type": "cliff",
+     "n": 511117,
+     "cats": "noncirculating+insiders"
+    },
+    {
+     "t": 1802506806,
+     "type": "cliff",
+     "n": 3854450,
+     "cats": "Uncategorized+noncirculating+insiders+privateSale"
+    },
+    {
+     "t": 1805136549,
+     "type": "cliff",
+     "n": 511117,
+     "cats": "noncirculating+insiders"
+    },
+    {
+     "t": 1807766292,
+     "type": "cliff",
+     "n": 511117,
+     "cats": "noncirculating+insiders"
+    },
+    {
+     "t": 1810396035,
+     "type": "cliff",
+     "n": 3854450,
+     "cats": "Uncategorized+noncirculating+insiders+privateSale"
+    },
+    {
+     "t": 1813025778,
+     "type": "cliff",
+     "n": 511117,
+     "cats": "noncirculating+insiders"
+    },
+    {
+     "t": 1815655521,
+     "type": "cliff",
+     "n": 511117,
+     "cats": "noncirculating+insiders"
+    },
+    {
+     "t": 1818285264,
+     "type": "cliff",
+     "n": 1413200,
+     "cats": "Uncategorized+noncirculating"
+    },
+    {
+     "t": 1820915007,
+     "type": "cliff",
+     "n": 163200,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1823544750,
+     "type": "cliff",
+     "n": 163200,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1826174493,
+     "type": "cliff",
+     "n": 163200,
+     "cats": "noncirculating"
     }
    ],
    "chain": "ethereum",
@@ -342,8 +642,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0x14778860e937f509e651192a90589de711fb88a9",
-   "circSupply": 77795983.33333333,
-   "totalLocked": 22204016.666666657,
+   "circSupply": 78307100,
+   "totalLocked": 21692899.999999985,
    "maxSupply": 99999999.99999999
   },
   {
@@ -357,20 +657,8 @@
    "name": "Sui",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1782894918,
-     "type": "cliff",
-     "n": 6069367,
-     "cats": "noncirculating"
-    },
-    {
-     "t": 1782993144,
-     "type": "cliff",
-     "n": 15894406,
-     "cats": "insiders+staking"
-    },
     {
      "t": 1785524661,
      "type": "cliff",
@@ -418,6 +706,186 @@
      "type": "cliff",
      "n": 6069367,
      "cats": "noncirculating"
+    },
+    {
+     "t": 1793512116,
+     "type": "cliff",
+     "n": 14350019,
+     "cats": "insiders+staking"
+    },
+    {
+     "t": 1796043633,
+     "type": "cliff",
+     "n": 6069367,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1796141859,
+     "type": "cliff",
+     "n": 13996351,
+     "cats": "insiders+staking"
+    },
+    {
+     "t": 1798673376,
+     "type": "cliff",
+     "n": 2069367,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1798680201,
+     "type": "cliff",
+     "n": 4000000,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1798771602,
+     "type": "cliff",
+     "n": 13654672,
+     "cats": "insiders+staking"
+    },
+    {
+     "t": 1801303119,
+     "type": "cliff",
+     "n": 6069367,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1801401345,
+     "type": "cliff",
+     "n": 13324520,
+     "cats": "insiders+staking"
+    },
+    {
+     "t": 1803932862,
+     "type": "cliff",
+     "n": 6069367,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1804031088,
+     "type": "cliff",
+     "n": 7013988,
+     "cats": "insiders"
+    },
+    {
+     "t": 1804040178,
+     "type": "cliff",
+     "n": 5991470,
+     "cats": "staking"
+    },
+    {
+     "t": 1806562605,
+     "type": "cliff",
+     "n": 6069367,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1806660831,
+     "type": "cliff",
+     "n": 12697063,
+     "cats": "insiders+staking"
+    },
+    {
+     "t": 1809192348,
+     "type": "cliff",
+     "n": 6069367,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1809290574,
+     "type": "cliff",
+     "n": 12398926,
+     "cats": "insiders+staking"
+    },
+    {
+     "t": 1811808000,
+     "type": "cliff",
+     "n": 11069367,
+     "cats": "insiders+noncirculating"
+    },
+    {
+     "t": 1811920317,
+     "type": "cliff",
+     "n": 12110661,
+     "cats": "insiders+staking"
+    },
+    {
+     "t": 1814437743,
+     "type": "cliff",
+     "n": 11069367,
+     "cats": "insiders+noncirculating"
+    },
+    {
+     "t": 1814559150,
+     "type": "cliff",
+     "n": 5088835,
+     "cats": "staking"
+    },
+    {
+     "t": 1817067486,
+     "type": "cliff",
+     "n": 5000000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1817081577,
+     "type": "cliff",
+     "n": 6069367,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1817188893,
+     "type": "cliff",
+     "n": 4885281,
+     "cats": "staking"
+    },
+    {
+     "t": 1819697229,
+     "type": "cliff",
+     "n": 11069367,
+     "cats": "insiders+noncirculating"
+    },
+    {
+     "t": 1819818636,
+     "type": "cliff",
+     "n": 4689870,
+     "cats": "staking"
+    },
+    {
+     "t": 1822326972,
+     "type": "cliff",
+     "n": 11069367,
+     "cats": "insiders+noncirculating"
+    },
+    {
+     "t": 1822448379,
+     "type": "cliff",
+     "n": 4502275,
+     "cats": "staking"
+    },
+    {
+     "t": 1824956715,
+     "type": "cliff",
+     "n": 11069367,
+     "cats": "insiders+noncirculating"
+    },
+    {
+     "t": 1825078122,
+     "type": "cliff",
+     "n": 4322184,
+     "cats": "staking"
+    },
+    {
+     "t": 1827586458,
+     "type": "cliff",
+     "n": 11069367,
+     "cats": "insiders+noncirculating"
+    },
+    {
+     "t": 1827707865,
+     "type": "cliff",
+     "n": 4149297,
+     "cats": "staking"
     }
    ],
    "chain": "unconfirmed",
@@ -425,8 +893,8 @@
    "note": "",
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified.",
-   "circSupply": 4120150667.0237265,
-   "totalLocked": 5879849332.976274,
+   "circSupply": 4155286203.017236,
+   "totalLocked": 5844713796.982763,
    "maxSupply": 10000000000
   },
   {
@@ -434,14 +902,8 @@
    "name": "Sei",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1781382462,
-     "type": "cliff",
-     "n": 121111110,
-     "cats": "staking+privateSale+insiders"
-    },
     {
      "t": 1784012205,
      "type": "cliff",
@@ -465,6 +927,84 @@
      "type": "cliff",
      "n": 119861110,
      "cats": "staking+privateSale+insiders"
+    },
+    {
+     "t": 1794531177,
+     "type": "cliff",
+     "n": 119861110,
+     "cats": "staking+privateSale+insiders"
+    },
+    {
+     "t": 1797160920,
+     "type": "cliff",
+     "n": 119861110,
+     "cats": "staking+privateSale+insiders"
+    },
+    {
+     "t": 1799790663,
+     "type": "cliff",
+     "n": 119861110,
+     "cats": "staking+privateSale+insiders"
+    },
+    {
+     "t": 1802420406,
+     "type": "cliff",
+     "n": 119861110,
+     "cats": "staking+privateSale+insiders"
+    },
+    {
+     "t": 1805050149,
+     "type": "cliff",
+     "n": 119861110,
+     "cats": "staking+privateSale+insiders"
+    },
+    {
+     "t": 1807679892,
+     "type": "cliff",
+     "n": 119861110,
+     "cats": "staking+privateSale+insiders"
+    },
+    {
+     "t": 1810309635,
+     "type": "cliff",
+     "n": 119861110,
+     "cats": "staking+privateSale+insiders"
+    },
+    {
+     "t": 1812939378,
+     "type": "cliff",
+     "n": 119861110,
+     "cats": "staking+privateSale+insiders"
+    },
+    {
+     "t": 1815569121,
+     "type": "cliff",
+     "n": 111527777,
+     "cats": "staking+privateSale+insiders"
+    },
+    {
+     "t": 1818198864,
+     "type": "cliff",
+     "n": 11250000,
+     "cats": "staking"
+    },
+    {
+     "t": 1820828607,
+     "type": "cliff",
+     "n": 11250000,
+     "cats": "staking"
+    },
+    {
+     "t": 1823458350,
+     "type": "cliff",
+     "n": 11250000,
+     "cats": "staking"
+    },
+    {
+     "t": 1826088093,
+     "type": "cliff",
+     "n": 11250000,
+     "cats": "staking"
     }
    ],
    "chain": "unconfirmed",
@@ -472,8 +1012,8 @@
    "note": "",
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
-   "circSupply": 7579861083,
-   "totalLocked": 2420138877,
+   "circSupply": 7699722193,
+   "totalLocked": 2300277767,
    "maxSupply": 9999999960
   },
   {
@@ -481,22 +1021,9 @@
    "name": "Aptos",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
     {
-     "t": 1781241492,
-     "type": "cliff",
-     "n": 11309783,
-     "cats": "noncirculating+insiders+privateSale"
-    },
-    {
-     "t": 1781241492,
-     "type": "linear",
-     "n": 802300,
-     "cats": "staking",
-     "rd": 30.44
-    },
-    {
      "t": 1783871235,
      "type": "cliff",
      "n": 11309783,
@@ -505,7 +1032,7 @@
     {
      "t": 1783871235,
      "type": "linear",
-     "n": 804500,
+     "n": 796100,
      "cats": "staking",
      "rd": 30.44
     },
@@ -518,7 +1045,7 @@
     {
      "t": 1786500978,
      "type": "linear",
-     "n": 806600,
+     "n": 798200,
      "cats": "staking",
      "rd": 30.44
     },
@@ -529,10 +1056,95 @@
      "cats": "noncirculating+insiders+privateSale"
     },
     {
+     "t": 1789130721,
+     "type": "linear",
+     "n": 800400,
+     "cats": "staking",
+     "rd": 30.44
+    },
+    {
      "t": 1791760464,
      "type": "cliff",
      "n": 11309783,
      "cats": "noncirculating+insiders+privateSale"
+    },
+    {
+     "t": 1794390207,
+     "type": "cliff",
+     "n": 4543478,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1797019950,
+     "type": "cliff",
+     "n": 4543478,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1799649693,
+     "type": "cliff",
+     "n": 4543478,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1802279436,
+     "type": "cliff",
+     "n": 4543478,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1804909179,
+     "type": "cliff",
+     "n": 4543478,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1807538922,
+     "type": "cliff",
+     "n": 4543478,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1810168665,
+     "type": "cliff",
+     "n": 4543478,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1812798408,
+     "type": "cliff",
+     "n": 4543478,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1815428151,
+     "type": "cliff",
+     "n": 4543478,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1818057894,
+     "type": "cliff",
+     "n": 4543478,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1820687637,
+     "type": "cliff",
+     "n": 4543478,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1823317380,
+     "type": "cliff",
+     "n": 4543478,
+     "cats": "noncirculating"
+    },
+    {
+     "t": 1825947123,
+     "type": "cliff",
+     "n": 4543478,
+     "cats": "noncirculating"
     }
    ],
    "chain": "unconfirmed",
@@ -540,8 +1152,8 @@
    "note": "",
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
-   "circSupply": 864384096.5497003,
-   "totalLocked": 1235615903.4502997,
+   "circSupply": 877179987.0691667,
+   "totalLocked": 1222820012.9308333,
    "maxSupply": 2100000000
   },
   {
@@ -549,207 +1161,8 @@
    "name": "Celestia",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1780602526,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1780688926,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1780775326,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1780861726,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1780948126,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1781034526,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1781120926,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1781207326,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1781293726,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1781380126,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1781466526,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1781552926,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1781639326,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1781725726,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1781812126,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1781898526,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1781984926,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1782071326,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1782157726,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1782244126,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1782330526,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1782416926,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1782503326,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1782589726,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1782676126,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1782762526,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1782848926,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1782912576,
-     "type": "linear",
-     "n": 539300,
-     "cats": "staking",
-     "rd": 30.44
-    },
-    {
-     "t": 1782935326,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1783021726,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1783108126,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1783194526,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1783280926,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
     {
      "t": 1783367326,
      "type": "cliff",
@@ -1479,6 +1892,2281 @@
      "n": 531200,
      "cats": "staking",
      "rd": 30.44
+    },
+    {
+     "t": 1793476126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1793562526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1793648926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1793735326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1793821726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1793908126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1793994526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1794080926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1794167326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1794253726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1794340126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1794426526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1794512926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1794599326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1794685726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1794772126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1794858526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1794944926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1795031326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1795117726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1795204126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1795290526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1795376926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1795463326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1795549726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1795636126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1795722526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1795808926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1795895326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1795981726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1796061291,
+     "type": "linear",
+     "n": 529200,
+     "cats": "staking",
+     "rd": 30.44
+    },
+    {
+     "t": 1796068126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1796154526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1796240926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1796327326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1796413726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1796500126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1796586526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1796672926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1796759326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1796845726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1796932126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1797018526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1797104926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1797191326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1797277726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1797364126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1797450526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1797536926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1797623326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1797709726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1797796126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1797882526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1797968926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1798055326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1798141726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1798228126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1798314526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1798400926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1798487326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1798573726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1798660126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1798691034,
+     "type": "linear",
+     "n": 527200,
+     "cats": "staking",
+     "rd": 30.44
+    },
+    {
+     "t": 1798746526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1798832926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1798919326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1799005726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1799092126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1799178526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1799264926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1799351326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1799437726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1799524126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1799610526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1799696926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1799783326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1799869726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1799956126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1800042526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1800128926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1800215326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1800301726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1800388126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1800474526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1800560926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1800647326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1800733726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1800820126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1800906526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1800992926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1801079326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1801165726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1801252126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1801320777,
+     "type": "linear",
+     "n": 525100,
+     "cats": "staking",
+     "rd": 30.44
+    },
+    {
+     "t": 1801338526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1801424926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1801511326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1801597726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1801684126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1801770526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1801856926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1801943326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1802029726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1802116126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1802202526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1802288926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1802375326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1802461726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1802548126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1802634526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1802720926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1802807326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1802893726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1802980126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1803066526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1803152926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1803239326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1803325726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1803412126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1803498526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1803584926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1803671326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1803757726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1803844126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1803930526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1803950520,
+     "type": "linear",
+     "n": 523100,
+     "cats": "staking",
+     "rd": 30.44
+    },
+    {
+     "t": 1804016926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1804103326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1804189726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1804276126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1804362526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1804448926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1804535326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1804621726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1804708126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1804794526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1804880926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1804967326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1805053726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1805140126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1805226526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1805312926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1805399326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1805485726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1805572126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1805658526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1805744926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1805831326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1805917726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1806004126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1806090526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1806176926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1806263326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1806349726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1806436126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1806522526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1806580263,
+     "type": "linear",
+     "n": 521100,
+     "cats": "staking",
+     "rd": 30.44
+    },
+    {
+     "t": 1806608926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1806695326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1806781726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1806868126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1806954526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1807040926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1807127326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1807213726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1807300126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1807386526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1807472926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1807559326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1807645726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1807732126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1807818526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1807904926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1807991326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1808077726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1808164126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1808250526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1808336926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1808423326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1808509726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1808596126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1808682526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1808768926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1808855326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1808941726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1809028126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1809114526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1809200926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1809210006,
+     "type": "linear",
+     "n": 519100,
+     "cats": "staking",
+     "rd": 30.44
+    },
+    {
+     "t": 1809287326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1809373726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1809460126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1809546526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1809632926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1809719326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1809805726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1809892126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1809978526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1810064926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1810151326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1810237726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1810324126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1810410526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1810496926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1810583326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1810669726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1810756126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1810842526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1810928926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1811015326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1811101726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1811188126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1811274526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1811360926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1811447326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1811533726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1811620126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1811706526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1811792926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1811839749,
+     "type": "linear",
+     "n": 517100,
+     "cats": "staking",
+     "rd": 30.44
+    },
+    {
+     "t": 1811879326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1811965726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1812052126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1812138526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1812224926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1812311326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1812397726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1812484126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1812570526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1812656926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1812743326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1812829726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1812916126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1813002526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1813088926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1813175326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1813261726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1813348126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1813434526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1813520926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1813607326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1813693726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1813780126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1813866526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1813952926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1814039326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1814125726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1814212126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1814298526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1814384926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1814469492,
+     "type": "linear",
+     "n": 515000,
+     "cats": "staking",
+     "rd": 30.44
+    },
+    {
+     "t": 1814471326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1814557726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1814644126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1814730526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1814816926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1814903326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1814989726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1815076126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1815162526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1815248926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1815335326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1815421726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1815508126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1815594526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1815680926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1815767326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1815853726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1815940126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1816026526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1816112926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1816199326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1816285726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1816372126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1816458526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1816544926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1816631326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1816717726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1816804126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1816890526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1816976926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1817063326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1817099235,
+     "type": "linear",
+     "n": 513000,
+     "cats": "staking",
+     "rd": 30.44
+    },
+    {
+     "t": 1817149726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1817236126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1817322526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1817408926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1817495326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1817581726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1817668126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1817754526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1817840926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1817927326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1818013726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1818100126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1818186526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1818272926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1818359326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1818445726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1818532126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1818618526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1818704926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1818791326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1818877726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1818964126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1819050526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1819136926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1819223326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1819309726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1819396126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1819482526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1819568926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1819655326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1819728978,
+     "type": "linear",
+     "n": 511000,
+     "cats": "staking",
+     "rd": 30.44
+    },
+    {
+     "t": 1819741726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1819828126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1819914526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1820000926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1820087326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1820173726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1820260126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1820346526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1820432926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1820519326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1820605726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1820692126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1820778526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1820864926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1820951326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1821037726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1821124126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1821210526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1821296926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1821383326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1821469726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1821556126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1821642526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1821728926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1821815326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1821901726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1821988126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1822074526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1822160926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1822247326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1822333726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1822358721,
+     "type": "linear",
+     "n": 509000,
+     "cats": "staking",
+     "rd": 30.44
+    },
+    {
+     "t": 1822420126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1822506526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1822592926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1822679326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1822765726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1822852126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1822938526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1823024926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1823111326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1823197726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1823284126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1823370526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1823456926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1823543326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1823629726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1823716126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1823802526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1823888926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1823975326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1824061726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1824148126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1824234526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1824320926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1824407326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1824493726,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1824580126,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1824666526,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1824752926,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1824839326,
+     "type": "cliff",
+     "n": 183562,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1824988464,
+     "type": "linear",
+     "n": 507000,
+     "cats": "staking",
+     "rd": 30.44
+    },
+    {
+     "t": 1827618207,
+     "type": "linear",
+     "n": 505000,
+     "cats": "staking",
+     "rd": 30.44
     }
    ],
    "chain": "unconfirmed",
@@ -1486,8 +4174,8 @@
    "note": "",
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 31 upcoming batch events at ingest. Not independently verified.",
-   "circSupply": 1101980924.0186005,
-   "totalLocked": 234114986.60011387,
+   "circSupply": 1114975380.128971,
+   "totalLocked": 221120530.48974323,
    "maxSupply": 1336095910.6187143
   },
   {
@@ -1565,20 +4253,8 @@
    "name": "Wormhole",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1781222400,
-     "type": "cliff",
-     "n": 50411392,
-     "cats": "insiders"
-    },
-    {
-     "t": 1782432000,
-     "type": "cliff",
-     "n": 50411392,
-     "cats": "insiders"
-    },
     {
      "t": 1783641600,
      "type": "cliff",
@@ -1632,6 +4308,174 @@
      "type": "cliff",
      "n": 50411392,
      "cats": "insiders"
+    },
+    {
+     "t": 1794528000,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1795737600,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1796947200,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1798156800,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1799366400,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1800576000,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1801785600,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1802995200,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1804204800,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1805414400,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1806624000,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1807833600,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1809043200,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1810252800,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1811462400,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1812672000,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1813881600,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1815091200,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1816300800,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1817510400,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1818720000,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1819929600,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1821139200,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1822348800,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1823558400,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1824768000,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1825977600,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1827187200,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
     }
    ],
    "chain": "unconfirmed",
@@ -1639,8 +4483,8 @@
    "note": "",
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified.",
-   "circSupply": 6520062132.040995,
-   "totalLocked": 3479937867.959078,
+   "circSupply": 6718400663.091709,
+   "totalLocked": 3281599336.9083633,
    "maxSupply": 10000000000.000072
   },
   {
@@ -1730,38 +4574,8 @@
    "name": "Forta",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1780790400,
-     "type": "cliff",
-     "n": 50000,
-     "cats": "farming"
-    },
-    {
-     "t": 1781395200,
-     "type": "cliff",
-     "n": 50000,
-     "cats": "farming"
-    },
-    {
-     "t": 1782000000,
-     "type": "cliff",
-     "n": 50000,
-     "cats": "farming"
-    },
-    {
-     "t": 1782604800,
-     "type": "cliff",
-     "n": 50000,
-     "cats": "farming"
-    },
-    {
-     "t": 1783209600,
-     "type": "cliff",
-     "n": 50000,
-     "cats": "farming"
-    },
     {
      "t": 1783814400,
      "type": "cliff",
@@ -1857,6 +4671,354 @@
      "type": "cliff",
      "n": 50000,
      "cats": "farming"
+    },
+    {
+     "t": 1793491200,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1794096000,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1794700800,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1795305600,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1795910400,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1796515200,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1797120000,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1797724800,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1798329600,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1798934400,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1799539200,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1800144000,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1800748800,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1801353600,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1801958400,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1802563200,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1803168000,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1803772800,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1804377600,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1804982400,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1805587200,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1806192000,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1806796800,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1807401600,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1808006400,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1808611200,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1809216000,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1809820800,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1810425600,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1811030400,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1811635200,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1812240000,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1812844800,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1813449600,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1814054400,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1814659200,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1815264000,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1815868800,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1816473600,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1817078400,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1817683200,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1818288000,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1818892800,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1819497600,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1820102400,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1820707200,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1821312000,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1821916800,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1822521600,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1823126400,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1823731200,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1824336000,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1824940800,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1825545600,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1826150400,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1826755200,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1827360000,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1827964800,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
     }
    ],
    "chain": "ethereum",
@@ -1865,8 +5027,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 4 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0x41545f8b9472d758bb669ed8eaeeecd7a9c4ec29",
-   "circSupply": 624540000.0000005,
-   "totalLocked": 375459999.9999995,
+   "circSupply": 624790000.0000005,
+   "totalLocked": 375209999.9999995,
    "maxSupply": 1000000000
   },
   {
@@ -1874,20 +5036,8 @@
    "name": "Hashflow",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1780837233,
-     "type": "cliff",
-     "n": 17888333,
-     "cats": "insiders+community+privateSale"
-    },
-    {
-     "t": 1780956375,
-     "type": "cliff",
-     "n": 462963,
-     "cats": "insiders"
-    },
     {
      "t": 1783466976,
      "type": "cliff",
@@ -1947,6 +5097,168 @@
      "type": "cliff",
      "n": 462963,
      "cats": "insiders"
+    },
+    {
+     "t": 1793985948,
+     "type": "cliff",
+     "n": 1875000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1794105090,
+     "type": "cliff",
+     "n": 462963,
+     "cats": "insiders"
+    },
+    {
+     "t": 1796615691,
+     "type": "cliff",
+     "n": 1875000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1796734833,
+     "type": "cliff",
+     "n": 462963,
+     "cats": "insiders"
+    },
+    {
+     "t": 1799245434,
+     "type": "cliff",
+     "n": 1875000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1799364576,
+     "type": "cliff",
+     "n": 462963,
+     "cats": "insiders"
+    },
+    {
+     "t": 1801875177,
+     "type": "cliff",
+     "n": 1875000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1801994319,
+     "type": "cliff",
+     "n": 462963,
+     "cats": "insiders"
+    },
+    {
+     "t": 1804504920,
+     "type": "cliff",
+     "n": 1875000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1804624062,
+     "type": "cliff",
+     "n": 462963,
+     "cats": "insiders"
+    },
+    {
+     "t": 1807134663,
+     "type": "cliff",
+     "n": 1875000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1807253805,
+     "type": "cliff",
+     "n": 462963,
+     "cats": "insiders"
+    },
+    {
+     "t": 1809764406,
+     "type": "cliff",
+     "n": 1875000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1809883548,
+     "type": "cliff",
+     "n": 462963,
+     "cats": "insiders"
+    },
+    {
+     "t": 1812394149,
+     "type": "cliff",
+     "n": 1875000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1812513291,
+     "type": "cliff",
+     "n": 462963,
+     "cats": "insiders"
+    },
+    {
+     "t": 1815023892,
+     "type": "cliff",
+     "n": 1875000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1815143034,
+     "type": "cliff",
+     "n": 462963,
+     "cats": "insiders"
+    },
+    {
+     "t": 1817653635,
+     "type": "cliff",
+     "n": 1875000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1817772777,
+     "type": "cliff",
+     "n": 462963,
+     "cats": "insiders"
+    },
+    {
+     "t": 1820283378,
+     "type": "cliff",
+     "n": 1875000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1820402520,
+     "type": "cliff",
+     "n": 462963,
+     "cats": "insiders"
+    },
+    {
+     "t": 1822913121,
+     "type": "cliff",
+     "n": 1875000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1823032263,
+     "type": "cliff",
+     "n": 462963,
+     "cats": "insiders"
+    },
+    {
+     "t": 1825542864,
+     "type": "cliff",
+     "n": 1875000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1825662006,
+     "type": "cliff",
+     "n": 462963,
+     "cats": "insiders"
+    },
+    {
+     "t": 1828172607,
+     "type": "cliff",
+     "n": 1875000,
+     "cats": "insiders"
     }
    ],
    "chain": "ethereum",
@@ -1955,8 +5267,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0xb3999F658C0391d94A37f7FF328F3feC942BcADC",
-   "circSupply": 907186296.2962965,
-   "totalLocked": 92813703.70370352,
+   "circSupply": 925537592.5925927,
+   "totalLocked": 74462407.40740728,
    "maxSupply": 1000000000
   },
   {
@@ -1964,20 +5276,8 @@
    "name": "Orderly",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1781481600,
-     "type": "cliff",
-     "n": 500000,
-     "cats": "farming"
-    },
-    {
-     "t": 1782691200,
-     "type": "cliff",
-     "n": 500000,
-     "cats": "farming"
-    },
     {
      "t": 1783900800,
      "type": "cliff",
@@ -2025,6 +5325,180 @@
      "type": "cliff",
      "n": 500000,
      "cats": "farming"
+    },
+    {
+     "t": 1793577600,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1794787200,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1795996800,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1797206400,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1798416000,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1799625600,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1800835200,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1802044800,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1803254400,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1804464000,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1805673600,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1806883200,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1808092800,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1809302400,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1810512000,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1811721600,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1812931200,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1814140800,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1815350400,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1816560000,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1817769600,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1818979200,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1820188800,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1821398400,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1822608000,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1823817600,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1825027200,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1826236800,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
+    },
+    {
+     "t": 1827446400,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
     }
    ],
    "chain": "ethereum",
@@ -2032,10 +5506,6 @@
    "note": "",
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified.",
-   "token": "ethereum:0xABD4C63d2616A5201454168269031355f4764337",
-   "circSupply": 481106103.08240336,
-   "totalLocked": 518893896.91759664,
-   "maxSupply": 1000000000,
    "tierHistory": {
     "from": "verified",
     "retractedAt": "2026-09-17",
@@ -2236,21 +5706,19 @@
      },
      "stampedMargin": 0.17
     }
-   }
+   },
+   "token": "ethereum:0xABD4C63d2616A5201454168269031355f4764337",
+   "circSupply": 492354232.0834983,
+   "totalLocked": 507645767.9165017,
+   "maxSupply": 1000000000
   },
   {
    "sym": "CARV",
    "name": "CARV",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1781113260,
-     "type": "cliff",
-     "n": 14152035,
-     "cats": "ecosystem+staking"
-    },
     {
      "t": 1783743003,
      "type": "cliff",
@@ -2274,6 +5742,96 @@
      "type": "cliff",
      "n": 48530004,
      "cats": "staking+ecosystem+privateSale+insiders"
+    },
+    {
+     "t": 1794220143,
+     "type": "cliff",
+     "n": 9752226,
+     "cats": "staking+ecosystem"
+    },
+    {
+     "t": 1796849886,
+     "type": "cliff",
+     "n": 4395083,
+     "cats": "staking"
+    },
+    {
+     "t": 1796891718,
+     "type": "cliff",
+     "n": 5357143,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1799479629,
+     "type": "cliff",
+     "n": 9752226,
+     "cats": "staking+ecosystem"
+    },
+    {
+     "t": 1799554203,
+     "type": "cliff",
+     "n": 38777778,
+     "cats": "privateSale+insiders"
+    },
+    {
+     "t": 1802109372,
+     "type": "cliff",
+     "n": 4395083,
+     "cats": "staking"
+    },
+    {
+     "t": 1802151204,
+     "type": "cliff",
+     "n": 5357143,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1804780947,
+     "type": "cliff",
+     "n": 5357143,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1807401600,
+     "type": "cliff",
+     "n": 47431233,
+     "cats": "staking+ecosystem+privateSale+insiders"
+    },
+    {
+     "t": 1810031343,
+     "type": "cliff",
+     "n": 8653455,
+     "cats": "staking+ecosystem"
+    },
+    {
+     "t": 1812661086,
+     "type": "cliff",
+     "n": 8653455,
+     "cats": "staking+ecosystem"
+    },
+    {
+     "t": 1815290829,
+     "type": "cliff",
+     "n": 8653455,
+     "cats": "staking+ecosystem"
+    },
+    {
+     "t": 1817920572,
+     "type": "cliff",
+     "n": 8653455,
+     "cats": "staking+ecosystem"
+    },
+    {
+     "t": 1823212800,
+     "type": "cliff",
+     "n": 2472234,
+     "cats": "staking"
+    },
+    {
+     "t": 1825842543,
+     "type": "cliff",
+     "n": 2472234,
+     "cats": "staking"
     }
    ],
    "chain": "ethereum",
@@ -2282,8 +5840,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0xc08cd26474722ce93f4d0c34d16201461c10aa8c",
-   "circSupply": 720514153.8316613,
-   "totalLocked": 279485846.16833866,
+   "circSupply": 764649074.466582,
+   "totalLocked": 235350925.53341806,
    "maxSupply": 1000000000
   },
   {
@@ -2291,7 +5849,7 @@
    "name": "Yield Basis",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
     {
      "t": 1789430400,
@@ -2307,8 +5865,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 0 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0x01791F726B4103694969820be083196cC7c045fF",
-   "circSupply": 427509263.0176749,
-   "totalLocked": 572490736.9823251,
+   "circSupply": 461906008.81728363,
+   "totalLocked": 538093991.1827164,
    "maxSupply": 1000000000
   },
   {
@@ -2316,12 +5874,19 @@
    "name": "fx Protocol",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
     {
      "t": 1789665978,
      "type": "linear",
      "n": 1377,
+     "cats": "farming",
+     "rd": 365.24
+    },
+    {
+     "t": 1821222904,
+     "type": "linear",
+     "n": 1239,
      "cats": "farming",
      "rd": 365.24
     }
@@ -2332,8 +5897,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0x365accfca291e7d3914637abf1f7635db165bb09",
-   "circSupply": 1290646.521632663,
-   "totalLocked": 710171.1499863232,
+   "circSupply": 1296941.8260036146,
+   "totalLocked": 703875.8456153716,
    "maxSupply": 2000817.6716189862
   },
   {
@@ -2341,14 +5906,8 @@
    "name": "Humanity",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1782280116,
-     "type": "cliff",
-     "n": 292857143,
-     "cats": "insiders+ecosystem+noncirculating+privateSale+staking"
-    },
     {
      "t": 1784909859,
      "type": "cliff",
@@ -2372,6 +5931,84 @@
      "type": "cliff",
      "n": 292857143,
      "cats": "insiders+ecosystem+noncirculating+privateSale+staking"
+    },
+    {
+     "t": 1795428831,
+     "type": "cliff",
+     "n": 292857143,
+     "cats": "insiders+ecosystem+noncirculating+privateSale+staking"
+    },
+    {
+     "t": 1798058574,
+     "type": "cliff",
+     "n": 292857143,
+     "cats": "insiders+ecosystem+noncirculating+privateSale+staking"
+    },
+    {
+     "t": 1800688317,
+     "type": "cliff",
+     "n": 292857143,
+     "cats": "insiders+ecosystem+noncirculating+privateSale+staking"
+    },
+    {
+     "t": 1803318060,
+     "type": "cliff",
+     "n": 292857143,
+     "cats": "insiders+ecosystem+noncirculating+privateSale+staking"
+    },
+    {
+     "t": 1805947803,
+     "type": "cliff",
+     "n": 292857143,
+     "cats": "insiders+ecosystem+noncirculating+privateSale+staking"
+    },
+    {
+     "t": 1808577546,
+     "type": "cliff",
+     "n": 292857143,
+     "cats": "insiders+ecosystem+noncirculating+privateSale+staking"
+    },
+    {
+     "t": 1811207289,
+     "type": "cliff",
+     "n": 292857143,
+     "cats": "insiders+ecosystem+noncirculating+privateSale+staking"
+    },
+    {
+     "t": 1813837032,
+     "type": "cliff",
+     "n": 292857143,
+     "cats": "insiders+ecosystem+noncirculating+privateSale+staking"
+    },
+    {
+     "t": 1816466775,
+     "type": "cliff",
+     "n": 292857143,
+     "cats": "insiders+ecosystem+noncirculating+privateSale+staking"
+    },
+    {
+     "t": 1819096518,
+     "type": "cliff",
+     "n": 292857143,
+     "cats": "insiders+ecosystem+noncirculating+privateSale+staking"
+    },
+    {
+     "t": 1821726261,
+     "type": "cliff",
+     "n": 292857143,
+     "cats": "insiders+ecosystem+noncirculating+privateSale+staking"
+    },
+    {
+     "t": 1824356004,
+     "type": "cliff",
+     "n": 292857143,
+     "cats": "insiders+ecosystem+noncirculating+privateSale+staking"
+    },
+    {
+     "t": 1826985747,
+     "type": "cliff",
+     "n": 105357143,
+     "cats": "ecosystem+noncirculating+staking"
     }
    ],
    "chain": "ethereum",
@@ -2380,8 +6017,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0xe76c5b78f93909d34404e9eb4c1f19e7582a5de1",
-   "circSupply": 3991071428.571429,
-   "totalLocked": 6008928571.428574,
+   "circSupply": 4283928571.4285717,
+   "totalLocked": 5716071428.57143,
    "maxSupply": 10000000000.000002
   },
   {
@@ -2389,14 +6026,8 @@
    "name": "Layer3",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1782781699,
-     "type": "cliff",
-     "n": 45370370,
-     "cats": "insiders"
-    },
     {
      "t": 1785411442,
      "type": "cliff",
@@ -2420,6 +6051,84 @@
      "type": "cliff",
      "n": 45370370,
      "cats": "insiders"
+    },
+    {
+     "t": 1795930414,
+     "type": "cliff",
+     "n": 45370370,
+     "cats": "insiders"
+    },
+    {
+     "t": 1798560157,
+     "type": "cliff",
+     "n": 45370370,
+     "cats": "insiders"
+    },
+    {
+     "t": 1801189900,
+     "type": "cliff",
+     "n": 45370370,
+     "cats": "insiders"
+    },
+    {
+     "t": 1803819643,
+     "type": "cliff",
+     "n": 45370370,
+     "cats": "insiders"
+    },
+    {
+     "t": 1806449386,
+     "type": "cliff",
+     "n": 45370370,
+     "cats": "insiders"
+    },
+    {
+     "t": 1809079129,
+     "type": "cliff",
+     "n": 45370370,
+     "cats": "insiders"
+    },
+    {
+     "t": 1811708872,
+     "type": "cliff",
+     "n": 45370370,
+     "cats": "insiders"
+    },
+    {
+     "t": 1814338615,
+     "type": "cliff",
+     "n": 45370370,
+     "cats": "insiders"
+    },
+    {
+     "t": 1816968358,
+     "type": "cliff",
+     "n": 45370370,
+     "cats": "insiders"
+    },
+    {
+     "t": 1819598101,
+     "type": "cliff",
+     "n": 45370370,
+     "cats": "insiders"
+    },
+    {
+     "t": 1822227844,
+     "type": "cliff",
+     "n": 45370370,
+     "cats": "insiders"
+    },
+    {
+     "t": 1824857587,
+     "type": "cliff",
+     "n": 45370370,
+     "cats": "insiders"
+    },
+    {
+     "t": 1827487330,
+     "type": "cliff",
+     "n": 45370370,
+     "cats": "insiders"
     }
    ],
    "chain": "ethereum",
@@ -2429,8 +6138,8 @@
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified. MECHANISM continuous-claim (2026-10-01): 2367 distinct claimants pull from 0x8E02d37b on 100% of days; best replay 0.25 of 4 index cliffs across 9 parameterisations — a stream, not a cliff",
    "mechanismBasis": "2367 distinct claimants pull from 0x8E02d37b on 100% of days; best replay 0.25 of 4 index cliffs across 9 parameterisations — a stream, not a cliff",
    "token": "ethereum:0x88909D489678dD17aA6D9609F89B0419Bf78FD9a",
-   "circSupply": 912039290.8735347,
-   "totalLocked": 2421294042.1264653,
+   "circSupply": 958449993.4687396,
+   "totalLocked": 2374883339.5312605,
    "maxSupply": 3333333333
   },
   {
@@ -2438,14 +6147,8 @@
    "name": "Renzo",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1782808518,
-     "type": "cliff",
-     "n": 83333333,
-     "cats": "insiders"
-    },
     {
      "t": 1785438261,
      "type": "cliff",
@@ -2469,6 +6172,30 @@
      "type": "cliff",
      "n": 83333333,
      "cats": "insiders"
+    },
+    {
+     "t": 1795957233,
+     "type": "cliff",
+     "n": 83333333,
+     "cats": "insiders"
+    },
+    {
+     "t": 1798586976,
+     "type": "cliff",
+     "n": 83333333,
+     "cats": "insiders"
+    },
+    {
+     "t": 1801216719,
+     "type": "cliff",
+     "n": 83333333,
+     "cats": "insiders"
+    },
+    {
+     "t": 1803846462,
+     "type": "cliff",
+     "n": 83333333,
+     "cats": "insiders"
     }
    ],
    "chain": "ethereum",
@@ -2478,8 +6205,8 @@
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified. MECHANISM index-contradicted (2026-10-01): 0/4 index cliffs (2026-06-30, 2026-07-30, 2026-08-30, 2026-09-29) show a claim cluster from 0x97061282 at any of 9 parameterisations, while the contract clustered 4x off-index (2026-04-30 13.97x/23r, 2026-05-05 8.42x/12r, 2026-05-10 4.76x/11r, 2026-05-25 5.72x/5r) — the listed dates are not where the claims are",
    "mechanismBasis": "0/4 index cliffs (2026-06-30, 2026-07-30, 2026-08-30, 2026-09-29) show a claim cluster from 0x97061282 at any of 9 parameterisations, while the contract clustered 4x off-index (2026-04-30 13.97x/23r, 2026-05-05 8.42x/12r, 2026-05-10 4.76x/11r, 2026-05-25 5.72x/5r) — the listed dates are not where the claims are",
    "token": "ethereum:0x3b50805453023a91a8bf641e279401a0b23fa6f9",
-   "circSupply": 9499999999.99998,
-   "totalLocked": 499999999.9999981,
+   "circSupply": 9583333333.333313,
+   "totalLocked": 416666666.66666603,
    "maxSupply": 9999999999.999979
   },
   {
@@ -2487,14 +6214,8 @@
    "name": "Across",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1782938574,
-     "type": "cliff",
-     "n": 3125000,
-     "cats": "insiders"
-    },
     {
      "t": 1785568317,
      "type": "cliff",
@@ -2518,6 +6239,84 @@
      "type": "cliff",
      "n": 3125000,
      "cats": "insiders"
+    },
+    {
+     "t": 1796087289,
+     "type": "cliff",
+     "n": 3125000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1798717032,
+     "type": "cliff",
+     "n": 3125000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1801346775,
+     "type": "cliff",
+     "n": 3125000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1803976518,
+     "type": "cliff",
+     "n": 3125000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1806606261,
+     "type": "cliff",
+     "n": 3125000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1809236004,
+     "type": "cliff",
+     "n": 3125000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1811865747,
+     "type": "cliff",
+     "n": 3125000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1814495490,
+     "type": "cliff",
+     "n": 3125000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1817125233,
+     "type": "cliff",
+     "n": 3125000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1819754976,
+     "type": "cliff",
+     "n": 3125000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1822384719,
+     "type": "cliff",
+     "n": 3125000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1825014462,
+     "type": "cliff",
+     "n": 3125000,
+     "cats": "insiders"
+    },
+    {
+     "t": 1827644205,
+     "type": "cliff",
+     "n": 3125000,
+     "cats": "insiders"
     }
    ],
    "chain": "ethereum",
@@ -2526,8 +6325,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0x44108f0223a3c3028f5fe7aec7f9bb2e66bef82f",
-   "circSupply": 717871281.211669,
-   "totalLocked": 282128718.78833103,
+   "circSupply": 725754810.159448,
+   "totalLocked": 274245189.840552,
    "maxSupply": 1000000000
   },
   {
@@ -2535,15 +6334,8 @@
    "name": "Centrifuge",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1783004058,
-     "type": "linear",
-     "n": 403800,
-     "cats": "noncirculating",
-     "rd": 30.44
-    },
     {
      "t": 1785633801,
      "type": "linear",
@@ -2564,6 +6356,104 @@
      "n": 406800,
      "cats": "noncirculating",
      "rd": 30.44
+    },
+    {
+     "t": 1793523030,
+     "type": "linear",
+     "n": 407800,
+     "cats": "noncirculating",
+     "rd": 30.44
+    },
+    {
+     "t": 1796152773,
+     "type": "linear",
+     "n": 408800,
+     "cats": "noncirculating",
+     "rd": 30.44
+    },
+    {
+     "t": 1798782516,
+     "type": "linear",
+     "n": 409900,
+     "cats": "noncirculating",
+     "rd": 30.44
+    },
+    {
+     "t": 1801412259,
+     "type": "linear",
+     "n": 410900,
+     "cats": "noncirculating",
+     "rd": 30.44
+    },
+    {
+     "t": 1804042002,
+     "type": "linear",
+     "n": 411900,
+     "cats": "noncirculating",
+     "rd": 30.44
+    },
+    {
+     "t": 1806671745,
+     "type": "linear",
+     "n": 412900,
+     "cats": "noncirculating",
+     "rd": 30.44
+    },
+    {
+     "t": 1809301488,
+     "type": "linear",
+     "n": 414000,
+     "cats": "noncirculating",
+     "rd": 30.44
+    },
+    {
+     "t": 1811931231,
+     "type": "linear",
+     "n": 415000,
+     "cats": "noncirculating",
+     "rd": 30.44
+    },
+    {
+     "t": 1814560974,
+     "type": "linear",
+     "n": 416000,
+     "cats": "noncirculating",
+     "rd": 30.44
+    },
+    {
+     "t": 1817190717,
+     "type": "linear",
+     "n": 417100,
+     "cats": "noncirculating",
+     "rd": 30.44
+    },
+    {
+     "t": 1819820460,
+     "type": "linear",
+     "n": 418100,
+     "cats": "noncirculating",
+     "rd": 30.44
+    },
+    {
+     "t": 1822450203,
+     "type": "linear",
+     "n": 419200,
+     "cats": "noncirculating",
+     "rd": 30.44
+    },
+    {
+     "t": 1825079946,
+     "type": "linear",
+     "n": 420200,
+     "cats": "noncirculating",
+     "rd": 30.44
+    },
+    {
+     "t": 1827709689,
+     "type": "linear",
+     "n": 421300,
+     "cats": "noncirculating",
+     "rd": 30.44
     }
    ],
    "chain": "ethereum",
@@ -2572,8 +6462,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0xcccccccccc33d538dbc2ee4feab0a7a1ff4e8a94",
-   "circSupply": 583910934.7600679,
-   "totalLocked": 107889065.23993206,
+   "circSupply": 590507861.1036798,
+   "totalLocked": 101292138.89632022,
    "maxSupply": 691800000
   },
   {
@@ -2581,14 +6471,8 @@
    "name": "ZORA Protocol",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1782809430,
-     "type": "cliff",
-     "n": 166666667,
-     "cats": "insiders+noncirculating+privateSale"
-    },
     {
      "t": 1785439173,
      "type": "cliff",
@@ -2612,6 +6496,84 @@
      "type": "cliff",
      "n": 166666667,
      "cats": "insiders+noncirculating+privateSale"
+    },
+    {
+     "t": 1795958145,
+     "type": "cliff",
+     "n": 166666667,
+     "cats": "insiders+noncirculating+privateSale"
+    },
+    {
+     "t": 1798587888,
+     "type": "cliff",
+     "n": 166666667,
+     "cats": "insiders+noncirculating+privateSale"
+    },
+    {
+     "t": 1801217631,
+     "type": "cliff",
+     "n": 166666667,
+     "cats": "insiders+noncirculating+privateSale"
+    },
+    {
+     "t": 1803847374,
+     "type": "cliff",
+     "n": 166666667,
+     "cats": "insiders+noncirculating+privateSale"
+    },
+    {
+     "t": 1806477117,
+     "type": "cliff",
+     "n": 166666667,
+     "cats": "insiders+noncirculating+privateSale"
+    },
+    {
+     "t": 1809106860,
+     "type": "cliff",
+     "n": 166666667,
+     "cats": "insiders+noncirculating+privateSale"
+    },
+    {
+     "t": 1811736603,
+     "type": "cliff",
+     "n": 166666667,
+     "cats": "insiders+noncirculating+privateSale"
+    },
+    {
+     "t": 1814366346,
+     "type": "cliff",
+     "n": 166666667,
+     "cats": "insiders+noncirculating+privateSale"
+    },
+    {
+     "t": 1816996089,
+     "type": "cliff",
+     "n": 166666667,
+     "cats": "insiders+noncirculating+privateSale"
+    },
+    {
+     "t": 1819625832,
+     "type": "cliff",
+     "n": 166666667,
+     "cats": "insiders+noncirculating+privateSale"
+    },
+    {
+     "t": 1822255575,
+     "type": "cliff",
+     "n": 166666667,
+     "cats": "insiders+noncirculating+privateSale"
+    },
+    {
+     "t": 1824885318,
+     "type": "cliff",
+     "n": 166666667,
+     "cats": "insiders+noncirculating+privateSale"
+    },
+    {
+     "t": 1827515061,
+     "type": "cliff",
+     "n": 166666667,
+     "cats": "insiders+noncirculating+privateSale"
     }
    ],
    "chain": "base",
@@ -2620,8 +6582,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "base:0x1111111111166b7fe7bd91427724b487980afc69",
-   "circSupply": 5666666666.666667,
-   "totalLocked": 4333333333.333335,
+   "circSupply": 5833333333.333333,
+   "totalLocked": 4166666666.666669,
    "maxSupply": 10000000000.000002
   },
   {
@@ -2629,14 +6591,8 @@
    "name": "Kaito",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1781912688,
-     "type": "cliff",
-     "n": 17597619,
-     "cats": "noncirculating+insiders+privateSale"
-    },
     {
      "t": 1784542431,
      "type": "cliff",
@@ -2660,6 +6616,84 @@
      "type": "cliff",
      "n": 17597619,
      "cats": "noncirculating+insiders+privateSale"
+    },
+    {
+     "t": 1795061403,
+     "type": "cliff",
+     "n": 17597619,
+     "cats": "noncirculating+insiders+privateSale"
+    },
+    {
+     "t": 1797691146,
+     "type": "cliff",
+     "n": 17597619,
+     "cats": "noncirculating+insiders+privateSale"
+    },
+    {
+     "t": 1800320889,
+     "type": "cliff",
+     "n": 17597619,
+     "cats": "noncirculating+insiders+privateSale"
+    },
+    {
+     "t": 1802950632,
+     "type": "cliff",
+     "n": 32597619,
+     "cats": "noncirculating+insiders+privateSale+farming"
+    },
+    {
+     "t": 1805580375,
+     "type": "cliff",
+     "n": 17597619,
+     "cats": "noncirculating+insiders+privateSale"
+    },
+    {
+     "t": 1808210118,
+     "type": "cliff",
+     "n": 17597619,
+     "cats": "noncirculating+insiders+privateSale"
+    },
+    {
+     "t": 1810839861,
+     "type": "cliff",
+     "n": 17597619,
+     "cats": "noncirculating+insiders+privateSale"
+    },
+    {
+     "t": 1813469604,
+     "type": "cliff",
+     "n": 17597619,
+     "cats": "noncirculating+insiders+privateSale"
+    },
+    {
+     "t": 1816099347,
+     "type": "cliff",
+     "n": 17597619,
+     "cats": "noncirculating+insiders+privateSale"
+    },
+    {
+     "t": 1818729090,
+     "type": "cliff",
+     "n": 17597619,
+     "cats": "noncirculating+insiders+privateSale"
+    },
+    {
+     "t": 1821358833,
+     "type": "cliff",
+     "n": 17597619,
+     "cats": "noncirculating+insiders+privateSale"
+    },
+    {
+     "t": 1823988576,
+     "type": "cliff",
+     "n": 17597619,
+     "cats": "noncirculating+insiders+privateSale"
+    },
+    {
+     "t": 1826618319,
+     "type": "cliff",
+     "n": 17597619,
+     "cats": "noncirculating+insiders+privateSale"
     }
    ],
    "chain": "base",
@@ -2668,8 +6702,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "base:0x98d0baa52b2d063e780de12f615f963fe8537553",
-   "circSupply": 477266666.66666675,
-   "totalLocked": 522733333.3333336,
+   "circSupply": 494864285.71428585,
+   "totalLocked": 505135714.2857145,
    "maxSupply": 1000000000.0000004
   },
   {
@@ -2677,20 +6711,8 @@
    "name": "Walrus Protocol",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1782479745,
-     "type": "cliff",
-     "n": 32708333,
-     "cats": "insiders+noncirculating"
-    },
-    {
-     "t": 1782755772,
-     "type": "cliff",
-     "n": 20833333,
-     "cats": "insiders"
-    },
     {
      "t": 1785109488,
      "type": "cliff",
@@ -2738,6 +6760,162 @@
      "type": "cliff",
      "n": 20833333,
      "cats": "insiders"
+    },
+    {
+     "t": 1795628460,
+     "type": "cliff",
+     "n": 32708333,
+     "cats": "insiders+noncirculating"
+    },
+    {
+     "t": 1795904487,
+     "type": "cliff",
+     "n": 20833333,
+     "cats": "insiders"
+    },
+    {
+     "t": 1798258203,
+     "type": "cliff",
+     "n": 32708333,
+     "cats": "insiders+noncirculating"
+    },
+    {
+     "t": 1798534230,
+     "type": "cliff",
+     "n": 20833333,
+     "cats": "insiders"
+    },
+    {
+     "t": 1800887946,
+     "type": "cliff",
+     "n": 32708333,
+     "cats": "insiders+noncirculating"
+    },
+    {
+     "t": 1801163973,
+     "type": "cliff",
+     "n": 20833333,
+     "cats": "insiders"
+    },
+    {
+     "t": 1803517689,
+     "type": "cliff",
+     "n": 32708333,
+     "cats": "insiders+noncirculating"
+    },
+    {
+     "t": 1803793716,
+     "type": "cliff",
+     "n": 20833333,
+     "cats": "insiders"
+    },
+    {
+     "t": 1806147432,
+     "type": "cliff",
+     "n": 32708333,
+     "cats": "insiders+noncirculating"
+    },
+    {
+     "t": 1806423459,
+     "type": "cliff",
+     "n": 20833333,
+     "cats": "insiders"
+    },
+    {
+     "t": 1808777175,
+     "type": "cliff",
+     "n": 32708333,
+     "cats": "insiders+noncirculating"
+    },
+    {
+     "t": 1809053202,
+     "type": "cliff",
+     "n": 20833333,
+     "cats": "insiders"
+    },
+    {
+     "t": 1811406918,
+     "type": "cliff",
+     "n": 32708333,
+     "cats": "insiders+noncirculating"
+    },
+    {
+     "t": 1811682945,
+     "type": "cliff",
+     "n": 20833333,
+     "cats": "insiders"
+    },
+    {
+     "t": 1814036661,
+     "type": "cliff",
+     "n": 32708333,
+     "cats": "insiders+noncirculating"
+    },
+    {
+     "t": 1814312688,
+     "type": "cliff",
+     "n": 20833333,
+     "cats": "insiders"
+    },
+    {
+     "t": 1816666404,
+     "type": "cliff",
+     "n": 32708333,
+     "cats": "insiders+noncirculating"
+    },
+    {
+     "t": 1816942431,
+     "type": "cliff",
+     "n": 20833333,
+     "cats": "insiders"
+    },
+    {
+     "t": 1819296147,
+     "type": "cliff",
+     "n": 32708333,
+     "cats": "insiders+noncirculating"
+    },
+    {
+     "t": 1819572174,
+     "type": "cliff",
+     "n": 20833333,
+     "cats": "insiders"
+    },
+    {
+     "t": 1821925890,
+     "type": "cliff",
+     "n": 32708333,
+     "cats": "insiders+noncirculating"
+    },
+    {
+     "t": 1822201917,
+     "type": "cliff",
+     "n": 20833333,
+     "cats": "insiders"
+    },
+    {
+     "t": 1824555633,
+     "type": "cliff",
+     "n": 32708333,
+     "cats": "insiders+noncirculating"
+    },
+    {
+     "t": 1824831660,
+     "type": "cliff",
+     "n": 20833333,
+     "cats": "insiders"
+    },
+    {
+     "t": 1827185376,
+     "type": "cliff",
+     "n": 32708333,
+     "cats": "insiders+noncirculating"
+    },
+    {
+     "t": 1827461403,
+     "type": "cliff",
+     "n": 20833333,
+     "cats": "insiders"
     }
    ],
    "chain": "unconfirmed",
@@ -2745,8 +6923,8 @@
    "note": "",
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified.",
-   "circSupply": 2574583333.250001,
-   "totalLocked": 2425416666.3099957,
+   "circSupply": 2628124999.910001,
+   "totalLocked": 2371874999.649996,
    "maxSupply": 4999999999.559997
   },
   {
@@ -2754,14 +6932,8 @@
    "name": "Plasma",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1782426087,
-     "type": "cliff",
-     "n": 88888889,
-     "cats": "ecosystem"
-    },
     {
      "t": 1785055830,
      "type": "cliff",
@@ -2785,6 +6957,84 @@
      "type": "cliff",
      "n": 227777778,
      "cats": "ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1795574802,
+     "type": "cliff",
+     "n": 227777778,
+     "cats": "ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1798204545,
+     "type": "cliff",
+     "n": 227777778,
+     "cats": "ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1800834288,
+     "type": "cliff",
+     "n": 227777778,
+     "cats": "ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1803464031,
+     "type": "cliff",
+     "n": 227777778,
+     "cats": "ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1806093774,
+     "type": "cliff",
+     "n": 227777778,
+     "cats": "ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1808723517,
+     "type": "cliff",
+     "n": 227777778,
+     "cats": "ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1811353260,
+     "type": "cliff",
+     "n": 227777778,
+     "cats": "ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1813983003,
+     "type": "cliff",
+     "n": 227777778,
+     "cats": "ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1816612746,
+     "type": "cliff",
+     "n": 227777778,
+     "cats": "ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1819242489,
+     "type": "cliff",
+     "n": 227777778,
+     "cats": "ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1821872232,
+     "type": "cliff",
+     "n": 227777778,
+     "cats": "ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1824501975,
+     "type": "cliff",
+     "n": 227777778,
+     "cats": "ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1827131718,
+     "type": "cliff",
+     "n": 227777778,
+     "cats": "ecosystem+insiders+privateSale"
     }
    ],
    "chain": "unconfirmed",
@@ -2792,8 +7042,8 @@
    "note": "",
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
-   "circSupply": 4533333333.333333,
-   "totalLocked": 5466666666.666667,
+   "circSupply": 4761111111.111111,
+   "totalLocked": 5238888888.888889,
    "maxSupply": 10000000000
   },
   {
@@ -2801,20 +7051,8 @@
    "name": "Aster",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1780963200,
-     "type": "cliff",
-     "n": 95088035,
-     "cats": "airdrop"
-    },
-    {
-     "t": 1782804429,
-     "type": "cliff",
-     "n": 2250000,
-     "cats": "staking"
-    },
     {
      "t": 1785434172,
      "type": "cliff",
@@ -2845,6 +7083,84 @@
      "type": "cliff",
      "n": 2250000,
      "cats": "staking"
+    },
+    {
+     "t": 1795953144,
+     "type": "cliff",
+     "n": 2250000,
+     "cats": "staking"
+    },
+    {
+     "t": 1798582887,
+     "type": "cliff",
+     "n": 2250000,
+     "cats": "staking"
+    },
+    {
+     "t": 1801212630,
+     "type": "cliff",
+     "n": 2250000,
+     "cats": "staking"
+    },
+    {
+     "t": 1803842373,
+     "type": "cliff",
+     "n": 2250000,
+     "cats": "staking"
+    },
+    {
+     "t": 1806472116,
+     "type": "cliff",
+     "n": 2250000,
+     "cats": "staking"
+    },
+    {
+     "t": 1809101859,
+     "type": "cliff",
+     "n": 2250000,
+     "cats": "staking"
+    },
+    {
+     "t": 1811731602,
+     "type": "cliff",
+     "n": 2250000,
+     "cats": "staking"
+    },
+    {
+     "t": 1814361345,
+     "type": "cliff",
+     "n": 2250000,
+     "cats": "staking"
+    },
+    {
+     "t": 1816991088,
+     "type": "cliff",
+     "n": 2250000,
+     "cats": "staking"
+    },
+    {
+     "t": 1819620831,
+     "type": "cliff",
+     "n": 2250000,
+     "cats": "staking"
+    },
+    {
+     "t": 1822250574,
+     "type": "cliff",
+     "n": 2250000,
+     "cats": "staking"
+    },
+    {
+     "t": 1824880317,
+     "type": "cliff",
+     "n": 2250000,
+     "cats": "staking"
+    },
+    {
+     "t": 1827510060,
+     "type": "cliff",
+     "n": 2250000,
+     "cats": "staking"
     }
    ],
    "chain": "bsc",
@@ -2853,8 +7169,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified.",
    "token": "bsc:0x000ae314e2a2172a039b26378814c252734f556a",
-   "circSupply": 2963888784.1963844,
-   "totalLocked": 5036111215.803616,
+   "circSupply": 2976656450.589154,
+   "totalLocked": 5023343549.410847,
    "maxSupply": 8000000000
   },
   {
@@ -2862,14 +7178,8 @@
    "name": "Falcon Finance",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1782755772,
-     "type": "cliff",
-     "n": 95000000,
-     "cats": "ecosystem+airdrop"
-    },
     {
      "t": 1785385515,
      "type": "cliff",
@@ -2899,6 +7209,120 @@
      "type": "cliff",
      "n": 203055556,
      "cats": "ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1795904487,
+     "type": "cliff",
+     "n": 75000000,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1795937229,
+     "type": "cliff",
+     "n": 128055556,
+     "cats": "insiders+privateSale+ecosystem"
+    },
+    {
+     "t": 1798534230,
+     "type": "cliff",
+     "n": 203055556,
+     "cats": "ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1801163973,
+     "type": "cliff",
+     "n": 75000000,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1801196715,
+     "type": "cliff",
+     "n": 128055556,
+     "cats": "insiders+privateSale+ecosystem"
+    },
+    {
+     "t": 1803793716,
+     "type": "cliff",
+     "n": 203055556,
+     "cats": "ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1806423459,
+     "type": "cliff",
+     "n": 75000000,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1806456201,
+     "type": "cliff",
+     "n": 128055556,
+     "cats": "insiders+privateSale+ecosystem"
+    },
+    {
+     "t": 1809053202,
+     "type": "cliff",
+     "n": 203055556,
+     "cats": "ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1811682945,
+     "type": "cliff",
+     "n": 203055556,
+     "cats": "ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1814312688,
+     "type": "cliff",
+     "n": 75000000,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1814345430,
+     "type": "cliff",
+     "n": 128055556,
+     "cats": "insiders+privateSale+ecosystem"
+    },
+    {
+     "t": 1816942431,
+     "type": "cliff",
+     "n": 203055556,
+     "cats": "ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1819572174,
+     "type": "cliff",
+     "n": 75000000,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1819604916,
+     "type": "cliff",
+     "n": 128055556,
+     "cats": "insiders+privateSale+ecosystem"
+    },
+    {
+     "t": 1822201917,
+     "type": "cliff",
+     "n": 203055556,
+     "cats": "ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1824831660,
+     "type": "cliff",
+     "n": 75000000,
+     "cats": "ecosystem"
+    },
+    {
+     "t": 1824864402,
+     "type": "cliff",
+     "n": 128055556,
+     "cats": "insiders+privateSale+ecosystem"
+    },
+    {
+     "t": 1827461403,
+     "type": "cliff",
+     "n": 203055556,
+     "cats": "ecosystem+insiders+privateSale"
     }
    ],
    "chain": "ethereum",
@@ -2907,8 +7331,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0xfa1c09fc8b491b6a4d3ff53a10cad29381b3f949",
-   "circSupply": 3343055555.5555553,
-   "totalLocked": 6656944444.444445,
+   "circSupply": 3546111111.111111,
+   "totalLocked": 6453888888.888889,
    "maxSupply": 10000000000
   },
   {
@@ -2916,18 +7340,36 @@
    "name": "Lista DAO",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
     {
-     "t": 1781955432,
+     "t": 1789844661,
      "type": "cliff",
      "n": 28437500,
      "cats": "noncirculating+farming+insiders"
     },
     {
-     "t": 1789844661,
+     "t": 1797733890,
      "type": "cliff",
      "n": 28437500,
+     "cats": "noncirculating+farming+insiders"
+    },
+    {
+     "t": 1805623119,
+     "type": "cliff",
+     "n": 8437500,
+     "cats": "noncirculating+farming+insiders"
+    },
+    {
+     "t": 1813512348,
+     "type": "cliff",
+     "n": 8437500,
+     "cats": "noncirculating+farming+insiders"
+    },
+    {
+     "t": 1821401577,
+     "type": "cliff",
+     "n": 8437500,
      "cats": "noncirculating+farming+insiders"
     }
    ],
@@ -2937,8 +7379,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "bsc:0xfceb31a79f71ac9cbdcf853519c1b12d379edc46",
-   "circSupply": 575361768.1945348,
-   "totalLocked": 224638231.8054645,
+   "circSupply": 578703211.5701299,
+   "totalLocked": 221296788.4298694,
    "maxSupply": 799999999.9999993
   },
   {
@@ -2946,14 +7388,8 @@
    "name": "StakeStone",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1783084545,
-     "type": "cliff",
-     "n": 21351729,
-     "cats": "privateSale+noncirculating+insiders"
-    },
     {
      "t": 1785714288,
      "type": "cliff",
@@ -2971,6 +7407,90 @@
      "type": "cliff",
      "n": 21351729,
      "cats": "privateSale+noncirculating+insiders"
+    },
+    {
+     "t": 1793603517,
+     "type": "cliff",
+     "n": 21351729,
+     "cats": "privateSale+noncirculating+insiders"
+    },
+    {
+     "t": 1796233260,
+     "type": "cliff",
+     "n": 21351729,
+     "cats": "privateSale+noncirculating+insiders"
+    },
+    {
+     "t": 1798863003,
+     "type": "cliff",
+     "n": 21351729,
+     "cats": "privateSale+noncirculating+insiders"
+    },
+    {
+     "t": 1801492746,
+     "type": "cliff",
+     "n": 21351729,
+     "cats": "privateSale+noncirculating+insiders"
+    },
+    {
+     "t": 1804122489,
+     "type": "cliff",
+     "n": 21351729,
+     "cats": "privateSale+noncirculating+insiders"
+    },
+    {
+     "t": 1806752232,
+     "type": "cliff",
+     "n": 17628812,
+     "cats": "privateSale+noncirculating+insiders"
+    },
+    {
+     "t": 1809381975,
+     "type": "cliff",
+     "n": 20110757,
+     "cats": "privateSale+noncirculating+insiders"
+    },
+    {
+     "t": 1812011718,
+     "type": "cliff",
+     "n": 20110757,
+     "cats": "privateSale+noncirculating+insiders"
+    },
+    {
+     "t": 1814641461,
+     "type": "cliff",
+     "n": 20110757,
+     "cats": "privateSale+noncirculating+insiders"
+    },
+    {
+     "t": 1817271204,
+     "type": "cliff",
+     "n": 20110757,
+     "cats": "privateSale+noncirculating+insiders"
+    },
+    {
+     "t": 1819900947,
+     "type": "cliff",
+     "n": 20110757,
+     "cats": "privateSale+noncirculating+insiders"
+    },
+    {
+     "t": 1822530690,
+     "type": "cliff",
+     "n": 20110757,
+     "cats": "privateSale+noncirculating+insiders"
+    },
+    {
+     "t": 1825160433,
+     "type": "cliff",
+     "n": 20110757,
+     "cats": "privateSale+noncirculating+insiders"
+    },
+    {
+     "t": 1827790176,
+     "type": "cliff",
+     "n": 20110757,
+     "cats": "privateSale+noncirculating+insiders"
     }
    ],
    "chain": "ethereum",
@@ -2979,8 +7499,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0x1d88713b483a8e45cff0e5cd7c2e15e5fab4534d",
-   "circSupply": 436202349.2907801,
-   "totalLocked": 563797650.7092202,
+   "circSupply": 457554078.0141845,
+   "totalLocked": 542445921.9858159,
    "maxSupply": 1000000000.0000004
   },
   {
@@ -2988,14 +7508,8 @@
    "name": "Solv Protocol",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1781777631,
-     "type": "cliff",
-     "n": 186577427,
-     "cats": "noncirculating+ecosystem+insiders+privateSale"
-    },
     {
      "t": 1784407374,
      "type": "cliff",
@@ -3025,6 +7539,84 @@
      "type": "cliff",
      "n": 186577427,
      "cats": "noncirculating+ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1794926346,
+     "type": "cliff",
+     "n": 186577427,
+     "cats": "noncirculating+ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1797556089,
+     "type": "cliff",
+     "n": 154459780,
+     "cats": "noncirculating+ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1800185832,
+     "type": "cliff",
+     "n": 370459780,
+     "cats": "noncirculating+ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1802815575,
+     "type": "cliff",
+     "n": 154459780,
+     "cats": "noncirculating+ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1805445318,
+     "type": "cliff",
+     "n": 154459780,
+     "cats": "noncirculating+ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1808075061,
+     "type": "cliff",
+     "n": 154459780,
+     "cats": "noncirculating+ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1810704804,
+     "type": "cliff",
+     "n": 154459780,
+     "cats": "noncirculating+ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1813334547,
+     "type": "cliff",
+     "n": 154459780,
+     "cats": "noncirculating+ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1815964290,
+     "type": "cliff",
+     "n": 370459780,
+     "cats": "noncirculating+ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1818594033,
+     "type": "cliff",
+     "n": 154459780,
+     "cats": "noncirculating+ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1821223776,
+     "type": "cliff",
+     "n": 154459780,
+     "cats": "noncirculating+ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1823853519,
+     "type": "cliff",
+     "n": 154459780,
+     "cats": "noncirculating+ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1826483262,
+     "type": "cliff",
+     "n": 154459780,
+     "cats": "noncirculating+ecosystem+insiders+privateSale"
     }
    ],
    "chain": "bsc",
@@ -3033,8 +7625,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "bsc:0xabe8e5cabe24cb36df9540088fd7ce1175b9bc52",
-   "circSupply": 5529525300.264971,
-   "totalLocked": 4130474699.735029,
+   "circSupply": 5716102727.503974,
+   "totalLocked": 3943897272.496026,
    "maxSupply": 9660000000
   },
   {
@@ -3042,14 +7634,8 @@
    "name": "Re",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-10-01T20:06",
+   "sourceFetchedAt": "2026-11-02T20:02",
    "sourceEvents": [
-    {
-     "t": 1781740800,
-     "type": "cliff",
-     "n": 166691667,
-     "cats": "airdrop"
-    },
     {
      "t": 1784370543,
      "type": "cliff",
@@ -3073,6 +7659,84 @@
      "type": "cliff",
      "n": 7091667,
      "cats": "airdrop"
+    },
+    {
+     "t": 1794889515,
+     "type": "cliff",
+     "n": 7091667,
+     "cats": "airdrop"
+    },
+    {
+     "t": 1797519258,
+     "type": "cliff",
+     "n": 7091667,
+     "cats": "airdrop"
+    },
+    {
+     "t": 1800149001,
+     "type": "cliff",
+     "n": 7091667,
+     "cats": "airdrop"
+    },
+    {
+     "t": 1802778744,
+     "type": "cliff",
+     "n": 7091667,
+     "cats": "airdrop"
+    },
+    {
+     "t": 1805408487,
+     "type": "cliff",
+     "n": 7091667,
+     "cats": "airdrop"
+    },
+    {
+     "t": 1808038230,
+     "type": "cliff",
+     "n": 7091667,
+     "cats": "airdrop"
+    },
+    {
+     "t": 1810667973,
+     "type": "cliff",
+     "n": 17369444,
+     "cats": "airdrop+privateSale+insiders"
+    },
+    {
+     "t": 1813297716,
+     "type": "cliff",
+     "n": 17369444,
+     "cats": "airdrop+privateSale+insiders"
+    },
+    {
+     "t": 1815927459,
+     "type": "cliff",
+     "n": 17369444,
+     "cats": "airdrop+privateSale+insiders"
+    },
+    {
+     "t": 1818557202,
+     "type": "cliff",
+     "n": 17369444,
+     "cats": "airdrop+privateSale+insiders"
+    },
+    {
+     "t": 1821186945,
+     "type": "cliff",
+     "n": 17369444,
+     "cats": "airdrop+privateSale+insiders"
+    },
+    {
+     "t": 1823816688,
+     "type": "cliff",
+     "n": 17369444,
+     "cats": "airdrop+privateSale+insiders"
+    },
+    {
+     "t": 1826446431,
+     "type": "cliff",
+     "n": 17369444,
+     "cats": "airdrop+privateSale+insiders"
     }
    ],
    "chain": "ethereum",
@@ -3081,8 +7745,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0x526526528f35ac738177003b8773b402b8df8143",
-   "circSupply": 180874999.99999997,
-   "totalLocked": 819125000,
+   "circSupply": 187966666.66666663,
+   "totalLocked": 812033333.3333334,
    "maxSupply": 1000000000
   }
  ]

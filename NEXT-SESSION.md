@@ -188,34 +188,45 @@ wait for the siren if a session is happening anyway.
 the operator's desktop (re-tested 2026-09-07). The in-app browser pane loads it
 normally. So the index arrives by hand, carried as gzip+base64, CRC-checked.
 
-**Route A, since 2026-10-01 (two minutes, nothing transcribed):** on the desktop,
-`node C:\Users\bloom\OneDrive\Desktop\radar-relay\fetch-defillama.mjs` opens the
-installed Chrome HEADED (headless is 403), saves the page's data as
-`defillama-raw.json` with a sha256 sidecar; then the bot's own `trim()` from
-`fetch-unlock-index.js` over the VPS keep-set writes the index in the exact schema,
-and the file goes to the VPS as `data/unlock-index.json` (copy the old one to
-`data/unlock-index.<date>.bak.json` first). Steps 5–8 below are unchanged. The
-2026-10-01 scripts (build-index, chore.sh, diff-keys) are in the session notes.
+**SINCE 2026-11-02 THE LIST PAGE CARRIES NO EVENTS.** `defillama.com/unlocks` still
+lists ~370 protocols, but `pageProps.data[i].events` is gone (0 of 371; 359 of 370 on
+2026-10-01). Events now live only on each protocol's page, `/unlocks/<protocolSlug>`,
+as `props.pageProps.emissions.events` (same fields). Those pages carry the FULL
+schedule — the list carried ~30 days — so the index now reaches the 400-day window
+`trim()` was written for. `fetchIndex()` refuses an event-less list (fixture 96).
 
-**Route B, the browser pane** (about ten minutes) — the fallback if Chrome is blocked:
+**Route A (headed Chrome relay) — BROKEN for this, do not use.** The list-only
+`fetch-defillama.mjs` now returns no events. The per-protocol variant
+(`radar-relay/fetch-defillama-detail.mjs`) loaded ~50 pages in quick succession and
+Cloudflare answered with its interactive challenge ("Just a moment…", HTTP 403) —
+that is bot detection, and getting past it is not an option. Do not re-run it.
 
-1. Browser pane → `https://defillama.com/unlocks`.
-2. Get the keep-set:
-   `node -e "const fs=require('fs');const k=new Set();for(const t of JSON.parse(fs.readFileSync('unlocks.json')).tokens)k.add(t.sym);for(const p of JSON.parse(fs.readFileSync('data/unlock-index.json')).protocols)k.add(p.symbol);console.log(JSON.stringify([...k].sort()))"`
-3. In the pane, run the extractor with that array as `KEEP` — it parses
-   `__NEXT_DATA__.props.pageProps.data`, applies the SAME trim as
-   `fetch-unlock-index.js` (cliff, or linear with `rd>=28`; past 120d / future 400d;
-   merged by `timestamp|type`), encodes compactly, gzips, base64s into `window.__C`.
-   The snippet is in the 2026-09-07 entry of REMAINING-WORK-NOTES.md.
-4. Carry `window.__C` out in slices (`.slice(0,2140)`, etc.), append each to one
-   file, then `node import-unlock-index.js <file.b64>`. A truncated or mistyped
-   slice fails the gzip CRC and writes NOTHING — that is the intended behaviour.
+**Route B, the browser pane, per-protocol (about fifteen minutes) — the working route:**
+
+1. Browser pane → `https://defillama.com/unlocks/celestia` (any protocol page).
+2. Keep-set = every `unlocks.json` sym + every symbol in the current index
+   (`keep-set.mjs`, in the 2026-11-02 entry of REMAINING-WORK-NOTES.md; write it as a file).
+3. In the pane, start the job (2026-11-02 entry of REMAINING-WORK-NOTES.md): it fetches
+   `/unlocks` for metadata and slugs, then each keep-set protocol's page, ONE EVERY 2s,
+   and STOPS (no retry) on 403/429/503 or a "Just a moment" title. It pre-filters only
+   dates (130d back / 410d forward, a superset) — the real trim is the bot's own
+   `trim()` on the desktop. Result: gzip+base64 in `window.__B64`.
+   Two list slugs 404: MOVE is `/unlocks/movement` (list says `ooia`), INJ is
+   `/unlocks/injective-orderbook` (list says `injective`). Check the token matches.
+4. Carry `window.__B64` out in 2,900-char pieces, and have the pane hash each piece
+   (sha-256, first 16 hex) so every piece is checked as it lands — not only by the
+   gzip CRC at the end. Then `build-index.mjs` (same notes entry) runs `trim()` over the
+   keep-set and prints a PARITY line against the previous index (events both captures
+   could see must match). The file goes to the VPS as `data/unlock-index.json`
+   (old one to `data/unlock-index.<date>.bak.json` first).
 5. Re-ingest every sourced row through the write path (never edit unlocks.json):
    `for s in $(node -e "console.log(JSON.parse(require('fs').readFileSync('unlocks.json')).tokens.filter(t=>t.provenance==='sourced').map(t=>t.sym).join(' '))"); do node promote-unlock.js $s provenance=sourced source=defillama; done`
 6. Watch for two things in that output:
    - `[OPERATOR] ... index dates MOVED and this row carries mechanism ...` — re-run
      `detect-cliff-cluster.js` for that symbol and re-stamp; the old verdict was
-     against the old dates.
+     against the old dates. CHECK `pages` in its report before re-stamping: `pages: 0`
+     with `0x/0r` on recent cliffs is a stale cache, not an empty window (2026-11-02:
+     the CLI passed no needUpTo and scored L3/REZ from 2026-09-05 caches; fixed).
    - a stage flip on a row you expected to stay put.
 7. Re-derive and RE-RECORD the pressure floor if it moved:
    `node -e "import('./src/core/unlock-promote.js').then(m=>console.log(JSON.stringify(m.derivePressureFloor(JSON.parse(require('fs').readFileSync('unlocks.json')).tokens))))"`

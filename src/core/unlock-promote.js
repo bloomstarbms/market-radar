@@ -87,10 +87,10 @@ export function sourcedRowProblems(t) {
 // Re-derive with derivePressureFloor() when the index is refreshed; record the new
 // value, do not let the floor move under the rows at runtime.
 export const SOURCED_PRESSURE_FLOOR = {
-  pctOfMaxSupply: 0.0587,
+  pctOfMaxSupply: 0.0597,
   percentile: 15,
   n: 30,
-  basis: '15th percentile of PER-ROW MEDIAN tranche/maxSupply across 30 sourced rows, index 2026-10-01T20:06; statistic is per-row because the floor is APPLIED to a row median. Re-derived 2026-10-01 on the index refresh: was 0.0585 (index 2026-09-15T03:49, re-derived then when ORDER returned to the sourced population; 0.0688/n29 before that). CFG sat exactly AT the old floor and, as that note predicted, the 2026-10-01 re-ingest defaulted it LOGGED -> STANDARD (its median 0.0585 is now below 0.0587 again, so the next re-ingest will return it to LOGGED — a row on the floor flips with the floor; decide its stage by hand if that matters)',
+  basis: '15th percentile of PER-ROW MEDIAN tranche/maxSupply across 30 sourced rows, index 2026-11-02T20:02 (read from per-protocol pages: the list stopped carrying events, and the pages carry the full 400-day schedule where the list carried ~30 days); statistic is per-row because the floor is APPLIED to a row median. Re-derived 2026-11-02 on the index refresh: was 0.0587 (index 2026-10-01T20:06). CFG sits on the floor again: its median is just under 0.0597, it was re-ingested STANDARD under 0.0587 on 2026-11-02, and the next re-ingest under this floor defaults it LOGGED — decide its stage by hand if that matters. History: 0.0587 (2026-10-01) was re-derived from 0.0585 (index 2026-09-15T03:49, re-derived then when ORDER returned to the sourced population; 0.0688/n29 before that). CFG sat exactly AT the old floor and, as that note predicted, the 2026-10-01 re-ingest defaulted it LOGGED -> STANDARD (its median 0.0585 is now below 0.0587 again, so the next re-ingest will return it to LOGGED — a row on the floor flips with the floor; decide its stage by hand if that matters)',
 };
 export const NON_PRESSURE_CATS = ['farming', 'staking'];
 // PER-ROW, not per-event. The first derivation (v0.30.0) took the percentile over

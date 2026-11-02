@@ -189,10 +189,16 @@ if (IS_CLI) (async () => {
     if (past.length < 3) { report[sym] = { sym, verdict: 'TOO-FEW-PAST-CLIFFS', pastCliffs: past.length, at: new Date().toISOString().slice(0, 16) }; console.log(`${sym}: ${past.length} past cliffs — untestable`); continue; }
     const earliest = past[0];
     const untilDate = new Date(new Date(earliest + 'T00:00:00Z').getTime() - 2 * 86400e3).toISOString().slice(0, 10);
+    // THE FETCH MUST REACH THE NEWEST WINDOW IT SCORES (2026-11-02). This call passed no needUpTo,
+    // and cacheSatisfies() reads that as "no requirement": the 2026-11-02 index refresh re-ran L3 and
+    // REZ and both were scored from caches that ended 2026-09-05 (pages 0, no network) — their
+    // 09-29 and 10-29/30 cliffs read 0x/0r, the ORDER class of 2026-09-12 through the one caller the
+    // v0.31.7 fix did not reach. The newest cliff's widest window (7d), capped at today.
+    const needUpTo = [new Date(new Date(past[past.length - 1] + 'T00:00:00Z').getTime() + 7 * 86400e3).toISOString().slice(0, 10), new Date().toISOString().slice(0, 10)].sort()[0];
     const results = [];
     for (const c of cands.slice(0, 2)) {
       const tokenAddr = (() => { try { return JSON.parse(readFileSync('data/resolution-map.json', 'utf8')).syms[sym]?.ethAddr ?? null; } catch { return null; } })();
-      const f = await outflowsWithRecipients(c.addr, sym, untilDate, { deadlineTs: t0 + budget * 1000 - 5000, tokenAddr, maxPages: 400 });
+      const f = await outflowsWithRecipients(c.addr, sym, untilDate, { deadlineTs: t0 + budget * 1000 - 5000, tokenAddr, maxPages: 400, needUpTo });
       if (!f.covered) { results.push({ contract: c.addr, verdict: 'UNVERIFIED', reason: `fetch did not reach ${untilDate} (oldest ${f.oldest}, ${f.pages} pages) — not evidence` }); continue; }
       const grid = [];
       for (const windowDays of [3, 5, 7]) for (const minRatio of [2, 3, 5]) {

@@ -4277,6 +4277,53 @@ console.log('95. CONFLUENCE on a falling price says "selling volume" and the dro
   check('routes.js describes FOLLOW as it is: one daily message, convergence listed in it, no edits', /FOLLOW: 'ONE daily message at 13:00 UTC/.test(routes) && !/a second watcher within 7d EDITS the original/.test(routes));
 }
 
+console.log('96. the unlock list without events is refused, not read as "every source event removed"');
+{
+  // (2026-11-02) defillama.com/unlocks still lists 371 protocols but none carries `events` (359 of
+  // 370 did on 1 Oct). Frozen from the real capture: fixtures/defillama-list-2026-11-02.json.
+  const fx = JSON.parse(readFileSync('fixtures/defillama-list-2026-11-02.json', 'utf8'));
+  const fui = await import('./fetch-unlock-index.js');
+  const cw = await import('./src/sources/calendar/cadence-watch.js');
+  check('the frozen capture is the real one: 371 protocols, none with events', fx.data.length === 371 && fx.withEvents === 0 && fx.data.every((p) => !p.keys.includes('events')));
+  const msg = fui.embedProblem(fx.data);
+  check('embedProblem refuses it and says why (0 of 371 carry events, the embed moved)', /carries events for 0 of 371 protocols — the embed moved/.test(msg || ''), msg);
+  const oct = fx.data.map((p, i) => ({ ...p, events: i < 40 ? [{ timestamp: 1.8e9, unlockType: 'cliff', noOfTokens: [1], category: 'insiders' }] : [] }));
+  check('a list shaped like 1 Oct (events on the protocols) passes', fui.embedProblem(oct) === null);
+  // The hazard the guard closes: without it the count check passes, trim() yields protocols with no
+  // events, and the weekly recheck DEMOTES a real sourced row.
+  const sourced = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens.find((t) => t.provenance === 'sourced' && !t.retired);
+  const empty = fui.trim(fx.data.map((p) => ({ ...p, events: [] })), fx.generatedAtSec, new Set([sourced.sym]));
+  check(`unguarded, the event-less list would DEMOTE a sourced row (${sourced.sym}: "source lists no upcoming batch events")`, cw.sourceRecheckDecision(sourced, empty).action === 'DEMOTE');
+  const prevFetch = globalThis.fetch;
+  let threw = null;
+  try {
+    const html = `<html><script id="__NEXT_DATA__" type="application/json">${JSON.stringify({ props: { pageProps: { data: fx.data, generatedAtSec: fx.generatedAtSec } } })}</script></html>`;
+    globalThis.fetch = async () => ({ status: 200, text: async () => html });
+    await fui.fetchIndex();
+  } catch (e) { threw = e.message; } finally { globalThis.fetch = prevFetch; }
+  check('fetchIndex() on that page throws — so pollSourceRecheck takes its NO-LOOK path and changes nothing', /the embed moved/.test(threw || ''), threw);
+  const src = readFileSync('src/sources/calendar/cadence-watch.js', 'utf8');
+  check('...and pollSourceRecheck still wraps fetchIndex+trim in the try whose catch records NO-LOOK and returns', /try \{\s*const mod = await import\('\.\.\/\.\.\/\.\.\/fetch-unlock-index\.js'\);\s*const \{ data, generatedAtSec \} = await mod\.fetchIndex\(\);[\s\S]{0,200}\} catch \(e\) \{[\s\S]{0,200}NO-LOOK: [\s\S]{0,300}return;/.test(src));
+}
+
+console.log('97. detect-cliff-cluster.js requires its fetch to reach the newest cliff window it scores');
+{
+  // (2026-11-02) The index refresh re-ran L3 and REZ; both were scored from caches that ended
+  // 2026-09-05 (pages 0) because the CLI passed no needUpTo. The real L3 entry's shape, as found:
+  const { cacheSatisfies } = await import('./detect-cliff-cluster.js');
+  const l3 = { byDay: {}, next: '', oldest: '2026-05-27', done: true, at: '2026-09-05T17:36' };
+  check('the 2026-09-05 L3 entry (no coveredTo) does not satisfy the 2026-10-29 cliff window', !cacheSatisfies(l3, '2026-07-28', '2026-11-05'));
+  check('...but with no needUpTo it is accepted — which is why the caller must state one', cacheSatisfies(l3, '2026-07-28', null));
+  const cli = readFileSync('detect-cliff-cluster.js', 'utf8');
+  check('the CLI derives needUpTo from the newest past cliff (+7d, capped at today) and passes it to outflowsWithRecipients',
+    /const needUpTo = \[new Date\(new Date\(past\[past\.length - 1\] \+ 'T00:00:00Z'\)\.getTime\(\) \+ 7 \* 86400e3\)/.test(cli)
+    && /outflowsWithRecipients\(c\.addr, sym, untilDate, \{[^}]*needUpTo \}\)/.test(cli));
+  check('both callers state it: the CLI (above) and the cliff watch, which reaches the fetch through `fetcher`',
+    /fetcher = fetcher \|\| \(await import\('\.\.\/\.\.\/\.\.\/detect-cliff-cluster\.js'\)\)\.outflowsWithRecipients/.test(readFileSync('src/sources/calendar/cadence-watch.js', 'utf8'))
+    && /maxPages: 400, needUpTo: latestEnd \}/.test(readFileSync('src/sources/calendar/cadence-watch.js', 'utf8'))
+    && [...cli.matchAll(/await outflowsWithRecipients\(/g)].length === 1);
+}
+
 // A block that mutes the console and forgets to restore it hides every section header after it.
 check('the suite ends with console.log and console.error as it started (every mute restored)', console.log === OUT && console.error === ERR);
 console.error = origErr;

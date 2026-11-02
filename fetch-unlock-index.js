@@ -36,7 +36,20 @@ export async function fetchIndex() {
   const j = JSON.parse(m[1]);
   const data = j?.props?.pageProps?.data;
   if (!Array.isArray(data) || data.length < 50) throw new Error(`pageProps.data missing or implausibly small (${Array.isArray(data) ? data.length : typeof data}) — index NOT refreshed`);
+  const moved = embedProblem(data);
+  if (moved) throw new Error(moved);
   return { data, generatedAtSec: j.props.pageProps.generatedAtSec };
+}
+
+// THE LIST STOPPED CARRYING EVENTS (2026-11-02). pageProps.data still lists ~370 protocols, but
+// none has an `events` array any more (359 of 370 did on 2026-10-01); events now live only on each
+// protocol's own page. The count check above passes on that page, trim() turns it into an index of
+// protocols with no events, and pollSourceRecheck reads every sourced row as "source lists no
+// upcoming batch events" — a DEMOTE and a DM for each. Today the VPS gets 403, so nothing ran;
+// the day it gets through, this is what stops it. Pure, so the suite holds it.
+export function embedProblem(data) {
+  const withEvents = (data || []).filter((p) => Array.isArray(p?.events) && p.events.length).length;
+  return withEvents < 20 ? `pageProps.data carries events for ${withEvents} of ${(data || []).length} protocols — the embed moved (events are on per-protocol pages since 2026-11); index NOT refreshed` : null;
 }
 
 export function trim(data, generatedAtSec, keep = null) {
