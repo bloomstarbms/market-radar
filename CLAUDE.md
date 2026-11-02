@@ -140,6 +140,21 @@ should have happened first. Three quoting casualties this month (two in
 PUSH-TO-GITHUB.bat, one on the VPS). Anything longer than one flag goes in a file;
 a stop-then-edit-then-start sequence asserts the stop and the edit before the start.
 
+**No heredocs or inline `-e` scripts for edits — not even short ones.** An edit script
+is written with the Write tool, then run. Not `cat > x <<'EOF'`, not `node -e`, not
+`python -c`, not `String.raw` around the old/new text. It failed on quoting twice
+more in v0.37.8–9, both times on scripts short enough to look safe:
+- v0.37.8: an edit to `src/core/telegram.js` held its old/new text in `String.raw`. The
+  backslashes before backticks survived into the match, so it did not match. The inline
+  `node -e` written to fix it broke on quoting too.
+- v0.37.9: a quoted `<<'EOF'` heredoc wrote a script with `\\` collapsed to `\`. Its
+  search strings then held real newlines where `\n` was meant.
+
+The match assertion caught both, so nothing wrong was written. But the time went into
+debugging the shell, not the change. Text that needs exact characters (backslashes,
+backticks, `$`, quotes, CRLF) goes in a file the edit script reads, never into the
+command line.
+
 **And a syntax check is not an execution.** `node --check` passes on an undeclared
 reference inside a function body. After any non-trivial edit, run the thing: the
 suite, or at minimum `node -e "import('./path.js').then(m => m.theFunction(...))"`.
