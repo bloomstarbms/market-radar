@@ -5361,3 +5361,14 @@ console.log(`PARITY (events between ${new Date(lo * 1000).toISOString().slice(0,
 writeFileSync(outF, JSON.stringify(out));
 console.log('wrote', outF);
 ```
+
+L3/REZ AFTER v0.37.10 (deployed 20:27:41Z, VPS suite 1,359 ALL GREEN): re-run under needUpTo, detection only.
+- L3: both contracts UNVERIFIED — eth.blockscout.com did not answer for 0x8E02's history (the
+  desktop's own request timed out at 25s too). Correctly "not evidence". Stamp: the pre-chore one,
+  restored. Retry when Blockscout answers, then re-stamp continuous-claim if the report supports it.
+- REZ: fresh fetch (1 page, data 07-21..10-29): 0/4 index cliffs cluster on REAL data now (09-29
+  0.13x/2r), but the span no longer reaches the Apr-Jun off-index clusters the index-contradicted
+  label rests on, so the stamp cannot be re-earned on this span (and the 10-30 window closes 11-04).
+  Stamp: the pre-chore one, restored. Operator: keep it, or let it lapse to pending.
+- First effect of the refreshed index on the live bot: a 7-day reminder for CARV's 9 Nov cliff
+  (sourced row, 0.98% of max supply). Delivery: operator to confirm.
