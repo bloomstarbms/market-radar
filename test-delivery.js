@@ -27,7 +27,15 @@ const { broadcast, hasRecipients } = await import('./src/core/telegram.js');
 const { dispatch } = await import('./src/core/dispatcher.js');
 
 let failures = 0;
-const check = (name, cond) => { console.log(`  ${cond ? 'PASS' : 'FAIL'}  ${name}`); if (!cond) failures++; };
+// check() prints through the console as it was HERE, not whatever console.log is when it runs: a check
+// inside a muted or capturing block still shows its FAIL line (it always counted, but printed into the
+// void), and its own PASS/FAIL text never lands in a capture a later regex reads. The detail argument
+// is printed on failure (call sites passed it; until 2026-11-02 it was silently dropped).
+const OUT = console.log, ERR = console.error;
+const check = (name, cond, detail) => {
+  OUT(`  ${cond ? 'PASS' : 'FAIL'}  ${name}`);
+  if (!cond) { failures++; if (detail !== undefined && detail !== '') OUT(`        ${String(detail).slice(0, 600)}`); }
+};
 // An account as the follows message renders it (2026-10-31): a link to its X profile, never a bare @handle.
 const XL = (h, n) => `<a href="https://x.com/${h}">${n ?? h}</a>`;
 
@@ -4269,6 +4277,8 @@ console.log('95. CONFLUENCE on a falling price says "selling volume" and the dro
   check('routes.js describes FOLLOW as it is: one daily message, convergence listed in it, no edits', /FOLLOW: 'ONE daily message at 13:00 UTC/.test(routes) && !/a second watcher within 7d EDITS the original/.test(routes));
 }
 
+// A block that mutes the console and forgets to restore it hides every section header after it.
+check('the suite ends with console.log and console.error as it started (every mute restored)', console.log === OUT && console.error === ERR);
 console.error = origErr;
-console.log(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
+OUT(failures === 0 ? '\nALL DELIVERY PROPERTIES HOLD' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

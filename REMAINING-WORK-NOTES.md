@@ -5176,3 +5176,23 @@ Also in this patch (operator decisions on the 31 Oct CONFLUENCE items):
   (the feed stops when the ladder switches CONFLUENCE off) are written at the noteWhale call.
 - The heartbeat's builder-follows line links accounts instead of @handle; routes.js's FOLLOW description
   no longer describes the per-follow edit removed in v0.35.
+
+## 2026-11-02 — A CHECK INSIDE A MUTED BLOCK FAILS OUT LOUD; check() PRINTS ITS DETAIL
+
+Sweep of test-delivery.js for checks run while console.log/console.error was muted or redirected. By
+source: 10 blocks reassign console.log (fixtures 89, 91, 94), and every check() in them already ran
+after the restore (v0.37.8 moved the last ones). At runtime: check() instrumented in a boot-check copy
+to record any call made while either console was not the suite's own — 0 of 1,348. The two child
+fixtures (88, 92) mute themselves but run no check(); they print a RESULT line the parent checks.
+
+That was true by convention only. check() printed through whatever console.log was at call time, so a
+check placed inside a muted block counted its failure but printed the FAIL line into the void, and
+under a capturing redirect its own PASS/FAIL text landed in the capture a later regex reads. Now:
+- check() prints through the console captured at the top of the suite, so muting cannot hide a result;
+- its third argument, passed by many call sites (raw child output, the audit JSON, hbLog) and silently
+  dropped by the two-argument definition, is printed on failure;
+- a last check asserts the suite ends with both consoles as it started (a forgotten restore hides
+  every section header after it), and the final verdict line prints through the captured console.
+Proof (copies): fixture 94's tiny-text check moved inside its void-muted try, the same-text guard
+deleted. Old check(): "1 FAILURE(S)", exit 1, and no FAIL line anywhere in the output. New check():
+"FAIL  a text too short to split, refused as too long, is not resent as it was", exit 1.
