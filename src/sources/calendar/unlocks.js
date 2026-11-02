@@ -92,6 +92,7 @@ function strengthClause(t) {
 // "firing in 7d" means a push is actually SCHEDULED: some (event, lead) pair lands
 // inside the next seven days, using the row's EFFECTIVE stage (pressure rule
 // applied), not its stored one.
+export const firstFive = (xs) => xs.slice(0, 5).join(', ') + (xs.length > 5 ? ` +${xs.length - 5} more` : '');
 export function sourcedFiring(now = Date.now(), tokens = null) {
   if (!tokens) { try { tokens = JSON.parse(readFileSync(join(ROOT, 'unlocks.json'), 'utf8')).tokens; } catch { tokens = []; } }
   const rc = loadRecheckState();
@@ -128,9 +129,12 @@ export function sourcedFiring(now = Date.now(), tokens = null) {
   return { sourced: sourced.length, withFuture: withFuture.length, firing7d: firing.length, firing,
     mute, faultMute,
     freshness: fresh, coverage,
+    // Lists are a count plus the first five (2026-11-02): the 30-row MUTE list made this one line 911
+    // characters of a heartbeat Telegram refused as too long for two days. The full lists stay in
+    // `firing`, `mute` and `faultMute` on this object.
     line: `Sourced firing: ${sourced.length} rows · ${withFuture.length} with a future event · ${firing.length} firing in 7d`
-      + (firing.length ? ` (${firing.join(', ')})` : '')
-      + (faultMute.length ? ` · 🚨 ${faultMute.length} MUTE: ${faultMute.join(', ')}` : '')
+      + (firing.length ? ` (${firstFive(firing)})` : '')
+      + (faultMute.length ? ` · 🚨 ${faultMute.length} MUTE: ${firstFive(faultMute)}` : '')
       + ` · ${mute.length - faultMute.length} silent by design · ${fresh.line} · ${coverage.line}` };
 }
 

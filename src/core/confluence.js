@@ -61,14 +61,14 @@ export async function checkConfluence(pair, { volH1, volAvgH1, priceH1, h1Distru
   if (!e) return false;
   const w = e.tokens[key];
 
-  const chk = dexH1Check({ dexH1: priceH1, dexPrice: Number(pair.priceUsd), cex: cex !== undefined ? cex : cexRef(pair.baseToken.symbol), chainDistrusted: h1Distrusted });
-  const pct = (x) => `${x >= 0 ? '+' : ''}${x}%`;
+  const ref = cex !== undefined ? cex : cexRef(pair.baseToken.symbol);
+  const chk = dexH1Check({ dexH1: priceH1, dexPrice: Number(pair.priceUsd), cex: ref, chainDistrusted: h1Distrusted });
   if (!chk.use && priceH1) {
     const tag = `${e.id}|${key}|${chk.why}`;
     if (!dropLogged.has(tag)) {
       if (dropLogged.size > 5000) dropLogged.clear();
       dropLogged.add(tag);
-      console.log(`  [confluence] ${pair.baseToken.symbol} (${pair.chainId}): DEX 1h ${pct(priceH1)} not used this evaluation — ${chk.reason}`);
+      console.log(`  [confluence] ${pair.baseToken.symbol} (${pair.chainId}): DEX 1h ${priceH1 >= 0 ? '+' : ''}${priceH1}% not used this evaluation — ${chk.reason}`);
     }
   }
   const h1 = chk.use ? priceH1 : 0;
@@ -76,25 +76,41 @@ export async function checkConfluence(pair, { volH1, volAvgH1, priceH1, h1Distru
   const hasActivity = (volRatio >= 2 && volH1 >= 50_000) || h1 >= 8;
   if (!hasActivity) return false;
 
-  const hoursAgo = ((Date.now() - e.ts) / 3600e3).toFixed(1);
-  const batch = Object.keys(e.tokens).length;
-  const fired = await dispatch({
-    source: 'SIG', type: 'CONFLUENCE', severity: 'HIGH', key, cooldownMin: 720,
-    title: `${pair.baseToken.symbol}: accumulation + activity (${pair.chainId})`,
-    lines: [
-      `🔻 ${e.exchange} withdrawal $${fmt(w.usd)} — ${hoursAgo}h ago (coins left the exchange)${batch > 1 ? ` · one tx moving ${batch} watchlist tokens` : ''}`,
-      `📊 Now moving: volume $${fmt(volH1)}/h (${volRatio.toFixed(1)}x avg)${h1 ? ` · price ${pct(h1)} 1h` : priceH1 ? ` · DEX 1h ${pct(priceH1)} set aside (${chk.why})` : ''}`,
-      `Two independent signals aligned — accumulation followed by real activity`,
-      `Price: $${pair.priceUsd} · Liq: $${fmt(pair.liquidity?.usd || 0)}`,
-    ],
-    url: pair.url,
-    track: { kind: 'dex', chainId: pair.chainId, address: pair.baseToken.address, price: Number(pair.priceUsd) || 0 },
-  });
+  const fired = await dispatch(confluenceAlert(pair, e, { volH1, volRatio, priceH1, chk, cex: ref }));
   if (fired) { // consume the EVENT, not the token: one tx fires once, and a later token of it cannot revive it
     const ev = events()[e.id];
     if (ev) { ev.consumed = Date.now(); save(); }
   }
   return fired;
+}
+
+// Pure: the CONFLUENCE alert. SELLING VOLUME (operator decision 2026-11-02, option A): when the activity
+// is volume and the price that passed the CEX check is falling, the call still fires and says so in the
+// title and the figure: "accumulation + selling volume", "into a -9.05% 1h drop". Excluding these was the
+// other option; on 29-30 Oct the two such calls (NMR, RED) had the best 24h outcomes of the 11.
+export function confluenceAlert(pair, e, { volH1, volRatio, priceH1, chk, cex }) {
+  const key = `${pair.chainId}:${pair.baseToken.address}`;
+  const w = e.tokens[key];
+  const h1 = chk.use ? priceH1 : 0;
+  const checked = chk.use ? priceH1 : cex?.h1 ?? null; // the DEX 1h if it passed, else the CEX consensus 1h
+  const selling = !(h1 >= 8) && checked !== null && checked < 0;
+  const hoursAgo = ((Date.now() - e.ts) / 3600e3).toFixed(1);
+  const batch = Object.keys(e.tokens).length;
+  const p2 = (x) => `${x >= 0 ? '+' : ''}${Number(x.toFixed(2))}%`;
+  return {
+    source: 'SIG', type: 'CONFLUENCE', severity: 'HIGH', key, cooldownMin: 720,
+    title: `${pair.baseToken.symbol}: accumulation + ${selling ? 'selling volume' : 'activity'} (${pair.chainId})`,
+    lines: [
+      `🔻 ${e.exchange} withdrawal $${fmt(w.usd)} — ${hoursAgo}h ago (coins left the exchange)${batch > 1 ? ` · one tx moving ${batch} watchlist tokens` : ''}`,
+      selling
+        ? `📊 Selling volume: $${fmt(volH1)}/h (${volRatio.toFixed(1)}x avg) into a ${p2(checked)} 1h drop${chk.use ? '' : ` (CEX ${cex.venues.join('/')}; DEX 1h ${p2(priceH1)} set aside: ${chk.why})`}`
+        : `📊 Now moving: volume $${fmt(volH1)}/h (${volRatio.toFixed(1)}x avg)${h1 ? ` · price ${p2(h1)} 1h` : priceH1 ? ` · DEX 1h ${p2(priceH1)} set aside (${chk.why})` : ''}`,
+      selling ? 'Accumulation, then heavy volume while the price falls' : 'Two independent signals aligned — accumulation followed by real activity',
+      `Price: $${pair.priceUsd} · Liq: $${fmt(pair.liquidity?.usd || 0)}`,
+    ],
+    url: pair.url,
+    track: { kind: 'dex', chainId: pair.chainId, address: pair.baseToken.address, price: Number(pair.priceUsd) || 0 },
+  };
 }
 
 const fmt = (n) => n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'K' : Number(n).toFixed(0);

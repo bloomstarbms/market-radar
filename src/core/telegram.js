@@ -1,6 +1,6 @@
 // Zero-dependency Telegram bot: long-polling for commands, broadcast for alerts.
 import { config } from '../config.js';
-import { addSubscriber, removeSubscriber, getState } from './store.js';
+import { addSubscriber, removeSubscriber, getState, save } from './store.js';
 import { statsSummary } from './outcomes.js';
 
 const API = () => `https://api.telegram.org/bot${config.telegramToken}`;
@@ -58,9 +58,112 @@ async function tg(method, payload) {
   return json;
 }
 
-export async function sendTo(chatId, text) {
-  return tg('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', link_preview_options: NO_PREVIEW });
+// A MESSAGE THAT DOES NOT FIT (2026-11-02). Telegram refused the heartbeat "message is too long" on every
+// poll from 29 Oct 19:34 UTC for two days: the same text, resent each minute, refused each minute, and
+// the only sign was a generic fallback line. Three rules, here at the one place every message leaves:
+//   1. Length is Telegram's count: UTF-16 code units of the text AFTER HTML parsing (a tag counts 0,
+//      an entity 1, an emoji 2). A message over SPLIT_AT goes as parts, split between top-level lines
+//      only (never inside a tag), each labelled (k/n); a single line too long for a part is shortened.
+//   2. A text refused as too long is never sent again: the part is re-split smaller at once, and the
+//      split point drops (persisted, state.tgSplitAt) so every later message starts below it.
+//   3. A message TYPE (its [TAG]) that reaches no recipient for an hour DMs one plain line naming the
+//      type and the error, once, until it is delivered again (state.undeliverable).
+export const TG_LIMIT = 4096;
+export const SPLIT_AT = 4000;   // near the limit: room for the (k/n) label
+const MIN_SPLIT = 1000;
+const ENT = { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" };
+const TAG_RX = /<(\/?)(b|strong|i|em|u|s|code|pre|a)(?:\s[^>]*)?>/;
+export function tgLength(text) {
+  return safeHtml(text).replace(/<[^>]*>/g, '')
+    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => (e[0] === '#' ? String.fromCodePoint(/^#x/i.test(e) ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10)) : ENT[e.toLowerCase()] ?? m)).length;
 }
+// Lines at tag depth 0: the only places a message may be cut.
+function topLevelLines(s) {
+  const out = []; let depth = 0, start = 0;
+  const rx = new RegExp(TAG_RX.source + '|\\n', 'g');
+  for (const m of s.matchAll(rx)) {
+    if (m[0] === '\n') { if (depth === 0) { out.push(s.slice(start, m.index)); start = m.index + 1; } continue; }
+    depth = Math.max(0, depth + (m[1] ? -1 : 1));
+  }
+  out.push(s.slice(start));
+  return out;
+}
+// Shorten one line to max visible units, tags kept whole and closed, ending in "…".
+export function clipLine(line, max) {
+  if (tgLength(line) <= max) return line;
+  let out = '', n = 0; const open = [];
+  const rx = new RegExp(TAG_RX.source + '|&(?:#x[0-9a-f]+|#\\d+|[a-z]+);|[\\s\\S]', 'giu');
+  for (const m of line.matchAll(rx)) {
+    const t = m[0];
+    if (m[2]) { if (m[1]) open.pop(); else open.push(m[2].toLowerCase()); out += t; continue; }
+    const w = t[0] === '&' && t.length > 1 ? 1 : t.length;
+    if (n + w > max - 1) break;
+    out += t; n += w;
+  }
+  return out + '…' + open.reverse().map((x) => `</${x}>`).join('');
+}
+const splitAt = () => { const v = Number(getState().tgSplitAt); return Number.isFinite(v) && v > 0 ? Math.max(MIN_SPLIT, Math.min(SPLIT_AT, v)) : SPLIT_AT; };
+export function splitMessage(text, limit = splitAt()) {
+  const s = safeHtml(text);
+  if (tgLength(s) <= limit) return [s];
+  const lines = topLevelLines(s);
+  const tag = (lines[0].match(/^<b>\[[^\]]*\]<\/b>/) || ['<b>[…]</b>'])[0];
+  const room = limit - 12; // the " (k/n)" label
+  const parts = []; let cur = [];
+  for (let l of lines) {
+    l = clipLine(l, room - tgLength(tag) - 1);
+    if (cur.length && tgLength([...cur, l].join('\n')) > room) { parts.push(cur); cur = [tag]; }
+    cur.push(l);
+  }
+  parts.push(cur);
+  return parts.map(([h, ...rest], i) => [`${h} (${i + 1}/${parts.length})`, ...rest].join('\n'));
+}
+const TOO_LONG = /message is too long/i;
+async function sendPart(chatId, text, depth) {
+  const json = await tg('sendMessage', { chat_id: chatId, text, parse_mode: 'HTML', link_preview_options: NO_PREVIEW });
+  if (json?.ok || !TOO_LONG.test(json?.description || '') || depth >= 3) return { json, parts: json?.ok ? 1 : 0, failed: json?.ok ? null : json };
+  // Refused although our count put it under the split point: the count is wrong for this text. Lower the
+  // split point for every later message, and send THIS text as smaller parts, never as it was.
+  const measured = tgLength(text), lower = Math.max(MIN_SPLIT, Math.floor(measured * 0.75));
+  const st = getState();
+  if (!(Number(st.tgSplitAt) <= lower)) { st.tgSplitAt = lower; save(); }
+  console.error(`[telegram][OPERATOR] refused as too long at ${measured} by our count of Telegram's; re-sent in smaller parts, split point now ${lower}`);
+  const smaller = splitMessage(text, lower);
+  if (smaller.length === 1 && smaller[0] === safeHtml(text)) return { json, parts: 0, failed: json }; // nothing smaller to send: never resend it as it was
+  let first = null, parts = 0, failed = null;
+  for (const p of smaller) {
+    const r = await sendPart(chatId, p, depth + 1);
+    parts += r.parts; if (r.json?.ok) first ??= r.json; if (r.failed) failed = r.failed;
+  }
+  return { json: first ?? failed ?? json, parts, failed };
+}
+// Telegram's answer for the first part delivered (or the failure), ok false if any part failed, and
+// `parts` = how many parts were delivered.
+export async function sendTo(chatId, text) {
+  let first = null, failed = null, parts = 0;
+  for (const p of splitMessage(text)) {
+    const r = await sendPart(chatId, p, 0);
+    parts += r.parts; if (r.json?.ok) first ??= r.json; if (r.failed) failed = r.failed;
+  }
+  if (parts > 1) console.log(`[telegram] sent in ${parts} parts (${kindOf(text)}, ${tgLength(text)} characters by Telegram's count)`);
+  return { ...(first ?? failed ?? {}), ok: !failed && !!first, parts, ...(failed ? { description: failed.description } : {}) };
+}
+export const kindOf = (text) => (String(text).match(/^<b>\[([^\]]+)\]<\/b>/)?.[1] ?? 'untagged message').trim();
+export const UNDELIVERABLE_AFTER_MS = 3600e3;
+// Pure over `map` (state.undeliverable): one delivery outcome for a message type. Returns the alert to
+// send, if any: 'down' once when the type has reached no one for an hour, 'recovered' when it lands again.
+export function noteDelivery(map, kind, delivered, now, error) {
+  const e = map[kind];
+  if (delivered) { if (!e) return null; delete map[kind]; return e.alertedAt ? { alert: 'recovered', kind, since: e.since } : { changed: true }; }
+  if (!e) { map[kind] = { since: now, lastError: error || 'unknown', alertedAt: null }; return { changed: true }; }
+  if (error) e.lastError = error;
+  if (!e.alertedAt && now - e.since >= UNDELIVERABLE_AFTER_MS) { e.alertedAt = now; return { alert: 'down', kind, since: e.since, error: e.lastError }; }
+  return null;
+}
+const dur = (ms) => { const m = Math.round(ms / 60e3); return m < 120 ? `${m} min` : `${(m / 60).toFixed(1)}h`; };
+export const undeliverableText = (v, now) => (v.alert === 'down'
+  ? `[radar] ${v.kind} messages undeliverable for ${dur(now - v.since)} (since ${new Date(v.since).toISOString().slice(0, 16)}Z): ${String(v.error).replace(/\s+/g, ' ').slice(0, 100)}`
+  : `[radar] ${v.kind} messages delivered again after ${dur(now - v.since)}`);
 
 // Returns [{chatId, messageId}] so a follow-up can EDIT this message rather than
 // posting a second one (spec §5.3: one live alert per symbol per direction).
@@ -80,7 +183,7 @@ export async function broadcast(text, { toChannel = true, operatorText } = {}) {
   const ids = [];
   results.forEach((r, i) => {
     const mid = r.status === 'fulfilled' ? r.value?.result?.message_id : null;
-    if (mid) ids.push({ chatId: targets[i], messageId: mid });
+    if (mid) ids.push({ chatId: targets[i], messageId: mid, parts: r.value?.parts ?? 1 });
     if (mid && targets[i] === config.telegramChannel) notePublicPush();
     else if (r.status === 'fulfilled' && targets[i] === config.telegramChannel)
       console.error('[telegram][OPERATOR] channel post failed — is the bot still admin of ' + config.telegramChannel + '?');
@@ -103,6 +206,18 @@ export async function broadcast(text, { toChannel = true, operatorText } = {}) {
   } else if (ids.length && failStreak) {
     console.log(`[telegram] delivery recovered after ${failStreak} failed broadcast(s)`);
     failStreak = 0; failSince = 0;
+  }
+  // Per message TYPE: reached no one for an hour -> one plain DM line, once, until it lands again.
+  if (targets.length) {
+    const st = getState(), now = Date.now();
+    const err = results.map((r) => (r.status === 'rejected' ? String(r.reason?.message || r.reason) : r.value?.ok === false ? r.value?.description : null)).find(Boolean);
+    const v = noteDelivery((st.undeliverable ??= {}), kindOf(text), ids.length > 0, now, err);
+    if (v) save();
+    if (v?.alert) {
+      const line = undeliverableText(v, now);
+      console.error(`[telegram][OPERATOR] ${line}`);
+      await Promise.allSettled([...subs].map((id) => sendPlain(id, line)));
+    }
   }
   return ids;
 }
@@ -131,6 +246,9 @@ export function hasRecipients(toChannel = true) {
 // the edit (message too old), so the dispatcher logged the wrong diagnosis.
 export async function editBroadcast(messageIds, text) {
   if (!messageIds?.length) return { ok: false, networkDown: false };
+  // An edit cannot be split. Over the split point it is not attempted: the caller re-sends, and the
+  // re-send goes in parts (a text Telegram would refuse is never sent).
+  if (tgLength(text) > splitAt()) { console.log(`[telegram] edit not attempted: ${tgLength(text)} characters by Telegram's count; the caller re-sends it in parts`); return { ok: false, networkDown: false, tooLong: true }; }
   const res = await Promise.allSettled(messageIds.map(({ chatId, messageId }) =>
     tg('editMessageText', {
       chat_id: chatId, message_id: messageId, text,

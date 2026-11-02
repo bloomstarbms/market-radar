@@ -3324,12 +3324,12 @@ console.log('82. builder follows: baseline silent, ONE daily message (convergenc
     const st300 = JSON.parse(JSON.stringify(st)), api300 = mkApi({ ...api.pages, toly: [...mk(300, 50000), ...api.pages.toly] }, ids);
     const h300 = harness(api300, st300, T0 + 8 * 3600e3), r300 = await h300.run();
     check('300 new follows → the 10-page cap is hit: 10 pages, 200 recorded, saturation flagged and on the heartbeat', tolyLog(api300).length === 10 && h300.rows.filter((x) => x.watcher === 'toly').length === 200 && r300.saturated.includes('toly')
-      && /⚠️ 1 saturated window\(s\) in the last look, 10-page cap hit: @toly — follows beyond 200 may have been missed/.test(followStatus(st300, T0 + 8 * 3600e3, { cfgResult: { ok: true, cfg }, key: 'k', price }).line));
+      && /⚠️ 1 saturated window\(s\) in the last look, 10-page cap hit: <a href="https:\/\/x\.com\/toly">toly<\/a> — follows beyond 200 may have been missed/.test(followStatus(st300, T0 + 8 * 3600e3, { cfgResult: { ok: true, cfg }, key: 'k', price }).line));
     const stF = JSON.parse(JSON.stringify(st)), apiF = mkApi({ ...api.pages, toly: [...mk(45, 60000), ...api.pages.toly] }, ids);
     const realF = apiF.fetchJson; apiF.fetchJson = async (url) => (/cursor=20$/.test(url) ? { status: 502, json: null } : realF(url));
     const hF = harness(apiF, stF, T0 + 8 * 3600e3), rF = await hF.run();
     check('a page that fails mid-overflow is an INCOMPLETE window, flagged as such and not as saturation; the 20 already read are kept', rF.incomplete.includes('toly') && rF.saturated.length === 0 && hF.rows.filter((x) => x.watcher === 'toly').length === 20
-      && /⚠️ 1 incomplete window\(s\) in the last look: @toly \(page 2 failed \(http\)\)/.test(followStatus(stF, T0 + 8 * 3600e3, { cfgResult: { ok: true, cfg }, key: 'k', price }).line));
+      && /⚠️ 1 incomplete window\(s\) in the last look: <a href="https:\/\/x\.com\/toly">toly<\/a> \(page 2 failed \(http\)\)/.test(followStatus(stF, T0 + 8 * 3600e3, { cfgResult: { ok: true, cfg }, key: 'k', price }).line));
     const stE = JSON.parse(JSON.stringify(st)), apiE = mkApi({ ...api.pages, toly: mk(20, 70000) }, ids);
     const rE = await harness(apiE, stE, T0 + 8 * 3600e3).run();
     check('a full page of new IDs where the list ENDS (no next page) reads one page and flags nothing', tolyLog(apiE).length === 1 && rE.saturated.length === 0 && rE.incomplete.length === 0);
@@ -3720,82 +3720,82 @@ console.log('86. the boot self-test is hermetic against the 24h budget: a full b
   check('index.js: the hermetic wrapper injects the spend alongside multipliers and the ladder', /const hermetic = \(fn\) => b\.withLadder\(\{\}, \(\) => b\.withMultipliers\(SYN_MULT, \(\) => b\.withSpent\(0, fn\)\)\)/.test(readFileSync('src/index.js', 'utf8')));
 }
 
-console.log('87. builder follows twice daily: the 01:00 look holds, the 13:00 look sends ONE message with both looks\' follows, nothing twice');
-{
-  const BF = await import('./src/sources/social/builder-follows.js');
-  const { followCycle, checkFollowConfig } = BF;
-  const REAL = JSON.parse(readFileSync('fixtures/twitterapi-followings-2026-10-27.json', 'utf8'));
-  const at = (d, hh, mm = 0) => Date.UTC(2026, 10, d, hh, mm); // November 2026
-  const U = (id, h, o = {}) => ({ ...REAL.followings[0], id: String(id), screen_name: h, userName: h, created_at: new Date(at(1, 0) - (o.age ?? 3) * 86400e3).toUTCString(),
-    followers_count: o.followers ?? 412, description: 'Onchain perps for everyone', url: 'https://newproject.xyz' });
-  const filler = (base) => Array.from({ length: 30 }, (_, i) => U(base + i, `old${base + i}`, { age: 3000, followers: 90000 }));
-  const cfg = checkFollowConfig({ accounts: [{ handle: 'toly', kind: 'founder', id: '1001' }, { handle: 'mert', kind: 'founder', id: '1002' }], capUsd: 40, approved: '2026-10-21' }).cfg;
-  const price = { measuredAt: '2026-10-21T12:00:00Z', basis: 'fixture', credits: { followings20: 60, followings200: 200, userInfo: 18, batchPerUser: 18, myInfo: 0 } };
-  const mk = () => {
-    const api = { pages: { toly: filler(5000), mert: filler(6000) }, status: 200, calls: 0 };
-    api.fetchJson = async (url) => {
-      api.calls++;
-      if (api.status !== 200) return { status: api.status, json: { message: 'API Key is invalid' } };
-      const u = new URL(url);
-      if (u.pathname === '/twitter/user/batch_info_by_ids') return { status: 200, json: { status: 'success', users: u.searchParams.get('userIds').split(',').map((id) => ({ id, userName: id === '1001' ? 'toly' : 'mert' })) } };
-      const all = api.pages[u.searchParams.get('userName')] ?? [], size = Number(u.searchParams.get('pageSize'));
-      return { status: 200, json: { status: 'success', followings: all.slice(0, size), has_next_page: false, next_cursor: '' } };
-    };
-    return api;
-  };
-  const look = async (api, state, now, deliver) => {
-    const sent = [], rows = [];
-    const r = await followCycle(state, { cfg, price, key: 'k', now, deliver, fetchJson: api.fetchJson, sleep: async () => {},
-      dispatch: async (a) => { sent.push(a); return true; }, dm: async () => true, record: (x) => rows.push(x), warn: async () => {} });
-    return { r, sent, rows };
-  };
-  const restart = (s) => JSON.parse(JSON.stringify(s)); // what save() then load() hands the next look
-
-  // THE CASE: baseline the day before; 01:00 one new follow (toly -> @alpha); 13:00 one more (mert -> @beta).
-  const api = mk();
-  let st = {};
-  await look(api, st, at(1, 13), true);
-  api.pages.toly = [U(701, 'alpha'), ...api.pages.toly];
-  const night = await look(api, st, at(2, 1), BF.deliverNow(at(2, 1, 2), st.follows.held));
-  check('01:00: the new follow is detected and recorded once, nothing is sent, and it is held in state for 13:00', night.r.newFollows === 1 && night.sent.length === 0 && night.rows.length === 1 && night.rows[0].action === 'queued for the daily message'
-    && night.r.held === 1 && st.follows.held?.entries?.length === 1 && st.follows.held.since === at(2, 1));
-  st = restart(st); // a restart between the looks: the held entry is in state, not in memory
-  api.pages.mert = [U(702, 'beta'), ...api.pages.mert];
-  const noon = await look(api, st, at(2, 13), BF.deliverNow(at(2, 13, 2), st.follows.held));
-  const m = noon.sent[0], L = m?.lines ?? [];
-  check('13:00: ONE message carrying both looks\' follows', noon.sent.length === 1 && m.title === '2 Nov · 2 new accounts followed' && m.dedupeKey === 'FOLLOWS:2026-11-02' && noon.r.listed === 2);
-  check('each follow appears exactly once: @alpha (from 01:00) and @beta (from 13:00)', L.filter((l) => l === `<b>${XL('alpha')} — followed by ${XL('toly')} (founder)</b>`).length === 1 && L.filter((l) => l === `<b>${XL('beta')} — followed by ${XL('mert')} (founder)</b>`).length === 1 && L.filter((l) => /^<b><a href=/.test(l)).length === 2);
-  check('the 01:00 follow is not detected again at 13:00 (still on toly\'s newest page): only @beta is new, recorded once', noon.r.newFollows === 1 && noon.rows.length === 1 && noon.rows[0].target === 'beta');
-  check('after the message nothing is held, both are listed in the convergence history, and the day counts 2 new · 2 listed', st.follows.held === null && !!st.follows.alerted['701'] && !!st.follows.alerted['702'] && st.follows.daily['2026-11-02'].new === 2 && st.follows.daily['2026-11-02'].alerted === 2);
-  const next = await look(api, st, at(3, 1), BF.deliverNow(at(3, 1, 2), st.follows.held));
-  check('the next 01:00 look, same pages: no new follows, nothing held, nothing sent', next.r.newFollows === 0 && next.sent.length === 0 && st.follows.held === null);
-
-  // CONVERGENCE ACROSS THE TWO LOOKS: toly at 01:00, mert at 13:00, the same account -> one entry naming both.
-  {
-    const a2 = mk(); let s2 = {};
-    await look(a2, s2, at(1, 13), true);
-    a2.pages.toly = [U(801, 'gamma'), ...a2.pages.toly];
-    await look(a2, s2, at(2, 1), false); s2 = restart(s2);
-    a2.pages.mert = [U(801, 'gamma'), ...a2.pages.mert];
-    const n2 = await look(a2, s2, at(2, 13), true), L2 = n2.sent[0]?.lines ?? [];
-    check('the same account followed at 01:00 by one watcher and at 13:00 by another: ONE convergence entry naming both, listed once', n2.sent.length === 1 && L2.filter((l) => /^<b><a href="https:\/\/x\.com\/gamma"/.test(l)).length === 1 && L2[0] === `<b>${XL('gamma')} — followed by ${XL('toly')} (founder), ${XL('mert')} (founder)</b>` && / · 1 by more than one watched account$/.test(n2.sent[0].title));
-  }
-  // A 13:00 look that fails still delivers what 01:00 held (the message is built on every exit).
-  {
-    const a3 = mk(); let s3 = {};
-    await look(a3, s3, at(1, 13), true);
-    a3.pages.toly = [U(901, 'delta'), ...a3.pages.toly];
-    await look(a3, s3, at(2, 1), false); s3 = restart(s3);
-    a3.status = 401;
-    const n3 = await look(a3, s3, at(2, 13), true);
-    check('a 13:00 look that fails on the key still sends the 01:00 follow, once, and flags the failure', n3.r.status === 'failed' && n3.sent.length === 1 && (n3.sent[0].lines ?? []).filter((l) => /^<b><a href="https:\/\/x\.com\/delta"/.test(l)).length === 1 && s3.follows.held === null && !!s3.follows.failingSince);
-  }
-  // A missed 13:00 (bot down 12:00 to 02:00): the next look delivers the held entries rather than holding them another day.
-  check('missed 13:00: the 02:00 catch-up look on the next day delivers a hold from the previous 01:00', BF.lookDue(at(3, 2), at(2, 1, 1)) && BF.deliverNow(at(3, 2), { since: at(2, 1, 1) }));
-  // Cost of the second look: one page per watched account, the same as the first.
-  check('each look costs one newest page per watched account (no extra paging on an ordinary look)', noon.r.calls === 2 && night.r.calls === 2);
-}
-
+console.log('87. builder follows twice daily: the 01:00 look holds, the 13:00 look sends ONE message with both looks\' follows, nothing twice');
+{
+  const BF = await import('./src/sources/social/builder-follows.js');
+  const { followCycle, checkFollowConfig } = BF;
+  const REAL = JSON.parse(readFileSync('fixtures/twitterapi-followings-2026-10-27.json', 'utf8'));
+  const at = (d, hh, mm = 0) => Date.UTC(2026, 10, d, hh, mm); // November 2026
+  const U = (id, h, o = {}) => ({ ...REAL.followings[0], id: String(id), screen_name: h, userName: h, created_at: new Date(at(1, 0) - (o.age ?? 3) * 86400e3).toUTCString(),
+    followers_count: o.followers ?? 412, description: 'Onchain perps for everyone', url: 'https://newproject.xyz' });
+  const filler = (base) => Array.from({ length: 30 }, (_, i) => U(base + i, `old${base + i}`, { age: 3000, followers: 90000 }));
+  const cfg = checkFollowConfig({ accounts: [{ handle: 'toly', kind: 'founder', id: '1001' }, { handle: 'mert', kind: 'founder', id: '1002' }], capUsd: 40, approved: '2026-10-21' }).cfg;
+  const price = { measuredAt: '2026-10-21T12:00:00Z', basis: 'fixture', credits: { followings20: 60, followings200: 200, userInfo: 18, batchPerUser: 18, myInfo: 0 } };
+  const mk = () => {
+    const api = { pages: { toly: filler(5000), mert: filler(6000) }, status: 200, calls: 0 };
+    api.fetchJson = async (url) => {
+      api.calls++;
+      if (api.status !== 200) return { status: api.status, json: { message: 'API Key is invalid' } };
+      const u = new URL(url);
+      if (u.pathname === '/twitter/user/batch_info_by_ids') return { status: 200, json: { status: 'success', users: u.searchParams.get('userIds').split(',').map((id) => ({ id, userName: id === '1001' ? 'toly' : 'mert' })) } };
+      const all = api.pages[u.searchParams.get('userName')] ?? [], size = Number(u.searchParams.get('pageSize'));
+      return { status: 200, json: { status: 'success', followings: all.slice(0, size), has_next_page: false, next_cursor: '' } };
+    };
+    return api;
+  };
+  const look = async (api, state, now, deliver) => {
+    const sent = [], rows = [];
+    const r = await followCycle(state, { cfg, price, key: 'k', now, deliver, fetchJson: api.fetchJson, sleep: async () => {},
+      dispatch: async (a) => { sent.push(a); return true; }, dm: async () => true, record: (x) => rows.push(x), warn: async () => {} });
+    return { r, sent, rows };
+  };
+  const restart = (s) => JSON.parse(JSON.stringify(s)); // what save() then load() hands the next look
+
+  // THE CASE: baseline the day before; 01:00 one new follow (toly -> @alpha); 13:00 one more (mert -> @beta).
+  const api = mk();
+  let st = {};
+  await look(api, st, at(1, 13), true);
+  api.pages.toly = [U(701, 'alpha'), ...api.pages.toly];
+  const night = await look(api, st, at(2, 1), BF.deliverNow(at(2, 1, 2), st.follows.held));
+  check('01:00: the new follow is detected and recorded once, nothing is sent, and it is held in state for 13:00', night.r.newFollows === 1 && night.sent.length === 0 && night.rows.length === 1 && night.rows[0].action === 'queued for the daily message'
+    && night.r.held === 1 && st.follows.held?.entries?.length === 1 && st.follows.held.since === at(2, 1));
+  st = restart(st); // a restart between the looks: the held entry is in state, not in memory
+  api.pages.mert = [U(702, 'beta'), ...api.pages.mert];
+  const noon = await look(api, st, at(2, 13), BF.deliverNow(at(2, 13, 2), st.follows.held));
+  const m = noon.sent[0], L = m?.lines ?? [];
+  check('13:00: ONE message carrying both looks\' follows', noon.sent.length === 1 && m.title === '2 Nov · 2 new accounts followed' && m.dedupeKey === 'FOLLOWS:2026-11-02' && noon.r.listed === 2);
+  check('each follow appears exactly once: @alpha (from 01:00) and @beta (from 13:00)', L.filter((l) => l === `<b>${XL('alpha')} — followed by ${XL('toly')} (founder)</b>`).length === 1 && L.filter((l) => l === `<b>${XL('beta')} — followed by ${XL('mert')} (founder)</b>`).length === 1 && L.filter((l) => /^<b><a href=/.test(l)).length === 2);
+  check('the 01:00 follow is not detected again at 13:00 (still on toly\'s newest page): only @beta is new, recorded once', noon.r.newFollows === 1 && noon.rows.length === 1 && noon.rows[0].target === 'beta');
+  check('after the message nothing is held, both are listed in the convergence history, and the day counts 2 new · 2 listed', st.follows.held === null && !!st.follows.alerted['701'] && !!st.follows.alerted['702'] && st.follows.daily['2026-11-02'].new === 2 && st.follows.daily['2026-11-02'].alerted === 2);
+  const next = await look(api, st, at(3, 1), BF.deliverNow(at(3, 1, 2), st.follows.held));
+  check('the next 01:00 look, same pages: no new follows, nothing held, nothing sent', next.r.newFollows === 0 && next.sent.length === 0 && st.follows.held === null);
+
+  // CONVERGENCE ACROSS THE TWO LOOKS: toly at 01:00, mert at 13:00, the same account -> one entry naming both.
+  {
+    const a2 = mk(); let s2 = {};
+    await look(a2, s2, at(1, 13), true);
+    a2.pages.toly = [U(801, 'gamma'), ...a2.pages.toly];
+    await look(a2, s2, at(2, 1), false); s2 = restart(s2);
+    a2.pages.mert = [U(801, 'gamma'), ...a2.pages.mert];
+    const n2 = await look(a2, s2, at(2, 13), true), L2 = n2.sent[0]?.lines ?? [];
+    check('the same account followed at 01:00 by one watcher and at 13:00 by another: ONE convergence entry naming both, listed once', n2.sent.length === 1 && L2.filter((l) => /^<b><a href="https:\/\/x\.com\/gamma"/.test(l)).length === 1 && L2[0] === `<b>${XL('gamma')} — followed by ${XL('toly')} (founder), ${XL('mert')} (founder)</b>` && / · 1 by more than one watched account$/.test(n2.sent[0].title));
+  }
+  // A 13:00 look that fails still delivers what 01:00 held (the message is built on every exit).
+  {
+    const a3 = mk(); let s3 = {};
+    await look(a3, s3, at(1, 13), true);
+    a3.pages.toly = [U(901, 'delta'), ...a3.pages.toly];
+    await look(a3, s3, at(2, 1), false); s3 = restart(s3);
+    a3.status = 401;
+    const n3 = await look(a3, s3, at(2, 13), true);
+    check('a 13:00 look that fails on the key still sends the 01:00 follow, once, and flags the failure', n3.r.status === 'failed' && n3.sent.length === 1 && (n3.sent[0].lines ?? []).filter((l) => /^<b><a href="https:\/\/x\.com\/delta"/.test(l)).length === 1 && s3.follows.held === null && !!s3.follows.failingSince);
+  }
+  // A missed 13:00 (bot down 12:00 to 02:00): the next look delivers the held entries rather than holding them another day.
+  check('missed 13:00: the 02:00 catch-up look on the next day delivers a hold from the previous 01:00', BF.lookDue(at(3, 2), at(2, 1, 1)) && BF.deliverNow(at(3, 2), { since: at(2, 1, 1) }));
+  // Cost of the second look: one page per watched account, the same as the first.
+  check('each look costs one newest page per watched account (no extra paging on an ordinary look)', noon.r.calls === 2 && night.r.calls === 2);
+}
+
 console.log('88. every budget entry is accounted for by an outcomes row: a call that spends a slot is a call that can be judged');
 {
   // (2026-10-30) The 20:59:23.793 UTC slot on 29 Oct was spent by a MULTIEX call (Q, B 72) that carried
@@ -4102,6 +4102,171 @@ console.log('93. builder follows: every account is a link to its X profile, neve
   const got = [];
   await bf.deliverDigest(st93, { dispatch: async (a) => { got.push(a); return true; }, now: at });
   check('a delivery retry sends the stored linked lines unchanged', got.length === 1 && got[0].lines[0] === `<b>${m.title}</b>` && wellFormed(got[0].lines.join('\n')));
+}
+
+console.log('94. a message near Telegram\'s limit goes in parts, a text refused as too long is never sent again, and a type undeliverable for an hour says so');
+{
+  // (2026-11-02) The heartbeat was refused "message is too long" on every poll from 29 Oct 19:34 UTC for
+  // two days, the same text each time; the only sign was a generic fallback line.
+  const tgm = await import('./src/core/telegram.js');
+  const { formatAlert } = await import('./src/core/dispatcher.js');
+  const tel = await import('./src/core/telemetry.js');
+  const bf = await import('./src/sources/social/builder-follows.js');
+  const E = await import('./src/sources/etf/flows.js');
+  const U = await import('./src/sources/calendar/unlocks.js');
+  const st = getState();
+  const savedSplit = st.tgSplitAt, savedSubs = st.subscribers, savedUnd = st.undeliverable, savedHb = st.lastHeartbeatTs;
+  delete st.tgSplitAt;
+  const bal = (t) => ['a', 'b', 'i', 'pre', 'code'].every((x) => (t.match(new RegExp(`<${x}[ >]`, 'g')) || []).length === (t.match(new RegExp(`</${x}>`, 'g')) || []).length);
+  // Telegram's count: UTF-16 units of the text after HTML parsing.
+  check('tgLength: tags count 0, an entity 1, an emoji 2, a stray < 1', tgm.tgLength('<b>a</b> &amp; 😀') === 6 && tgm.tgLength('x < y') === 5 && tgm.tgLength('<a href="https://x.com/h">name</a>') === 4);
+  const HB = formatAlert({ source: 'SYS', type: 'HEARTBEAT', severity: 'LOW', title: 'alive 1.0h', lines: [] }).split('\n')[0];
+  const KIND = tgm.kindOf(HB);
+  const big = [HB, ...Array.from({ length: 220 }, (_, i) => `• <b>line ${i}</b> <a href="https://x.com/h${i}">name ${i}</a> ${'x'.repeat(40)}`)].join('\n');
+  const parts = tgm.splitMessage(big);
+  check('a message of ' + tgm.tgLength(big) + ' goes in parts: each under 4,096 by Telegram\'s count and each with whole tags', parts.length >= 3 && parts.every((p) => tgm.tgLength(p) <= 4096 && bal(p)));
+  check('...split between lines only: the parts\' lines, labels and continuation headers removed, are the original lines in order',
+    parts.flatMap((p, i) => { const ls = p.split('\n'); return i === 0 ? [ls[0].replace(/ \(1\/\d+\)$/, ''), ...ls.slice(1)] : ls.slice(1); }).join('\n') === big);
+  check('...labelled: part 1 keeps the original first line + (1/n), each later part opens with the type tag + (k/n)', parts[0].startsWith(HB + ` (1/${parts.length})`) && parts.slice(1).every((p, i) => p.startsWith(`${HB.match(/^<b>\[[^\]]*\]<\/b>/)[0]} (${i + 2}/${parts.length})`)));
+  const longLine = `${HB}\n• <b>${'y'.repeat(9000)}</b>`;
+  const lp = tgm.splitMessage(longLine);
+  check('a single line too long for any part is shortened with "…", its tags closed', lp.every((p) => tgm.tgLength(p) <= 4096 && bal(p)) && lp.some((p) => /…<\/b>$/.test(p)));
+  check('a newline inside <pre> is never a split point', tgm.splitMessage(`${HB}\n<pre>${'a'.repeat(3000)}\n${'b'.repeat(500)}</pre>\n${'c'.repeat(3000)}`).every((p) => bal(p)));
+  check('a message under the split point is sent as it is, one part', tgm.splitMessage(`${HB}\nshort`).length === 1);
+  // Refused as too long although our count said it fits: never the same text again.
+  const sent = [], origFetch = globalThis.fetch;
+  const fake = (refuseOver) => async (url, init) => {
+    const body = JSON.parse(init.body); sent.push({ method: String(url).split('/').pop(), body });
+    if (body.parse_mode === 'HTML' && tgm.tgLength(body.text) > refuseOver) return { status: 400, json: async () => ({ ok: false, description: 'Bad Request: message is too long' }) };
+    return { status: 200, json: async () => ({ ok: true, result: { message_id: sent.length } }) };
+  };
+  const errs = [], origErr2 = console.error, logs = [], origLog = console.log;
+  const T3500 = [HB, ...Array.from({ length: 60 }, (_, i) => `• row ${i} ${'z'.repeat(50)}`)].join('\n');
+  let r1, r2;
+  try {
+    globalThis.fetch = fake(2500); console.error = (...a) => errs.push(a.join(' ')); console.log = (...a) => logs.push(a.join(' '));
+    r1 = await tgm.sendTo('fx94', T3500);
+    r2 = await tgm.sendTo('fx94', T3500);
+  } finally { globalThis.fetch = origFetch; console.error = origErr2; console.log = origLog; }
+  const texts = sent.map((x) => x.body.text);
+  check(`a ${tgm.tgLength(T3500)}-unit text refused as too long: re-sent at once in smaller parts, all delivered`, r1.ok && r1.parts >= 2 && errs.some((l) => /refused as too long/.test(l)));
+  check('...and NO text refused as too long is ever sent a second time (the next send of the same message starts split)', texts.filter((t) => t === T3500).length === 1
+    && texts.filter((t) => tgm.tgLength(t) > 2500).every((t) => texts.filter((u) => u === t).length === 1) && r2.ok);
+  check('...the lowered split point is kept in state, so later messages start below it', st.tgSplitAt > 0 && st.tgSplitAt < 2500);
+  sent.length = 0;
+  const tiny = `${HB}\nfx94 tiny`;
+  try { globalThis.fetch = fake(0); console.error = () => {}; console.log = () => {}; await tgm.sendTo('fx94', tiny); } finally { globalThis.fetch = origFetch; console.error = origErr2; console.log = origLog; }
+  check('a text too short to split, refused as too long, is not resent as it was (sent once, reported failed)', sent.filter((x) => x.body.text === tiny).length === 1 && sent.length === 1);
+  delete st.tgSplitAt;
+  // An edit over the split point is not attempted (it cannot be split); the caller re-sends.
+  sent.length = 0;
+  let ed;
+  try { globalThis.fetch = fake(1e9); console.log = () => {}; ed = await tgm.editBroadcast([{ chatId: 'fx94', messageId: 1 }], big); }
+  finally { globalThis.fetch = origFetch; console.log = origLog; }
+  check('an edit over the split point is not attempted: no editMessageText call, tooLong reported', ed.ok === false && ed.tooLong === true && sent.length === 0);
+  // Undeliverable for an hour: one plain DM line per type, once, until it recovers.
+  const map = {}, t0 = 5e12;
+  const seq = [[t0, false], [t0 + 30 * 60e3, false], [t0 + 61 * 60e3, false], [t0 + 90 * 60e3, false], [t0 + 120 * 60e3, true], [t0 + 121 * 60e3, true]].map(([t, ok]) => tgm.noteDelivery(map, KIND, ok, t, 'Bad Request: message is too long')?.alert ?? null);
+  check('rule: failing at 0, 30 and 61 min -> one "down" alert at 61 min, none at 90; delivered -> one "recovered"; then nothing', seq.join() === ',,down,,recovered,');
+  check('rule: the alert line names the type, how long, since when, and the error, as plain text', /^\[radar\] .*HEARTBEAT messages undeliverable for 61 min \(since .*Z\): Bad Request: message is too long$/.test(tgm.undeliverableText({ alert: 'down', kind: KIND, since: t0, error: 'Bad Request: message is too long' }, t0 + 61 * 60e3)));
+  check('rule: two types are tracked separately', (() => { const m2 = {}; tgm.noteDelivery(m2, 'A', false, t0, 'e'); tgm.noteDelivery(m2, 'B', false, t0 + 50 * 60e3, 'e'); return tgm.noteDelivery(m2, 'A', false, t0 + 61 * 60e3, 'e')?.alert === 'down' && tgm.noteDelivery(m2, 'B', false, t0 + 61 * 60e3, 'e') === null; })());
+  sent.length = 0;
+  try {
+    st.subscribers = ['fx94dm']; st.undeliverable = { [KIND]: { since: Date.now() - 2 * 3600e3, lastError: 'Bad Request: message is too long', alertedAt: null } };
+    globalThis.fetch = async (url, init) => { const body = JSON.parse(init.body); sent.push({ body }); return body.parse_mode ? { status: 400, json: async () => ({ ok: false, description: 'Bad Request: chat not found' }) } : { status: 200, json: async () => ({ ok: true, result: { message_id: 1 } }) }; };
+    console.error = () => {}; console.log = () => {};
+    tgm.resetDeliveryStreak();
+    await tgm.broadcast(`${HB}\nfx94`, { toChannel: false });
+    await tgm.broadcast(`${HB}\nfx94 again`, { toChannel: false });
+    var plain94 = sent.filter((x) => !x.body.parse_mode && /HEARTBEAT messages/.test(x.body.text));
+    globalThis.fetch = async (url, init) => { const body = JSON.parse(init.body); sent.push({ body }); return { status: 200, json: async () => ({ ok: true, result: { message_id: 2 } }) }; };
+    await tgm.broadcast(`${HB}\nfx94 ok`, { toChannel: false });
+    var back94 = sent.filter((x) => !x.body.parse_mode && /HEARTBEAT messages delivered again/.test(x.body.text)), cleared94 = !st.undeliverable[KIND];
+  } finally { globalThis.fetch = origFetch; console.error = origErr2; console.log = origLog; st.subscribers = savedSubs; st.undeliverable = savedUnd; tgm.resetDeliveryStreak(); }
+  // (checked after console.log is restored: check() prints through it)
+  check('through broadcast: a heartbeat undeliverable for 2h sends ONE plain line to the DM naming it and the error; the next failure sends none', plain94.length === 1 && /undeliverable for 2\.0h \(since .*Z\): Bad Request: chat not found$/.test(plain94[0].body.text) && plain94[0].body.chat_id === 'fx94dm');
+  check('...delivered again: one plain "delivered again" line, and the type is cleared', back94.length === 1 && cleared94);
+  // The heartbeat itself, through heartbeat(): sent, and the log says to how many and in how many parts.
+  sent.length = 0; logs.length = 0;
+  try {
+    st.subscribers = ['fx94dm']; st.lastHeartbeatTs = 0;
+    globalThis.fetch = async (url, init) => { const body = JSON.parse(init.body); sent.push({ body }); return { status: 200, json: async () => ({ ok: true, result: { message_id: sent.length } }) }; };
+    console.log = (...a) => logs.push(a.join(' '));
+    await tel.heartbeat(Date.now() - 3600e3);
+  } finally { globalThis.fetch = origFetch; console.log = origLog; st.subscribers = savedSubs; st.lastHeartbeatTs = savedHb; st.undeliverable = savedUnd; }
+  const hbLog = logs.find((l) => /^\[heartbeat\] sent to 1 recipient\(s\) in \d+ part\(s\)/.test(l));
+  check('heartbeat(): sent, and bot.log says "[heartbeat] sent to N recipient(s) in K part(s), L characters", K = the sends made', !!hbLog && Number(hbLog.match(/in (\d+) part/)[1]) === sent.length && sent.every((x) => tgm.tgLength(x.body.text) <= 4096), hbLog);
+  // THE LENGTH GATE: every builder at a realistic worst case, every piece under 4,096 in Telegram's count.
+  const pieces = (text) => tgm.splitMessage(text, tgm.SPLIT_AT);
+  const under = (text) => pieces(text).every((p) => tgm.tgLength(p) <= tgm.TG_LIMIT && bal(p));
+  const hb = tel.buildHeartbeat(Date.now(), { startedAt: Date.now() - 3600e3 });
+  const hbText = formatAlert({ source: 'SYS', type: 'HEARTBEAT', severity: 'LOW', title: hb.title, lines: hb.lines });
+  console.log(`     (heartbeat from this tree's state: ${tgm.tgLength(hbText)} by Telegram's count, ${pieces(hbText).length} part(s))`);
+  check('GATE heartbeat, live-sized state (this tree\'s own data): every piece under 4,096', under(hbText));
+  const sf = U.sourcedFiring();
+  const OLD_MUTE = 'Sourced firing: 30 rows · 1 with a future event · 0 firing in 7d · 🚨 30 MUTE: ' + Array.from({ length: 30 }, (_, i) => `TOK${i}:stale`).join(', ');
+  const worst = formatAlert({ source: 'SYS', type: 'HEARTBEAT', severity: 'LOW', title: hb.title, lines: [...hb.lines, OLD_MUTE, OLD_MUTE, ...hb.lines] });
+  check(`GATE heartbeat, worst case (twice the live lines plus the old 30-entry MUTE line twice, ${tgm.tgLength(worst)}): every piece under 4,096`, under(worst) && pieces(worst).length >= 2);
+  check('Sourced firing is a count plus the first 5', U.firstFive(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']) === 'a, b, c, d, e +3 more' && U.firstFive(['a', 'b']) === 'a, b'
+    && (sf.faultMute.length <= 5 || sf.line.includes(`🚨 ${sf.faultMute.length} MUTE: ${sf.faultMute.slice(0, 5).join(', ')} +${sf.faultMute.length - 5} more`)) && (sf.firing.length <= 5 || sf.line.includes(`+${sf.firing.length - 5} more`)));
+  const REAL = JSON.parse(readFileSync('fixtures/twitterapi-followings-2026-10-27.json', 'utf8'));
+  const cfgF = bf.loadFollowConfig('builder-follows.json').cfg, atF = Date.parse(REAL.capturedAt), u0 = REAL.followings[0];
+  const sol = cfgF.accounts.find((a) => a.handle === 'solana');
+  const many = Array.from({ length: 80 }, (_, i) => { const t = bf.accountFacts({ ...u0, id: String(900000 + i), screen_name: `proj_${i}_xxxxxx`, name: `Project & Co ${i} <beta> "${'n'.repeat(20)}"`, description: `${'d'.repeat(80)} @solana` }, atF);
+    return bf.followMessage({ t, fr: bf.freshness(t), watchers: [{ id: sol.id, handle: 'solana', kind: 'chain' }], earlier: [{ handle: 'toly', kind: 'founder', at: atF - 86400e3 }] }, { mentionIndex: bf.buildMentionIndex(cfgF.accounts), names: bf.watcherNames(cfgF.accounts) }); });
+  const dm = bf.digestMessage(atF, many);
+  const follows = [formatAlert({ source: 'SOCIAL', type: 'FOLLOW', severity: 'MEDIUM', title: dm.title, lines: dm.lines, operatorLines: dm.operatorLines }, { kind: 'FACT' }, 'public'),
+    formatAlert({ source: 'SOCIAL', type: 'FOLLOW', severity: 'MEDIUM', title: dm.title, lines: dm.lines, operatorLines: dm.operatorLines }, { kind: 'FACT' }, 'operator'),
+    ...bf.fullListChunks(atF, dm).map((c) => formatAlert({ source: 'SYS', type: 'FOLLOWS', severity: 'LOW', title: c.title, lines: c.lines }))];
+  check(`GATE builder follows, 80 entries (channel, operator, ${follows.length - 2} DM chunks): every piece under 4,096, each a single message`, follows.every(under) && follows.every((t) => pieces(t).length === 1));
+  const FX = JSON.parse(readFileSync('fixtures/sosovalue-etf-2026-10-29.json', 'utf8'));
+  const D = '2026-10-28', tick = (a) => FX.lists[a].data.map((x) => x.ticker);
+  const allPending = ['BTC', 'ETH', 'SOL'].map((a) => E.assetDay(a, tick(a).map((t) => ({ ticker: t, status: 'pending' }))));
+  const allReported = ['BTC', 'ETH', 'SOL'].map((a) => E.assetDay(a, tick(a).map((t) => E.fundOnDay(t, FX.table[a][t], D))));
+  const etf = [allPending, allReported].flatMap((days) => { const m = E.flowsMessage(D, days); return ['public', 'operator'].map((aud) => formatAlert({ source: 'SIG', type: 'FLOWS', severity: 'LOW', title: m.title, lines: m.lines, operatorLines: m.operatorLines }, { kind: 'FACT' }, aud)); });
+  check(`GATE ETF flows, all ${tick('BTC').length + tick('ETH').length + tick('SOL').length} funds (every fund pending, and every fund reported), both audiences: every piece under 4,096`, etf.every(under));
+  st.tgSplitAt = savedSplit; if (savedSplit === undefined) delete st.tgSplitAt;
+}
+
+console.log('95. CONFLUENCE on a falling price says "selling volume" and the drop; whale withdrawals feed it until the ladder switches CONFLUENCE off');
+{
+  // (2026-11-02) Operator decisions: item 3 option A (fire, and say so), item 4 keep the feed with its
+  // reason and stop condition in the code. FROZEN: the 29-30 Oct inputs of CVX, NMR, G, RED and SHIB.
+  const c = await import('./src/core/confluence.js');
+  const x = await import('./src/core/cexref.js');
+  const w = await import('./src/sources/chain/whale.js');
+  const b = await import('./src/core/budget.js');
+  const { proseProblems } = await import('./src/core/prose-lint.js');
+  const bin = (price, h1) => ({ price, h1, venues: ['binance'] });
+  const call = (sym, price, h1, vol, ratio, ref) => {
+    const key = `ethereum:0xfx95${sym.toLowerCase()}`;
+    const pair = { chainId: 'ethereum', baseToken: { address: key.split(':')[1], symbol: sym }, priceUsd: String(price), liquidity: { usd: 2e5 }, url: '' };
+    const e = { exchange: 'Binance', ts: Date.now() - 6 * 3600e3, tokens: { [key]: { usd: 1.26e6 } } };
+    return c.confluenceAlert(pair, e, { volH1: vol, volRatio: ratio, priceH1: h1, chk: x.dexH1Check({ dexH1: h1, dexPrice: price, cex: ref }), cex: ref });
+  };
+  const nmr = call('NMR', 8.74, -9.05, 149.7e3, 22.8, bin(9.2, -1.71));
+  check('NMR (real 02:19 inputs): "accumulation + selling volume", and the drop figure', nmr.title === 'NMR: accumulation + selling volume (ethereum)' && nmr.lines[1] === '📊 Selling volume: $149.7K/h (22.8x avg) into a -9.05% 1h drop' && nmr.lines[2] === 'Accumulation, then heavy volume while the price falls');
+  const red = call('RED', 0.1086, -8.71, 215e3, 24, bin(0.1196, -7.14)), cvx = call('CVX', 2.014, -2.56, 65.2e3, 2.8, bin(2.063, -0.53));
+  check('RED and CVX (falling) read the same way, with their own figures', red.title === 'RED: accumulation + selling volume (ethereum)' && /into a -8\.71% 1h drop$/.test(red.lines[1]) && cvx.title.includes('selling volume') && /into a -2\.56% 1h drop$/.test(cvx.lines[1]));
+  const g = call('G', 0.003136, 0.56, 252.4e3, 24, bin(0.00334, 0.3));
+  check('G (+0.56%, not falling) keeps "accumulation + activity"', g.title === 'G: accumulation + activity (ethereum)' && /^📊 Now moving: volume \$252\.4K\/h \(24\.0x avg\) · price \+0\.56% 1h$/.test(g.lines[1]));
+  const shib = call('SHIB', 0.000005241, 6.25, 51.1e3, 11.5, bin(0.00000481, -2.63));
+  check('SHIB: its DEX +6.25% was set aside (9% premium), so the drop is the CEX one and the line says whose', shib.title.includes('selling volume') && shib.lines[1] === '📊 Selling volume: $51.1K/h (11.5x avg) into a -2.63% 1h drop (CEX binance; DEX 1h +6.25% set aside: premium)');
+  check('a price-branch call (DEX +10.56% agreeing with its CEX) is never "selling volume"', !call('SUP', 0.17, 10.56, 18.5e3, 3.8, bin(0.169, 2)).title.includes('selling'));
+  check('the new wording passes the prose lint', [nmr, red, cvx, g, shib].every((a) => proseProblems([a.title, ...a.lines].join('\n')).length === 0));
+  check('the call still fires: confluenceAlert is what checkConfluence dispatches, and no falling-price exclusion exists', /dispatch\(confluenceAlert\(pair, e, \{ volH1, volRatio, priceH1, chk, cex: ref \}\)\)/.test(readFileSync('src/core/confluence.js', 'utf8')));
+  check('the feed stays open while CONFLUENCE is on the ladder, and closes when the ladder switches CONFLUENCE off', w.confluenceFeedOpen(() => 'OK') && !w.confluenceFeedOpen(() => 'DISABLED')
+    && b.withLadder({ CONFLUENCE: 'DISABLED' }, () => !w.confluenceFeedOpen()) && b.withLadder({ WHALE: 'DISABLED' }, () => w.confluenceFeedOpen()));
+  const ws = readFileSync('src/sources/chain/whale.js', 'utf8');
+  const at = ws.indexOf('if (confluenceFeedOpen()) noteWhale(');
+  check('whale.js: noteWhale is guarded by it, with the reason and the STOP CONDITION written next to the call', at > 0 && /WHY THIS FEED RUNS WHILE WHALE IS LADDER-OFF[\s\S]*STOP CONDITION: the feed stops when the ladder switches CONFLUENCE itself off/.test(ws.slice(at - 900, at)));
+  // The heartbeat's builder-follows line: links, no bare @handle. routes.js: no stale edit description.
+  const bf = await import('./src/sources/social/builder-follows.js');
+  const cfgT = bf.checkFollowConfig({ accounts: [{ handle: 'toly', kind: 'founder', id: '1001' }], capUsd: 40, approved: '2026-10-21' }).cfg;
+  const line = bf.followStatus({ follows: { unresolved: { ghost: 1 }, incomplete: [{ handle: 'toly', at: Date.now(), why: 'page 2 failed (http)' }], saturated: [{ handle: 'toly', at: Date.now() }], failingSince: Date.now() - 60e3, lastError: { kind: 'all-failed', msg: '@toly (http)' } } }, Date.now(), { cfgResult: { ok: true, cfg: cfgT }, key: 'k', price: null }).line;
+  check('the heartbeat\'s builder-follows line links every account (saturated, incomplete, unresolved, the failure text) and shows no bare @handle', line.includes(XL('ghost')) && line.includes(`${XL('toly')} (page 2 failed (http))`) && line.includes(`(all-failed: ${XL('toly')} (http))`) && !/(?<![A-Za-z0-9_\/])@[A-Za-z0-9_]/.test(line.replace(/href="[^"]*"/g, '')));
+  const routes = readFileSync('src/core/routes.js', 'utf8');
+  check('routes.js describes FOLLOW as it is: one daily message, convergence listed in it, no edits', /FOLLOW: 'ONE daily message at 13:00 UTC/.test(routes) && !/a second watcher within 7d EDITS the original/.test(routes));
 }
 
 console.error = origErr;

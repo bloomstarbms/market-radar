@@ -48,7 +48,7 @@ const FACT_ROUTES = {
   FUNDING: 'push at detection (fact: rate + OI, no direction)',
   CASCADE: 'push at detection (producer lands in step 7)',
   OI: 'push at detection once the market holds 7d of its own hourly OI samples; digest pool before (perp/hyperliquid.js)',
-  FOLLOW: 'push at detection, fresh accounts only; a second watcher within 7d EDITS the original (social/builder-follows.js)',
+  FOLLOW: 'ONE daily message at 13:00 UTC (looks at 01:00 and 13:00), fresh accounts only; a second watcher within 7d is listed in it as convergence, no edits (social/builder-follows.js)',
   FLOWS: 'one message per US trading day, edited as late funds report (etf/flows.js)',
 };
 

@@ -9,6 +9,9 @@ import { config } from '../../config.js';
 import { dispatch } from '../../core/dispatcher.js';
 import { arkhamLabel } from './arkham.js';
 import { noteWhale } from '../../core/confluence.js';
+import { ladderStatus } from '../../core/budget.js';
+// Whether whale withdrawals still feed CONFLUENCE: see the reason and the stop condition at the call.
+export const confluenceFeedOpen = (status = ladderStatus) => status('CONFLUENCE') !== 'DISABLED';
 
 const RULES = {
   whaleUsd: Number(process.env.WHALE_USD || 1_000_000),
@@ -423,7 +426,12 @@ export async function checkWhales(pair) {
         hint = 'the address had no history before this tx \u2014 the exchange moving its own coins, not accumulation';
       }
       // The tx hash makes one transaction one event, however many watchlist tokens it moves.
-      noteWhale(key, { direction: dir, exchange: exch, usd, symbol: pair.baseToken.symbol, isWithdrawal: true, hash: tx.hash, label, history });
+      // WHY THIS FEED RUNS WHILE WHALE IS LADDER-OFF (operator decision 2026-11-02). WHALE's own alerts
+      // are ladder-DISABLED on their record as standalone calls (2,375 rows to 31 Oct, 2 ever pushed).
+      // That record does not measure a withdrawal used as one input of CONFLUENCE, and CONFLUENCE is
+      // judged by the ladder on its own outcomes; cutting the feed would switch CONFLUENCE off on another
+      // type's record. STOP CONDITION: the feed stops when the ladder switches CONFLUENCE itself off.
+      if (confluenceFeedOpen()) noteWhale(key, { direction: dir, exchange: exch, usd, symbol: pair.baseToken.symbol, isWithdrawal: true, hash: tx.hash, label, history });
     }
     await dispatch({
       source: 'CHAIN', type: 'WHALE', severity: sev, key, dedupeKey: `WHALE:${key}`, cooldownMin: RULES.tokenCooldownMin,

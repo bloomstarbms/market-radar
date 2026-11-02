@@ -7,7 +7,7 @@
 import { readdirSync, statSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { config } from '../config.js';
-import { broadcast, hasRecipients, publicPushes24h } from './telegram.js';
+import { broadcast, hasRecipients, publicPushes24h, tgLength } from './telegram.js';
 
 // CHANNEL SPLIT (v0.31.0): the public channel carries FACTS and CALLS only. Every
 // telemetry send — digest, heartbeat — goes through here, DM-only. A telemetry
@@ -308,8 +308,10 @@ export async function heartbeat(startedAt) {
   const st = getState();
   if (st.lastHeartbeatTs && Date.now() - st.lastHeartbeatTs < config.heartbeatHours * 3600e3) return;
   const hb = buildHeartbeat(Date.now(), { startedAt });
-  const ids = await sendTelemetry(formatAlert({
-    source: 'SYS', type: 'HEARTBEAT', severity: 'LOW', title: hb.title, lines: hb.lines,
-  }));
+  const text = formatAlert({ source: 'SYS', type: 'HEARTBEAT', severity: 'LOW', title: hb.title, lines: hb.lines });
+  const ids = await sendTelemetry(text); // split at the send layer when it is near Telegram's limit
+  // The delivery fact, on disk: how many recipients, in how many parts, at what length.
+  if (ids.length) console.log(`[heartbeat] sent to ${ids.length} recipient(s) in ${Math.max(...ids.map((i) => i.parts ?? 1))} part(s), ${tgLength(text)} characters by Telegram's count`);
+  else if (hasRecipients(false)) console.error(`[heartbeat] not delivered (${tgLength(text)} characters by Telegram's count); retried next poll`);
   if (ids.length || !hasRecipients(false)) { st.lastHeartbeatTs = Date.now(); save(); }
 }

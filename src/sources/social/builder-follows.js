@@ -670,7 +670,7 @@ export async function reconcile(state, deps = {}) {
 // ---------------------------------------------------------------- heartbeat line, pure when deps are injected
 export function followStatus(state, now = Date.now(), deps = {}) {
   const c = deps.cfgResult ?? loadFollowConfig();
-  if (!c.ok) return { line: `Builder follows: OFF (${c.why})` };
+  if (!c.ok) return { line: `Builder follows: OFF (${linkMentions(esc(c.why))})` };
   const key = deps.key ?? config.twitterapiKey;
   if (!key) return { line: 'Builder follows: OFF (no TWITTERAPI_KEY in .env)' };
   const f = state.follows ?? {};
@@ -696,17 +696,17 @@ export function followStatus(state, now = Date.now(), deps = {}) {
     `price ${price.credits.followings20} credits/call (${priceLabel})`];
   const flags = [];
   if (!canSpend(f, price.credits.followings20, cap, now)) flags.push(`⛔ CAP REACHED — no calls until ${next}`);
-  if (f.failingSince) flags.push(`🚨 source failing since ${new Date(f.failingSince).toISOString().slice(0, 16)}Z (${f.lastError?.kind}: ${f.lastError?.msg}) — silent by design`);
-  if (sat.length) flags.push(`⚠️ ${sat.length} saturated window(s) in the last look, ${MAX_PAGES}-page cap hit: ${[...new Set(sat.map((x) => '@' + x.handle))].join(', ')} — follows beyond ${MAX_PAGES * PAGE_SIZE} may have been missed`);
+  if (f.failingSince) flags.push(`🚨 source failing since ${new Date(f.failingSince).toISOString().slice(0, 16)}Z (${f.lastError?.kind}: ${linkMentions(esc(f.lastError?.msg ?? ''))}) — silent by design`);
+  if (sat.length) flags.push(`⚠️ ${sat.length} saturated window(s) in the last look, ${MAX_PAGES}-page cap hit: ${[...new Set(sat.map((x) => x.handle))].map((h) => xLink(h)).join(', ')} — follows beyond ${MAX_PAGES * PAGE_SIZE} may have been missed`);
   if (f.pendingDigest) flags.push(`⚠️ the ${f.pendingDigest.dayKey} daily message is not delivered yet (${f.pendingDigest.attempts || 0} attempt(s))`);
   const inc = (f.incomplete ?? []).filter((x) => now - x.at < 26 * 3600e3);
-  if (inc.length) flags.push(`⚠️ ${inc.length} incomplete window(s) in the last look: ${inc.map((x) => `@${x.handle} (${x.why})`).join(', ')}`);
+  if (inc.length) flags.push(`⚠️ ${inc.length} incomplete window(s) in the last look: ${inc.map((x) => `${xLink(x.handle)} (${esc(x.why)})`).join(', ')}`);
   const vr = volumeReview(f.daily, now);
   if (vr.tripped) flags.push(`⚠️ listed entries over ${VOLUME_REVIEW.perDay}/day for ${VOLUME_REVIEW.days} days (${vr.days.map((x) => `${x.day.slice(5)} ${x.alerted}`).join(', ')}) — pre-registered rule: ${VOLUME_REVIEW.action}`);
   if (f.recon?.lastError && now - f.recon.lastError.at < 2 * 86400e3) flags.push(`⚠️ reconciliation unsettled (${f.recon.lastError.msg})`);
   if (rl?.kind === 'anomalous' && now - rl.at < 7 * 86400e3) flags.push(`⚠️ reconciliation anomalous ${dayKey(rl.at)}: balance fell ${rl.ratio}× the meter (not adopted)`);
   const un = Object.keys(f.unresolved ?? {});
-  if (un.length) flags.push(`⚠️ unresolved: ${un.map((h) => '@' + h).join(', ')}`);
+  if (un.length) flags.push(`⚠️ unresolved: ${un.map((h) => xLink(h)).join(', ')}`);
   return { line: [...parts, ...flags].join(' · ') };
 }
 

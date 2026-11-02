@@ -5143,3 +5143,36 @@ convergence and late (01:00) additions render inside it, and a delivery retry re
 Not changed: the heartbeat's follows flags still name accounts as @handle (a different DM message);
 routes.js still describes FOLLOW as "a second watcher within 7d EDITS the original", stale since v0.35.
 No website or example card exists in this repo.
+
+## 2026-11-02 — THE HEARTBEAT THAT WAS TOO LONG FOR TWO DAYS; SPLITTING, NO SAME-TEXT RESEND, A LOUD ALERT
+
+Found 31 Oct while checking the v0.37.7 deploy: Telegram refused the DM heartbeat "message is too long"
+on every poll from 29 Oct 19:34 UTC (210 refusals on 30 Oct, 755 by 11:22 UTC on 31 Oct). The only sign
+was the generic "N sends failed" fallback line, 17 times. The longest line was "Sourced firing" at 911
+characters (a 30-row MUTE list).
+
+Fixed at the send layer (core/telegram.js), so it holds for every message, not only the heartbeat:
+- tgLength() is Telegram's count: UTF-16 code units after HTML parsing. Over SPLIT_AT (4,000) a message
+  goes in parts, split between top-level lines only (never inside a tag), labelled (k/n); a single line
+  too long for a part is shortened with "…" and its tags closed.
+- A text refused as too long is never sent again: that part is re-split at three quarters of its length
+  at once, and the split point drops for every later message (state.tgSplitAt, persisted). A text too
+  short to split is reported failed, not resent. An edit over the split point is not attempted (an edit
+  cannot be split); the caller re-sends in parts.
+- A message TYPE (its [TAG]) that reaches no recipient for an hour sends one plain DM line naming the
+  type, how long, since when and the error, once, until it is delivered again ("delivered again after").
+  The clock is in state.undeliverable, so a restart does not reset it.
+- "Sourced firing" lists are a count plus the first 5. heartbeat() logs "[heartbeat] sent to N
+  recipient(s) in K part(s), L characters by Telegram's count", so delivery-by-parts is on disk.
+- Suite length gate (fixture 94): heartbeat at the tree's own state and at a worst case, builder follows
+  at 80 entries (channel, operator, every DM chunk), ETF flows with all 32 funds both pending and
+  reported: every piece under 4,096 by Telegram's count.
+
+Also in this patch (operator decisions on the 31 Oct CONFLUENCE items):
+- Item 3, option A: a volume call on a falling price fires and says "accumulation + selling volume" with
+  the drop ("into a -9.05% 1h drop"); the price is the DEX 1h if it passed the CEX check, else the CEX
+  consensus 1h, and the line says which (fixture 95, real CVX/NMR/G/RED/SHIB inputs).
+- Item 4: the whale feed to CONFLUENCE stays while WHALE is ladder-off; the reason and the stop condition
+  (the feed stops when the ladder switches CONFLUENCE off) are written at the noteWhale call.
+- The heartbeat's builder-follows line links accounts instead of @handle; routes.js's FOLLOW description
+  no longer describes the per-follow edit removed in v0.35.
