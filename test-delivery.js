@@ -1564,7 +1564,7 @@ console.log('62. a CORRECTION is visible — removing a verdict from state must 
   const live = verdictCorrections();
   const liveLog = JSON.parse(readFileSync('data/verdict-annotations.json', 'utf8')).annotations;
   const has = (sym, key) => liveLog.find((a) => a.sym === sym && a.key === key && a.op === 'void');
-  check('LIVE-RECORD: the real annotation log is readable, reports the latest correction, and every entry carries a reason and the original', !live.unreadable && live.n === liveLog.length && live.n >= 2 && /void/.test(live.line) && liveLog.every((a) => a.reason?.length >= 20 && a.original && a.at));
+  check('LIVE-RECORD: the real annotation log is readable, reports the latest correction, and every entry carries a reason and the original', !live.unreadable && live.n === liveLog.length && live.n >= 2 && live.line.includes(`${liveLog.at(-1).sym} ${liveLog.at(-1).key} ${liveLog.at(-1).op} `) && liveLog.every((a) => a.reason?.length >= 20 && a.original && a.at));
   check('LIVE-RECORD: ORDER 2026-09-07 and ENA 2026-09 are both in the log — a correction is recorded as a correction, never as an absence', !!has('ORDER', '2026-09-07') && has('ENA', '2026-09')?.original?.action === 'DEMOTE' && has('ENA', '2026-09').clearedDemotion?.kind === 'DEMOTE');
 }
 
