@@ -91,12 +91,23 @@ export function expectedEmissionDate(spec, year, month /* 1-based */) {
 // spec.wallets: [{addr, meanAmount}] (family) — or legacy spec.wallet + meanAmount.
 // outflows: {'YYYY-MM-DD': n} for a single-wallet spec, or {addr: {day: n}} for a
 // family. Injected entirely — hermetic.
+// A WINDOW IS SCORED ONLY AFTER ITS LAST DAY HAS ENDED IN UTC, PLUS A MARGIN (2026-11-03).
+// cadenceDecision's window runs start..end INCLUSIVE, but it used to score as soon as
+// now passed `end` — 00:00 of the window's LAST day. ENA's October stamp was written at
+// 10-09T03:59 and counted 887,353 for 10-09; 0x54B8 paid two more transfers that day
+// (06:07, 20:12) that the stamp never saw. The margin covers the explorer's indexing lag
+// for a transfer made in the last minutes of the day. One rule for every window: cadence,
+// cliff watch, and the cliff CLI's choice of which past cliffs to score.
+export const WINDOW_SCORE_MARGIN_MS = 2 * 3600e3;
+export const windowScoreableAt = (lastDayStartMs) => lastDayStartMs + 86400e3 + WINDOW_SCORE_MARGIN_MS;
+
 export function cadenceDecision(spec, year, month, now, outflows, { rule = 'window-total' } = {}) {
   const expected = expectedEmissionDate(spec, year, month);
   const grace = spec.graceDays ?? 3;
   const start = new Date(expected.getTime() - 86400e3);
-  const end = new Date(expected.getTime() + grace * 86400e3);
-  if (now.getTime() <= end.getTime()) return { action: 'PENDING', windowEnd: end.toISOString().slice(0, 10) };
+  const end = new Date(expected.getTime() + grace * 86400e3); // the window's LAST day (inclusive)
+  const scoreAt = windowScoreableAt(end.getTime());
+  if (now.getTime() < scoreAt) return { action: 'PENDING', windowEnd: end.toISOString().slice(0, 10), scoreAt: new Date(scoreAt).toISOString().slice(0, 16) };
   const sKey = start.toISOString().slice(0, 10), eKey = end.toISOString().slice(0, 10);
   const window = `${sKey}..${eKey}`;
   const peakIn = (byDay) => {
@@ -201,6 +212,25 @@ async function fetchOutflows(wallet, sym, untilDate, maxPages = 20) {
   return { byDay, covered: false }; // page cap hit before reaching the window
 }
 
+// The fetch and the decision for one row-month, shared by the poller and by
+// annotate-verdict.js --rescore, so a correction is computed by the code that made the
+// stamp. Family specs need every wallet fetched; ANY uncovered fetch aborts the whole
+// decision — a partial view of a family would read as a silent wallet.
+// Returns { pending } | { unobserved: addr } | { dec }.
+export async function scoreWindow(t, y, m, now, fetcher = fetchOutflows) {
+  const pending = cadenceDecision(t.cadence, y, m, now, {});
+  if (pending.action === 'PENDING') return { pending };
+  const windowStart = new Date(expectedEmissionDate(t.cadence, y, m).getTime() - 86400e3).toISOString().slice(0, 10);
+  const addrs = Array.isArray(t.cadence.wallets) ? t.cadence.wallets.map((w) => w.addr) : [t.cadence.wallet];
+  const byAddr = {};
+  for (const a of addrs) {
+    const f = await fetcher(a, t.sym, windowStart);
+    if (!windowObserved(f)) return { unobserved: a };
+    byAddr[a] = f.byDay;
+  }
+  return { dec: cadenceDecision(t.cadence, y, m, now, Array.isArray(t.cadence.wallets) ? byAddr : byAddr[addrs[0]]) };
+}
+
 // Impure poll. Checks each cadence-verified row once per closed window; network only
 // when a window has NEWLY closed. Demotion is recorded FIRST (the observation stands
 // whether or not the message sends), then the operator DM retries until delivered.
@@ -261,22 +291,11 @@ export async function pollCadence(loadTokens) {
     const rec = st.months[t.sym][mKey];
     if (rec && (rec.action !== 'DEMOTE' || rec.notified)) continue; // month settled
     if (!rec) {
-      const pending = cadenceDecision(t.cadence, y, m, now, {});
-      if (pending.action === 'PENDING') continue; // window still open — no fetch, no record
+      if (cadenceDecision(t.cadence, y, m, now, {}).action === 'PENDING') continue; // window still open — no fetch, no record
       if (promotedAt && mKey < promotedAt.slice(0, 7)) continue; // window pre-dates the promotion
-      const windowStart = new Date(expectedEmissionDate(t.cadence, y, m).getTime() - 86400e3).toISOString().slice(0, 10);
-      // Family specs need every wallet fetched; ANY uncovered fetch aborts the whole
-      // decision — a partial view of a family would read as a silent wallet.
-      const addrs = Array.isArray(t.cadence.wallets) ? t.cadence.wallets.map((w) => w.addr) : [t.cadence.wallet];
-      const byAddr = {};
-      let allCovered = true;
-      for (const a of addrs) {
-        const f = await fetchOutflows(a, t.sym, windowStart);
-        if (!windowObserved(f)) { allCovered = false; break; }
-        byAddr[a] = f.byDay;
-      }
-      if (!allCovered) continue; // "we did not look" must never demote — retry next poll
-      const dec = cadenceDecision(t.cadence, y, m, now, Array.isArray(t.cadence.wallets) ? byAddr : byAddr[addrs[0]]);
+      const scored = await scoreWindow(t, y, m, now);
+      if (!scored.dec) continue; // "we did not look" must never demote — retry next poll
+      const dec = scored.dec;
       st.months[t.sym][mKey] = { ...dec, at: now.toISOString().slice(0, 16) };
       // PARTIAL demotes too: the family figure the message claims went unverified,
       // and a row that keeps asserting an unverified number is the defect.
@@ -405,12 +424,23 @@ export function deriveTolerance(ratios, { k = 3, margin = 1.1, hardFloor = 0.05,
 // IN THE BAND each confirmation lands and surface sustained one-sided deviation as
 // DRIFT (operator judgement) rather than as a demotion (automatic silence).
 // Pure: takes the stamped months for one token.
+// EXCLUDED MONTHS (2026-11-03). A verdict can be real and still not belong in the
+// statistics: ENA's October window paid 207M, 23 of its 26 recipients the regular
+// monthly ones and eleven of them EXACTLY 18x their usual month — a catch-up, not the
+// schedule's level. annotate-verdict.js --exclude marks such a stamp `excluded` with its
+// reason; it stays a CONFIRM (the schedule paid on its day), but drift, the spec mean
+// (detect-cadence) and the tolerance band (promote-unlock tolerance=auto) skip it.
+export const isExcluded = (stamp) => !!stamp?.excluded;
+export function excludedMonths(months) {
+  return new Set(Object.entries(months || {}).filter(([, r]) => isExcluded(r)).map(([k]) => k));
+}
+
 export function driftStatus(months, { minRun = 3, threshold = 0.10 } = {}) {
   // Compared like with like: the spec mean is a peak-day mean, so drift reads peakRatio
   // where the stamp carries it (v0.33.9 window-total verdicts) and ratio on older stamps.
   const basis = (r) => (typeof r.peakRatio === 'number' ? r.peakRatio : r.ratio);
   const confirms = Object.entries(months || {})
-    .filter(([, r]) => r.action === 'CONFIRM' && typeof basis(r) === 'number')
+    .filter(([, r]) => r.action === 'CONFIRM' && typeof basis(r) === 'number' && !isExcluded(r))
     .sort(([a], [b]) => a.localeCompare(b));
   if (!confirms.length) return null;
   // longest run of same-side deviations ending at the most recent window
@@ -523,8 +553,8 @@ export async function pollSourceRecheck(loadTokens) {
 // behaviour and legitimately vary. Uncovered fetch -> the caller never calls this.
 export function cliffClusterDecision(spec, cliffDate, now, byDay) {
   const start = new Date(cliffDate + 'T00:00:00Z').getTime();
-  const end = start + spec.windowDays * 86400e3;
-  if (now.getTime() <= end) return { action: 'PENDING', windowEnd: new Date(end).toISOString().slice(0, 10) };
+  const end = start + spec.windowDays * 86400e3; // 00:00 AFTER the last day; days counted are [start, end)
+  if (now.getTime() < windowScoreableAt(end - 86400e3)) return { action: 'PENDING', windowEnd: new Date(end - 86400e3).toISOString().slice(0, 10) };
   let amt = 0; const to = new Set();
   for (const [d, r] of Object.entries(byDay || {})) {
     const t = new Date(d + 'T00:00:00Z').getTime();
@@ -550,7 +580,7 @@ export async function pollCliffWatch(loadTokens) {
   let fetcher = null;
   for (const t of rows) {
     const due = t.cliffDates.filter((c) => c.cluster === null && !st.cliffs[`${t.sym}:${c.date}`]
-      && now.getTime() > new Date(c.date + 'T00:00:00Z').getTime() + t.clusterSpec.windowDays * 86400e3);
+      && now.getTime() >= windowScoreableAt(new Date(c.date + 'T00:00:00Z').getTime() + (t.clusterSpec.windowDays - 1) * 86400e3));
     if (!due.length) continue;
     try { fetcher = fetcher || (await import('../../../detect-cliff-cluster.js')).outflowsWithRecipients; } catch (e) { console.error('[cliff-watch] tool import failed:', e.message); return; }
     const tokenAddr = t.token?.startsWith('ethereum:') ? t.token.slice(9) : null;
@@ -653,7 +683,9 @@ export function cadenceStatus(tokens = null, state = loadWatchState(), now = new
     // Drift is reported, never acted on: a sustained one-sided deviation is a
     // question for the operator ("did the schedule change?"), not grounds for
     // automatic silence.
+    const lastStamp = lastOk ? months[lastOk] : null;
     const driftMark = d?.drifting ? ` ⚠️ DRIFT ${d.pct > 0 ? '+' : ''}${d.pct}% x${d.run} windows`
+      : isExcluded(lastStamp) ? ` (${lastOk} ${lastStamp.excluded.kind ?? 'excluded'}, outside the mean)`
       : d?.last ? ` (${d.last > 1 ? '+' : ''}${Math.round((d.last - 1) * 100)}% vs mean)` : '';
     return `${t.sym} ${lastOk ? `ok ${lastOk}` : 'no window closed yet'}${driftMark}${ageD !== null && ageD > 65 ? ' ⚠️ stale confirm' : ''}`;
   });

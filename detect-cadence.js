@@ -79,7 +79,10 @@ export function significanceFloor(values, months, mode = 'median-top') {
   const median = top.length % 2 ? top[mid] : (top[mid - 1] + top[mid]) / 2;
   return median * 0.1;
 }
-export function detectCadence(byDay, { minMonths = 4, minAmount = 0, floor = 'median-top', now = new Date() } = {}) {
+// exclude: months ('YYYY-MM') the operator marked excluded through annotate-verdict.js (a
+// catch-up window is a real emission, so it still counts toward the RUN — the day held —
+// but its amount stays out of meanAmount and cv, and the emission is listed `excluded`).
+export function detectCadence(byDay, { minMonths = 4, minAmount = 0, floor = 'median-top', now = new Date(), exclude = new Set() } = {}) {
   const entries = Object.entries(byDay).filter(([, v]) => v > minAmount).sort();
   if (!entries.length) return { verdict: 'NO-OUTFLOWS' };
   const monthsInSpan = new Set(entries.map(([d]) => d.slice(0, 7))).size;
@@ -117,7 +120,8 @@ export function detectCadence(byDay, { minMonths = 4, minAmount = 0, floor = 'me
   if (!best) return { verdict: 'IRREGULAR', sigDays: sig.length, sigFloor: Math.round(sigFloor) };
 
   const es = best.run.map((k) => best.perMonth[k]);
-  const amounts = es.map((e) => e.v);
+  const counted = es.filter((e) => !exclude.has(monthKey(e)));
+  const amounts = (counted.length ? counted : es).map((e) => e.v);
   const mean = amounts.reduce((a, b) => a + b, 0) / amounts.length;
   const cv = Math.sqrt(amounts.reduce((s, a) => s + (a - mean) ** 2, 0) / amounts.length) / mean;
   const pattern = best.c.id === 'ME' ? 'MONTH-END' : 'FIXED-DAY';
@@ -132,12 +136,12 @@ export function detectCadence(byDay, { minMonths = 4, minAmount = 0, floor = 'me
   const span = [es[0].d, es[es.length - 1].d];
   const offSchedule = sig.filter((e) => e.d >= span[0] && e.d <= span[1] && !best.c.match(e))
     .map((e) => ({ d: e.d, amt: Math.round(e.v) }));
-  if (cv >= 1.0) return { verdict: 'DAY-STABLE-AMOUNT-UNSTABLE', pattern, targetDay, monthsRun: best.run.length, cv: +cv.toFixed(2), meanAmount: Math.round(mean), emissions: es.map((e) => ({ d: e.d, amt: Math.round(e.v) })), offSchedule, sigFloor: Math.round(sigFloor) };
+  if (cv >= 1.0) return { verdict: 'DAY-STABLE-AMOUNT-UNSTABLE', pattern, targetDay, monthsRun: best.run.length, cv: +cv.toFixed(2), meanAmount: Math.round(mean), emissions: es.map((e) => ({ d: e.d, amt: Math.round(e.v), ...(exclude.has(monthKey(e)) ? { excluded: true } : {}) })), offSchedule, sigFloor: Math.round(sigFloor) };
   return {
     verdict: 'CADENCE', pattern, targetDay, monthsRun: best.run.length,
     meanAmount: Math.round(mean), cv: +cv.toFixed(2),
     firstSeen: es[0].d, lastSeen: es[es.length - 1].d,
-    emissions: es.map((e) => ({ d: e.d, amt: Math.round(e.v) })),
+    emissions: es.map((e) => ({ d: e.d, amt: Math.round(e.v), ...(exclude.has(monthKey(e)) ? { excluded: true } : {}) })),
     offSchedule,
   };
 }
@@ -164,18 +168,26 @@ if (IS_CLI) (async () => {
   }
   console.log(`cadence scan: ${sym ?? 'explicit'} · ${wallets.length} wallets`);
 
+  // Months the operator excluded through annotate-verdict.js (catch-up windows): read
+  // from the watch's own file, never typed. They stay in the run, out of the mean.
+  let exclude = new Set();
+  try {
+    const months = JSON.parse(readFileSync('data/cadence-watch.json', 'utf8')).months?.[sym] || {};
+    exclude = new Set(Object.entries(months).filter(([, r]) => r?.excluded).map(([k]) => k));
+  } catch { /* no watch state: nothing excluded */ }
+  if (exclude.size) console.log(`excluded from the mean (annotate-verdict.js): ${[...exclude].join(', ')}`);
   const familyByDay = {};
   const perWallet = [];
   for (const w of wallets) {
     const byDay = await outflowsByDay(w.addr, sym);
     for (const [d, v] of Object.entries(byDay)) familyByDay[d] = (familyByDay[d] || 0) + v;
-    const solo = detectCadence(byDay);
+    const solo = detectCadence(byDay, { exclude });
     perWallet.push({ addr: w.addr, bal: w.bal, days: Object.keys(byDay).length, solo: solo.verdict === 'CADENCE' ? solo : solo.verdict });
     process.stdout.write('.');
     await sleep(350);
   }
   console.log();
-  const family = detectCadence(familyByDay);
+  const family = detectCadence(familyByDay, { exclude });
   console.log('\nFAMILY AGGREGATE:', JSON.stringify(family, null, 1));
   console.log('\nper-wallet:');
   for (const p of perWallet) {

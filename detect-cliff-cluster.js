@@ -17,6 +17,7 @@
 // feedWasLooking applies: an uncovered window is NOT an empty window. Pagination must
 // reach every cliff under test or the verdict is UNVERIFIED, never FAILED.
 import { spanCovered, rangeCovers } from './src/core/pagination.js';
+import { windowScoreableAt } from './src/sources/calendar/cadence-watch.js';
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
@@ -154,13 +155,20 @@ export function clusterVerdicts(byDay, cliffs, { windowDays = 5, minRatio = 3, m
     params: { windowDays, minRatio, minRecipients } };
 }
 
-export function loadCliffs(sym, now = Date.now()) {
-  const idx = JSON.parse(readFileSync('data/unlock-index.json', 'utf8')).protocols.find((p) => p.symbol === sym);
-  if (!idx) return { past: [], future: [] };
+// A cliff is PAST — scoreable — only once the widest window the grid scores (7 days) has
+// closed under the watch's rule: its last day ended in UTC, plus the margin (2026-11-03).
+// It counted one day after the cliff, so on 2026-11-02 the L3 and REZ re-runs scored their
+// 10-29/30 cliffs with five of seven window days still to come. Between the two it is OPEN.
+export function loadCliffs(sym, now = Date.now(), index = null) {
+  const idx = (index || JSON.parse(readFileSync('data/unlock-index.json', 'utf8'))).protocols.find((p) => p.symbol === sym);
+  if (!idx) return { past: [], open: [], future: [] };
   const cliffs = idx.events.filter((e) => e.type === 'cliff').map((e) => day(e.t));
   const uniq = [...new Set(cliffs)];
-  return { past: uniq.filter((d) => new Date(d + 'T00:00:00Z').getTime() + 86400e3 < now), future: uniq.filter((d) => new Date(d + 'T00:00:00Z').getTime() >= now) };
+  const t0 = (d) => new Date(d + 'T00:00:00Z').getTime();
+  const closed = (d) => now >= windowScoreableAt(t0(d) + (CLI_MAX_WINDOW_DAYS - 1) * 86400e3);
+  return { past: uniq.filter(closed), open: uniq.filter((d) => t0(d) < now && !closed(d)), future: uniq.filter((d) => t0(d) >= now) };
 }
+export const CLI_MAX_WINDOW_DAYS = 7;
 
 // Exported so the bridge-exclusion invariant is fixture-checked: a LayerZero adapter
 // that emitted on a cadence day (STO, v0.29.0) is a BRIDGE, and must never reach the
@@ -183,7 +191,8 @@ if (IS_CLI) (async () => {
   const syms = sweep ? args : [args[0]];
   for (const sym of syms) {
     if ((Date.now() - t0) / 1000 > budget) { console.log('budget reached; rerun to continue'); break; }
-    const { past, future } = loadCliffs(sym);
+    const { past, open, future } = loadCliffs(sym);
+    if (open.length) console.log(`${sym}: cliff window(s) still open, not scored: ${open.join(', ')}`);
     const cands = (!sweep && args[1]) ? [{ addr: args[1], pctSupply: null }] : reportContracts(sym);
     if (!cands.length) { report[sym] = { sym, verdict: 'NO-CANDIDATE-CONTRACT', at: new Date().toISOString().slice(0, 16) }; console.log(`${sym}: no candidate contract`); continue; }
     if (past.length < 3) { report[sym] = { sym, verdict: 'TOO-FEW-PAST-CLIFFS', pastCliffs: past.length, at: new Date().toISOString().slice(0, 16) }; console.log(`${sym}: ${past.length} past cliffs — untestable`); continue; }

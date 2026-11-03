@@ -188,6 +188,33 @@ export function sourceIsStale(t, now = Date.now()) {
 // falsifier margin (0.17; best point on its own grid 0.26) sits outside the verified
 // population (EIGEN 0.76, ENA 0.67, MOVE 0.64) — see MIN_FALSIFIER_MARGIN.
 export const TIER_CORRECTION_MIN_REASON = 20;
+// OBSERVED, NOT CLAIMED (2026-11-03). An operator-only observation appended to a row's
+// operatorNote, dated, and NOTHING else changed — not the tier, not the falsifier, not the
+// review date. The verified-row promote path rebuilds the whole row (promoteRow) and would
+// drop reviewBy, so a note cannot go through it. operatorNote never reaches a public
+// message (the note split), which is why an observation lives there and not in `note`.
+export function appendObservation(row, text, date) {
+  if (!row?.sym) throw new Error('appendObservation: no row');
+  if (!text || text.trim().length < 20) throw new Error(`appendObservation: ${row.sym}: say what was observed (>=20 chars)`);
+  if (!/^\d{4}-\d\d-\d\d$/.test(date || '')) throw new Error('appendObservation: date must be YYYY-MM-DD');
+  return { ...row, operatorNote: `${row.operatorNote ? row.operatorNote + ' ' : ''}OBSERVED, NOT CLAIMED (${date}): ${text.trim()}` };
+}
+
+// A MECHANISM STAMP LAPSES, it is not deleted (2026-11-03). The row goes back to
+// mechanism 'pending' and the pressure rule's own stage, rebuilt through sourceRow exactly
+// as a re-ingest would build it, and the operatorNote records what lapsed, why, and the
+// basis it had rested on — so the next session can see the stamp existed and why it went.
+export function lapsedMechanismRow(t, reason, date) {
+  if (t?.provenance !== 'sourced') throw new Error(`lapse: ${t?.sym}: a mechanism lapses on a SOURCED row`);
+  if (!t.mechanism || t.mechanism === 'pending') throw new Error(`lapse: ${t.sym}: no mechanism stamp to lapse`);
+  if (!reason || reason.trim().length < 20) throw new Error(`lapse: ${t.sym}: reason= is required (>=20 chars)`);
+  const stage = pressureStage({ sourceEvents: t.sourceEvents, maxSupply: t.maxSupply ?? null, stage: 'STANDARD', mechanism: 'pending' });
+  return sourceRow(t, { source: t.source, sourceFetchedAt: t.sourceFetchedAt, sourceEvents: t.sourceEvents, chain: t.chain, token: t.token ?? null,
+    stage, note: t.note ?? '', circSupply: t.circSupply ?? null, totalLocked: t.totalLocked ?? null, maxSupply: t.maxSupply ?? null,
+    mechanism: 'pending', mechanismBasis: null,
+    operatorNote: `${t.operatorNote ? t.operatorNote + ' ' : ''}MECHANISM LAPSED (${date}): was ${t.mechanism} — ${reason.trim()}. It had rested on: ${t.mechanismBasis ?? 'no recorded basis'}` });
+}
+
 export function sourceRow(oldRow, { source, sourceFetchedAt, sourceEvents, chain, token = null, stage = 'STANDARD', note = '', circSupply = null, totalLocked = null, maxSupply = null, mechanism = 'pending', mechanismBasis = null, tierCorrection = null, operatorNote = null }) {
   if (!oldRow?.sym) throw new Error('sourceRow: no sym');
   if (oldRow.retired) throw new Error(`sourceRow: ${oldRow.sym} is RETIRED`);

@@ -5372,3 +5372,25 @@ L3/REZ AFTER v0.37.10 (deployed 20:27:41Z, VPS suite 1,359 ALL GREEN): re-run un
   Stamp: the pre-chore one, restored. Operator: keep it, or let it lapse to pending.
 - First effect of the refreshed index on the live bot: a 7-day reminder for CARV's 9 Nov cliff
   (sourced row, 0.98% of max supply). Delivery: operator to confirm.
+
+## 2026-11-03 — A WINDOW IS SCORED AFTER ITS LAST DAY; ENA OCTOBER A CATCH-UP; ZRO OBSERVED; REZ LAPSED
+
+Operator decisions on the 2026-11-02 report, as implemented:
+- WINDOW TIMING. cadenceDecision scored once now passed the window's LAST day at 00:00, so that day
+  was counted for however many hours had run (ENA October stamp 10-09T03:59: 887,353 of the day's
+  1,540,407). One rule now, windowScoreableAt(lastDayStart) = last day's end in UTC + 2h
+  (WINDOW_SCORE_MARGIN_MS, the explorer's indexing lag): cadenceDecision, cliffClusterDecision, the
+  cliff watch's due filter, and detect-cliff-cluster's loadCliffs (a cliff is past only once its
+  7-day grid window has closed; between, OPEN — the 10-29/30 cliffs scored on 11-02 were open).
+  The poller's fetch-and-decide is exported as scoreWindow() and shared with the re-score.
+- annotate-verdict.js gains --exclude [--kind catch-up] (the verdict stays stamped and CONFIRM, and
+  is marked outside drift, the spec mean in detect-cadence, and promote-unlock tolerance=auto) and
+  --rescore (re-scored by scoreWindow under the current rule; notified/excluded carried; refused if
+  the action would change — that is --void). Both log the original first.
+- promote-unlock.js gains observe="..." (operatorNote only; refused if anything else would change —
+  the verified promote path rebuilds the row and would have dropped ZRO's reviewBy) and
+  mechanism=pending reason="..." (a stamp LAPSES through sourceRow: pending, pressure-rule stage, the
+  old mechanism and basis recorded in operatorNote).
+- Fixture 98 on real data (ENA's October days, ZRO's and REZ's rows); five mutations caught.
+- EIGEN stays demoted; a one-time report after its 30 Nov window. L3: one-time report-only cliff runs
+  daily 4–10 Nov (stop at the first covered run); the stamp is the operator's.

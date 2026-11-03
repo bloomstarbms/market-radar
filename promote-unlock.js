@@ -71,7 +71,7 @@ if (!sym) {
   process.exit(1);
 }
 const args = Object.fromEntries(kvs.map((s) => { const i = s.indexOf('='); return [s.slice(0, i), s.slice(i + 1)]; }));
-if (!args.keepEvents && !args.mechanism && !args.strength && !['sourced', 'contract-cliff'].includes(args.provenance) && (!args.source || !args.detail)) { console.error('source= and detail= are required — provenance is what "verified" means. (keepEvents=1 reuses existing provenance.)'); process.exit(1); }
+if (!args.keepEvents && !args.mechanism && !args.strength && !args.observe && !['sourced', 'contract-cliff'].includes(args.provenance) && (!args.source || !args.detail)) { console.error('source= and detail= are required — provenance is what "verified" means. (keepEvents=1 reuses existing provenance.)'); process.exit(1); }
 
 const j = JSON.parse(readFileSync('unlocks.json', 'utf8'));
 let idx = j.tokens.findIndex((t) => t.sym === sym.toUpperCase());
@@ -164,9 +164,40 @@ if (args.strength) {
 // verdict is derived from data/cliff-cluster-report.json (Route 2's evidence), the
 // basis string is built from it, and the stage goes LOGGED: there is no discrete
 // event to announce. Refused where the report does not support the label.
+// observe="..." (2026-11-03): append a dated OBSERVED, NOT CLAIMED line to operatorNote and
+// change nothing else (appendObservation). For a pattern seen on chain that the row does not
+// rest on — ZRO's day-20 wallet — recorded so the next session finds it, claimed nowhere.
+if (args.observe) {
+  const t = j.tokens[idx];
+  if (!t) { console.error(`${sym}: no such row`); process.exit(1); }
+  const { appendObservation } = await import('./src/core/unlock-promote.js');
+  let row;
+  try { row = appendObservation(t, args.observe, new Date().toISOString().slice(0, 10)); } catch (e) { console.error(e.message); process.exit(1); }
+  const changed = Object.keys(row).filter((k) => JSON.stringify(row[k]) !== JSON.stringify(t[k]));
+  if (changed.join() !== 'operatorNote' || Object.keys(t).some((k) => !(k in row))) { console.error(`${sym}: REFUSED — an observation may change operatorNote only (would change: ${changed.join(', ')})`); process.exit(1); }
+  j.tokens[idx] = row;
+  j.lastReviewed = new Date().toISOString().slice(0, 10) + ` (observation on ${row.sym} via promote-unlock.js)`;
+  writeFileSync('unlocks.json.tmp', JSON.stringify(j, null, 1)); renameSync('unlocks.json.tmp', 'unlocks.json');
+  console.log(`${row.sym}: observation recorded in operatorNote (nothing else changed).`);
+  process.exit(0);
+}
+
 if (args.mechanism) {
   const t = j.tokens[idx];
   if (!t || t.provenance !== 'sourced') { console.error(`${sym}: mechanism= applies to a SOURCED row`); process.exit(1); }
+  // mechanism=pending reason="..." LAPSES a stamp (lapsedMechanismRow): back to pending and
+  // the pressure rule's stage, with what lapsed and why in operatorNote. No report needed —
+  // a lapse is the absence of support, recorded as such.
+  if (args.mechanism === 'pending') {
+    const { lapsedMechanismRow } = await import('./src/core/unlock-promote.js');
+    let row;
+    try { row = lapsedMechanismRow(t, args.reason, new Date().toISOString().slice(0, 10)); } catch (e) { console.error(e.message); process.exit(1); }
+    j.tokens[idx] = row;
+    j.lastReviewed = new Date().toISOString().slice(0, 10) + ` (mechanism ${row.sym} lapsed via promote-unlock.js)`;
+    writeFileSync('unlocks.json.tmp', JSON.stringify(j, null, 1)); renameSync('unlocks.json.tmp', 'unlocks.json');
+    console.log(`${row.sym} mechanism ${t.mechanism} LAPSED → pending, stage ${t.stage} → ${row.stage} (pressure rule).`);
+    process.exit(0);
+  }
   const rep = JSON.parse(readFileSync('data/cliff-cluster-report.json', 'utf8'))[sym.toUpperCase()];
   const res = (rep?.results || []).filter((r) => Array.isArray(r.perCliff));
   if (!res.length) { console.error(`${sym}: no cliff-cluster evidence — run detect-cliff-cluster.js first`); process.exit(1); }
@@ -243,10 +274,14 @@ const eventDate = args.date ?? null;
 function autoTolerance(sym, walletAddrs, mean) {
   const rep = JSON.parse(readFileSync('data/cadence-report.json', 'utf8'))[sym];
   const watched = new Set(walletAddrs.map((a) => a.toLowerCase()));
+  // A month excluded through annotate-verdict.js (a catch-up window) is real but not the
+  // schedule's level: it stays out of the band, exactly as it stays out of the mean.
+  let excluded = new Set();
+  try { excluded = new Set(Object.entries(JSON.parse(readFileSync('data/cadence-watch.json', 'utf8')).months?.[sym] || {}).filter(([, r]) => r?.excluded).map(([k]) => k)); } catch { /* none */ }
   const byMonth = {};
   for (const p of rep?.perWallet || []) {
     if (typeof p.solo !== 'object' || !watched.has(p.addr.toLowerCase())) continue;
-    for (const e of p.solo.emissions) { const m = e.d.slice(0, 7); byMonth[m] = (byMonth[m] || 0) + e.amt; }
+    for (const e of p.solo.emissions) { const m = e.d.slice(0, 7); if (e.excluded || excluded.has(m)) continue; byMonth[m] = (byMonth[m] || 0) + e.amt; }
   }
   const ratios = Object.values(byMonth).map((v) => v / mean);
   return deriveTolerance(ratios);

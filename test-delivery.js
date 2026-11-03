@@ -4324,6 +4324,82 @@ console.log('97. detect-cliff-cluster.js requires its fetch to reach the newest 
     && [...cli.matchAll(/await outflowsWithRecipients\(/g)].length === 1);
 }
 
+console.log('98. a window is scored only after its last day has ended (UTC) plus a margin; catch-up months stay out of the mean; observations and lapses change only what they say');
+{
+  const cw = await import('./src/sources/calendar/cadence-watch.js');
+  const av = await import('./annotate-verdict.js');
+  const dcl = await import('./detect-cliff-cluster.js');
+  const dca = await import('./detect-cadence.js');
+  const up = await import('./src/core/unlock-promote.js');
+  const tokens = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
+  const ena = tokens.find((t) => t.sym === 'ENA');
+  // ENA's real October window (10-05..10-09), 0x54B8's outflows per day. The live stamp was
+  // written 10-09T03:59 and counted 887,353 for 10-09; the day's three transfers were
+  // 887,352.51 (02:56), 372,822.06 (06:07) and 280,232.43 (20:12).
+  const at = (s) => new Date(s + 'Z');
+  const t9 = [887352.51, 372822.0637, 280232.4337];
+  const oct = { '2026-10-05': 9632082, '2026-10-06': 186387859, '2026-10-07': 3542558, '2026-10-08': 6809879, '2026-10-09': t9[0] + t9[1] + t9[2] };
+  check('the window\'s last day is still running at 10-09T03:59 (the live stamp\'s moment): PENDING, not a verdict', cw.cadenceDecision(ena.cadence, 2026, 10, at('2026-10-09T03:59'), oct).action === 'PENDING');
+  check('...and still PENDING inside the margin after midnight (10-10T01:59)', cw.cadenceDecision(ena.cadence, 2026, 10, at('2026-10-10T01:59'), oct).action === 'PENDING' && cw.WINDOW_SCORE_MARGIN_MS === 2 * 3600e3);
+  const d = cw.cadenceDecision(ena.cadence, 2026, 10, at('2026-10-10T02:00'), oct);
+  check('scored at 10-10T02:00: the 20:12 transfer on the last day is COUNTED — window total 207,912,785, not the stamp\'s 207,259,731', d.action === 'CONFIRM' && d.windowTotal === 207912785 && d.days['2026-10-09'] === 1540407, JSON.stringify(d));
+  // Cliff windows: days [cliff, cliff+w); same rule on the last day.
+  const cs = { windowDays: 5, baselineDaily: 10, minRatio: 3, minRecipients: 2 };
+  const cdays = { '2026-10-09': { amt: 500, to: ['a', 'b', 'c'] } };
+  check('cliff window: PENDING at 10-10T00:30 (inside the margin), scored at 10-10T02:00 with the last day\'s claims counted',
+    cw.cliffClusterDecision(cs, '2026-10-05', at('2026-10-10T00:30'), cdays).action === 'PENDING'
+    && cw.cliffClusterDecision(cs, '2026-10-05', at('2026-10-10T02:00'), cdays).inWindow === 500);
+  // The cliff CLI: a cliff is past only once its 7-day window has closed; between, OPEN.
+  const ix = { protocols: [{ symbol: 'FX98', events: [{ t: Date.parse('2026-09-29T00:00Z') / 1000, type: 'cliff' }, { t: Date.parse('2026-10-29T00:00Z') / 1000, type: 'cliff' }, { t: Date.parse('2026-11-29T00:00Z') / 1000, type: 'cliff' }] }] };
+  const l1 = dcl.loadCliffs('FX98', Date.parse('2026-11-02T20:15Z'), ix), l2 = dcl.loadCliffs('FX98', Date.parse('2026-11-05T02:00Z'), ix);
+  check('the CLI on 11-02 scores 09-29 only; 10-29 is OPEN (its window ends 11-04); from 11-05T02:00 it is past', l1.past.join() === '2026-09-29' && l1.open.join() === '2026-10-29' && l1.future.join() === '2026-11-29' && l2.past.join() === '2026-09-29,2026-10-29');
+  // scoreWindow: the poller's fetch-and-decide, shared with --rescore; uncovered is not evidence.
+  const fake = (covered) => async () => ({ byDay: oct, covered });
+  const s1 = await cw.scoreWindow(ena, 2026, 10, at('2026-10-10T02:00'), fake(true)), s2 = await cw.scoreWindow(ena, 2026, 10, at('2026-10-10T02:00'), fake(false));
+  check('scoreWindow returns the same decision the rule makes, and { unobserved } on an uncovered fetch', s1.dec?.windowTotal === 207912785 && !s2.dec && s2.unobserved === ena.cadence.wallet);
+  // EXCLUSION: the real October stamp, kept, marked outside the statistics.
+  const stamp = { action: 'CONFIRM', date: '2026-10-06', amount: 207259731, ratio: 17.172, window: '2026-10-05..2026-10-09', windowTotal: 207259731, peakDay: '2026-10-06', peakAmount: 186387859, peakRatio: 15.443, rule: 'window-total', at: '2026-10-09T03:59' };
+  const months = { '2026-08': { action: 'CONFIRM', ratio: 1.103, at: 'x' }, '2026-09': { action: 'CONFIRM', ratio: 1.288, peakRatio: 0.427, at: 'x' }, '2026-10': stamp };
+  const why = 'catch-up emission: eleven regular recipients paid exactly 18x their usual month';
+  const ex = av.excludeVerdict({ months: { ENA: months } }, 'ENA', '2026-10', why, 'catch-up', '2026-11-03T10:00');
+  check('--exclude keeps the verdict (CONFIRM, every field) and marks it, with the original in the log entry', !ex.error && ex.state.months.ENA['2026-10'].action === 'CONFIRM' && ex.state.months.ENA['2026-10'].windowTotal === 207259731
+    && ex.state.months.ENA['2026-10'].excluded.kind === 'catch-up' && ex.entry.op === 'exclude' && ex.entry.original.peakRatio === 15.443);
+  check('--exclude refuses a miss, a repeat, a short reason, and a cliff key',
+    !!av.excludeVerdict({ months: { E: { '2026-10': { action: 'DEMOTE' } } } }, 'E', '2026-10', why).error && !!av.excludeVerdict(ex.state, 'ENA', '2026-10', why).error
+    && !!av.excludeVerdict({ months: { ENA: months } }, 'ENA', '2026-10', 'short').error && !!av.excludeVerdict({ months: { ENA: months } }, 'ENA', '2026-10-06', why).error);
+  const dr = cw.driftStatus(ex.state.months.ENA), dr0 = cw.driftStatus(months);
+  check('drift skips the excluded month: last is September (0.427), not October (15.443)', dr0.last === 15.443 && dr.last === 0.427 && dr.n === 2);
+  const line = cw.cadenceStatus([ena], { months: ex.state.months, demotions: {}, cliffs: {} }, at('2026-11-03T10:00')).line;
+  check('the heartbeat says so: "ENA ok 2026-10 (2026-10 catch-up, outside the mean)", and no +1444%', line.includes('ENA ok 2026-10 (2026-10 catch-up, outside the mean)') && !/1444/.test(line), line);
+  // RESCORE: the corrected decision replaces the stamp; notified and excluded are carried.
+  const rs = av.rescoreVerdict({ months: { ENA: { '2026-10': { ...ex.state.months.ENA['2026-10'], notified: true } } } }, 'ENA', '2026-10', d, 'window scored before its last day ended', '2026-11-03T10:05');
+  const r = rs.state?.months.ENA['2026-10'];
+  check('--rescore replaces the figures (207,912,785), keeps notified, excluded and the original stamp time, and logs the original', !rs.error && r.windowTotal === 207912785 && r.notified === true && r.excluded?.kind === 'catch-up'
+    && r.at === '2026-10-09T03:59' && r.rescored.at === '2026-11-03T10:05' && rs.entry.original.windowTotal === 207259731);
+  check('--rescore refuses a re-score that would change the verdict (that is --void\'s job)', !!av.rescoreVerdict({ months: { ENA: months } }, 'ENA', '2026-10', { ...d, action: 'DEMOTE' }, why).error);
+  // detect-cadence: an excluded month stays in the run, out of the mean.
+  const byDay = {};
+  for (let m = 3; m <= 10; m++) byDay[`2026-${String(m).padStart(2, '0')}-06`] = m === 10 ? 186e6 : 12e6;
+  const all = dca.detectCadence(byDay, { now: at('2026-11-03T00:00') }), exd = dca.detectCadence(byDay, { now: at('2026-11-03T00:00'), exclude: new Set(['2026-10']) });
+  check('detect-cadence: with October excluded the run is still 8 months, the mean is 12M (not 33.75M), and October is listed `excluded`',
+    all.meanAmount === 33750000 && exd.monthsRun === 8 && exd.meanAmount === 12000000 && exd.emissions.find((e) => e.d === '2026-10-06')?.excluded === true, JSON.stringify({ all: all.meanAmount, exd: exd.meanAmount, run: exd.monthsRun }));
+  // OBSERVATION: ZRO's real row; only operatorNote changes, the review date survives.
+  const zro = tokens.find((t) => t.sym === 'ZRO');
+  const zo = up.appendObservation(zro, 'detect-cadence ZRO --top 27: wallet 0x637ca60D pays ~1.31M on day ~20, 14 consecutive months', '2026-11-03');
+  check('observe= on ZRO changes operatorNote only; reviewBy, falsifier, events and tier are untouched',
+    Object.keys(zro).every((k) => k === 'operatorNote' || JSON.stringify(zo[k]) === JSON.stringify(zro[k])) && Object.keys(zo).length === Object.keys(zro).length
+    && zo.reviewBy === zro.reviewBy && zo.operatorNote.endsWith('OBSERVED, NOT CLAIMED (2026-11-03): detect-cadence ZRO --top 27: wallet 0x637ca60D pays ~1.31M on day ~20, 14 consecutive months'));
+  // LAPSE: REZ's real row back to pending, stage from the pressure rule, history in the note.
+  const rez = tokens.find((t) => t.sym === 'REZ');
+  const rl = up.lapsedMechanismRow(rez, 'off-index evidence Apr–Jun, not re-earnable on fresh data', '2026-11-03');
+  check('mechanism=pending on REZ: pending, no basis, stage by the pressure rule, every source field carried, and the lapse with its old basis recorded',
+    rez.mechanism === 'index-contradicted' && rl.mechanism === 'pending' && !('mechanismBasis' in rl)
+    && rl.stage === up.pressureStage({ sourceEvents: rez.sourceEvents, maxSupply: rez.maxSupply, stage: 'STANDARD', mechanism: 'pending' })
+    && ['source', 'sourceFetchedAt', 'sourceEvents', 'chain', 'maxSupply'].every((k) => JSON.stringify(rl[k]) === JSON.stringify(rez[k]))
+    && rl.operatorNote.includes('MECHANISM LAPSED (2026-11-03): was index-contradicted — off-index evidence Apr–Jun, not re-earnable on fresh data. It had rested on: ' + rez.mechanismBasis));
+  check('a lapse refuses a row with no stamp and a short reason', (() => { try { up.lapsedMechanismRow(rl, 'off-index evidence Apr–Jun, not re-earnable', '2026-11-03'); return false; } catch { /* expected */ } try { up.lapsedMechanismRow(rez, 'short', '2026-11-03'); return false; } catch { return true; } })());
+}
+
 // A block that mutes the console and forgets to restore it hides every section header after it.
 check('the suite ends with console.log and console.error as it started (every mute restored)', console.log === OUT && console.error === ERR);
 console.error = origErr;
