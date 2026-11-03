@@ -5394,3 +5394,22 @@ Operator decisions on the 2026-11-02 report, as implemented:
 - Fixture 98 on real data (ENA's October days, ZRO's and REZ's rows); five mutations caught.
 - EIGEN stays demoted; a one-time report after its 30 Nov window. L3: one-time report-only cliff runs
   daily 4–10 Nov (stop at the first covered run); the stamp is the operator's.
+
+## 2026-11-03 — DEPOSIT/WITHDRAWAL NOTICES MUTED (operator); REZ LIVE FIXTURES FOLLOW THE LAPSE
+
+- SUSPENSION notices are no longer sent, to the channel or the operator DM, unless
+  config.suspensionNotices (SUSPENSION_NOTICES=1). Every detection — open-ended, routine with
+  interest, routine without (review log, as before) — goes through processSuspension(): recorded in
+  state.suspensionLog (cap 500) with venue, asset, which, routine, interest and action, logged to
+  bot.log when muted, and counted on the heartbeat: "Deposit/withdrawal notices: muted · N seen 24h".
+  suspensionInterest still runs, so the cross-venue memory keeps working while muted.
+- Dependencies checked: nothing reads a suspension. Delistings write pendingDelists and suspensions
+  read it, not the reverse; CONFLUENCE, listings and the digest take no suspension input; SUSPENSION
+  appears elsewhere only as a FACT type (budget), a label (dispatcher), a route (routes.js) and the
+  boot admit self-test. Pure resumption notices were never a message type: eight phrasings classify
+  as null (unclassified review log) or operational noise.
+- Fixture 99 (12 checks); three mutations caught (default on, muted still dispatched, muted not logged).
+- MY MISS, fixed here: the 2026-11-03 data commit (REZ lapse, f0406dd) was pushed without re-running
+  the suite, and three LIVE fixtures pinned REZ as index-contradicted — the tree failed its own suite
+  until this patch. The LIVE checks now pin the lapse; the stamp's behaviour is tested on REZ's row
+  frozen at v0.37.10 (fixtures/rez-row-2026-11-02.json). A data commit runs the suite like a code commit.

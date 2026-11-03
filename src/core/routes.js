@@ -37,7 +37,7 @@ const FACT_ROUTES = {
   ANNOUNCE: 'push at detection',
   PERP: 'push at detection',
   UPBIT: 'push at detection',
-  SUSPENSION: 'push at detection (routine vs open-ended distinguished)',
+  SUSPENSION: 'MUTED by default (config.suspensionNotices): detected, logged to bot.log and state.suspensionLog, counted on the heartbeat, sent nowhere; when on, push at detection (routine vs open-ended distinguished) (cex/announcements.js)',
   DELIST_SCHEDULED: 'push at announcement + T-7d/T-1d reminders',
   UNLOCK: 'push at verified-date stages',
   TGE: 'push at detection',

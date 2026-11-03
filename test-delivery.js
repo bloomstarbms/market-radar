@@ -1608,8 +1608,13 @@ console.log('48. MECHANISM — a sourced date can name no discrete event; weak f
   const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
   const l3 = live.find((t) => t.sym === 'L3'), rez = live.find((t) => t.sym === 'REZ'), order = live.find((t) => t.sym === 'ORDER');
   check('LIVE: L3 is continuous-claim, LOGGED, with basis', l3?.mechanism === 'continuous-claim' && l3.stage === 'LOGGED' && /2367/.test(l3.mechanismBasis));
-  check('LIVE: REZ is index-contradicted, LOGGED, with the off-index dates in its basis', rez?.mechanism === 'index-contradicted' && rez.stage === 'LOGGED' && /2026-04-30/.test(rez.mechanismBasis));
-  check('LIVE: every sourced row passes the gate with mechanisms in place', sourcedRowProblems(l3).length === 0 && sourcedRowProblems(rez).length === 0);
+  // REZ's index-contradicted stamp LAPSED by operator decision on 2026-11-03 ("off-index evidence
+  // Apr–Jun, not re-earnable on fresh data"). The live row says so; the stamp's behaviour is tested
+  // on the row frozen at v0.37.10 (fixtures/rez-row-2026-11-02.json), not on today's data.
+  const rezStamped = JSON.parse(readFileSync('fixtures/rez-row-2026-11-02.json', 'utf8')).row;
+  check('LIVE: REZ\'s stamp has lapsed — pending, no basis, and the note records the lapse with the off-index dates it rested on', rez?.mechanism === 'pending' && !rez.mechanismBasis && /MECHANISM LAPSED \(2026-11-03\): was index-contradicted — off-index evidence Apr–Jun, not re-earnable on fresh data\. It had rested on: .*2026-04-30/.test(rez.operatorNote));
+  check('FROZEN: REZ as stamped (v0.37.10) was index-contradicted, LOGGED, with the off-index dates in its basis', rezStamped.mechanism === 'index-contradicted' && rezStamped.stage === 'LOGGED' && /2026-04-30/.test(rezStamped.mechanismBasis));
+  check('LIVE: every sourced row passes the gate with mechanisms in place', sourcedRowProblems(l3).length === 0 && sourcedRowProblems(rez).length === 0 && sourcedRowProblems(rezStamped).length === 0);
   // 2026-09-15 TIER CORRECTION: ORDER's margin (0.17; grid best 0.26) is outside the
   // verified population (0.64-0.76). It is sourced again, with the verification it
   // held recorded — and its coverage line is the sourced one, with no WEAK clause.
@@ -1617,9 +1622,9 @@ console.log('48. MECHANISM — a sourced date can name no discrete event; weak f
   check('LIVE: ORDER carries the settled evidence — 9 grid points with margins, best w3/r2 0.26 against bar 0.40, spec and 8 backtested cliffs retained', order?.tierHistory?.evidence?.grid?.points?.length === 9 && order.tierHistory.evidence.grid.best.margin === 0.26 && order.tierHistory.evidence.bar === 0.4 && order.tierHistory.evidence.stampedMargin === 0.17 && order.tierHistory.retracted.clusterSpec?.hits === 6 && order.tierHistory.retracted.cliffDates?.filter((c) => c.cluster !== null).length === 8);
   check('LIVE: ORDER passes the sourced gate and its coverage line names the source, not a WEAK falsifier', sourcedRowProblems(order).length === 0 && /published figures/.test(claimCoverage(order, 0).line) && !/WEAK/.test(claimCoverage(order, 0).line));
   check('claimCoverage for a stream says there is no discrete event', claimCoverage(l3, 3).scope === 'mechanism' && /No discrete event/.test(claimCoverage(l3, 3).line));
-  check('claimCoverage for a contradicted index says the chain contradicts it', /Index contradicted by chain/.test(claimCoverage(rez, 3).line));
+  check('claimCoverage for a contradicted index says the chain contradicts it (the frozen stamped row)', /Index contradicted by chain/.test(claimCoverage(rezStamped, 3).line) && !/Index contradicted by chain/.test(claimCoverage(rez, 3).line));
   const cov = unlockCoverage();
-  check('coverage line splits sourced into pending vs unverifiable-by-mechanism', /\d+ pending verification · 2 unverifiable by mechanism: 1 continuous-claim, 1 index-contradicted/.test(cov.line) && cov.sourcedPending + cov.sourcedUnverifiable === cov.sourced);
+  check('coverage line splits sourced into pending vs unverifiable-by-mechanism (since 2026-11-03: L3 only)', /\d+ pending verification · 1 unverifiable by mechanism: 1 continuous-claim, 0 index-contradicted/.test(cov.line) && cov.sourcedPending + cov.sourcedUnverifiable === cov.sourced, cov.line);
   check('coverage line carries no WEAK label and no weakFalsifier count (state retired)', !/WEAK/.test(cov.line) && cov.weakFalsifier === undefined);
   // RENDERING RULE, constructed state, fixed `now`. A cliff-watched row renders its
   // stamped margin (one derivation, in unlock-promote.js — the inline chance-rate copy
@@ -4390,7 +4395,7 @@ console.log('98. a window is scored only after its last day has ended (UTC) plus
     Object.keys(zro).every((k) => k === 'operatorNote' || JSON.stringify(zo[k]) === JSON.stringify(zro[k])) && Object.keys(zo).length === Object.keys(zro).length
     && zo.reviewBy === zro.reviewBy && zo.operatorNote.endsWith('OBSERVED, NOT CLAIMED (2026-11-03): detect-cadence ZRO --top 27: wallet 0x637ca60D pays ~1.31M on day ~20, 14 consecutive months'));
   // LAPSE: REZ's real row back to pending, stage from the pressure rule, history in the note.
-  const rez = tokens.find((t) => t.sym === 'REZ');
+  const rez = JSON.parse(readFileSync('fixtures/rez-row-2026-11-02.json', 'utf8')).row; // REZ as stamped, before the 2026-11-03 lapse
   const rl = up.lapsedMechanismRow(rez, 'off-index evidence Apr–Jun, not re-earnable on fresh data', '2026-11-03');
   check('mechanism=pending on REZ: pending, no basis, stage by the pressure rule, every source field carried, and the lapse with its old basis recorded',
     rez.mechanism === 'index-contradicted' && rl.mechanism === 'pending' && !('mechanismBasis' in rl)
@@ -4398,6 +4403,52 @@ console.log('98. a window is scored only after its last day has ended (UTC) plus
     && ['source', 'sourceFetchedAt', 'sourceEvents', 'chain', 'maxSupply'].every((k) => JSON.stringify(rl[k]) === JSON.stringify(rez[k]))
     && rl.operatorNote.includes('MECHANISM LAPSED (2026-11-03): was index-contradicted — off-index evidence Apr–Jun, not re-earnable on fresh data. It had rested on: ' + rez.mechanismBasis));
   check('a lapse refuses a row with no stamp and a short reason', (() => { try { up.lapsedMechanismRow(rl, 'off-index evidence Apr–Jun, not re-earnable', '2026-11-03'); return false; } catch { /* expected */ } try { up.lapsedMechanismRow(rez, 'short', '2026-11-03'); return false; } catch { return true; } })());
+}
+
+console.log('99. deposit/withdrawal notices are detected and logged, sent nowhere (muted by default), and counted on the heartbeat');
+{
+  const an = await import('./src/sources/cex/announcements.js');
+  const NOW = Date.UTC(2026, 10, 3, 12);
+  const logs = [];
+  const st = {};
+  const deps = (enabled) => ({ st, now: NOW, enabled, unlocks: [], log: (s) => logs.push(s), noteUnclassified: () => {} });
+  check('the flag is OFF unless SUSPENSION_NOTICES says otherwise', config.suspensionNotices === false && !process.env.SUSPENSION_NOTICES);
+  check('the heartbeat line before anything is seen: "Deposit/withdrawal notices: muted · 0 seen 24h"', an.suspensionNoticeStatus(st, NOW, false).line === 'Deposit/withdrawal notices: muted · 0 seen 24h');
+  // The real open-ended shape (fixture 16): what used to be the loudest push.
+  const open = an.classify('Suspension of ALLO withdrawals');
+  const prevFetch = globalThis.fetch;
+  let calls = 0, act;
+  try { globalThis.fetch = async () => { calls++; return { status: 200, json: async () => ({ ok: true, result: { message_id: 1 } }) }; }; act = an.processSuspension('bithumb', { id: 'fx99a', title: 'Suspension of ALLO withdrawals' }, open, deps(false)); }
+  finally { globalThis.fetch = prevFetch; }
+  check('an open-ended suspension is DETECTED (SUSPENSION, HIGH) and MUTED: no network call, nothing sent', open.type === 'SUSPENSION' && open.sev === 'HIGH' && act === 'muted' && calls === 0);
+  const e = st.suspensionLog?.[0];
+  check('...LOGGED to state with venue, which, routine flag and action', st.suspensionLog?.length === 1 && e.venue === 'bithumb' && e.which === 'withdrawals' && e.routine === false && e.action === 'muted' && e.ts === NOW);
+  check('...and to bot.log, one line saying it was muted and why', logs.length === 1 && /^\[announce\] SUSPENSION muted \(config\.suspensionNotices off\) · bithumb · .* withdrawals · no resumption stated · "Suspension of ALLO withdrawals"$/.test(logs[0]), logs[0]);
+  check('the heartbeat count goes up: "muted · 1 seen 24h"', an.suspensionNoticeStatus(st, NOW, false).line === 'Deposit/withdrawal notices: muted · 1 seen 24h');
+  // A routine notice with a stated resumption: still detected and counted, to the review log as before.
+  const pol = an.classify('폴리곤에코시스템토큰(POL) 입출금 일시 중지 안내 (08/14 재개)');
+  check('a routine notice (stated 재개) is detected, sent nowhere, kept in the review log and counted', an.processSuspension('upbit', { id: 'fx99b', title: '폴리곤에코시스템토큰(POL) 입출금 일시 중지 안내 (08/14 재개)' }, pol, deps(false)) === 'review'
+    && an.suspensionNoticeStatus(st, NOW, false).n === 2);
+  // Cross-venue memory still works while muted: the same asset halted on a second venue has interest.
+  const pokt = an.classify('POKT Deposit and Withdrawal Suspension Notice (resumes 18/08 18:00 KST)');
+  an.processSuspension('bithumb', { id: 'fx99c', title: '(POKT) Deposit and Withdrawal Suspension Notice (resumes 18/08 18:00 KST)' }, { ...pokt }, deps(false));
+  const second = { ...pokt };
+  check('the cross-venue input still works when muted: POKT on a second venue carries interest and is muted, not lost', an.processSuspension('upbit', { id: 'fx99d', title: '(POKT) Deposit and Withdrawal Suspension Notice (resumes 18/08 18:00 KST)' }, second, deps(false)) === 'muted' && /halted on 2 venues/.test(second.interest.join()));
+  check('with the flag ON the same notice is "send" (one flag re-enables it) and is still logged', an.processSuspension('bithumb', { id: 'fx99e', title: 'Suspension of ALLO withdrawals' }, an.classify('Suspension of ALLO withdrawals'), deps(true)) === 'send' && st.suspensionLog.at(-1).action === 'send' && an.suspensionNoticeStatus(st, NOW, true).line === 'Deposit/withdrawal notices: ON · 5 seen 24h');
+  const src = readFileSync('src/sources/cex/announcements.js', 'utf8');
+  const loop = src.slice(src.indexOf('export async function pollAnnouncements'));
+  check('the poller continues past a muted or review suspension BEFORE anything reaches fresh/dispatch',
+    /if \(c\.type === 'SUSPENSION'\) \{\s*const action = processSuspension\(exch, it, c\);\s*if \(action === 'review'\) \{ routineSuppressed\+\+; continue; \}\s*if \(action === 'muted'\) \{ suspensionsMuted\+\+; continue; \}/.test(loop)
+    && loop.indexOf("if (action === 'muted')") < loop.indexOf('fresh.push({ it, c })'));
+  // The live heartbeat carries the line (state injected in memory, restored).
+  const live = getState(), savedLog = live.suspensionLog;
+  try {
+    live.suspensionLog = [{ ts: Date.now() - 3600e3, venue: 'fx', action: 'muted' }, { ts: Date.now() - 30 * 3600e3, venue: 'fx', action: 'muted' }];
+    const hbS = buildHeartbeat(Date.now(), { rows: [], drops: { byReason: {} }, bugs: 0, startedAt: Date.now(), digest: ZERO_DIGEST });
+    check('buildHeartbeat carries exactly "Deposit/withdrawal notices: muted · 1 seen 24h" (the 30h-old one is outside the window)', hbS.lines.includes('Deposit/withdrawal notices: muted · 1 seen 24h'));
+  } finally { live.suspensionLog = savedLog; }
+  const routes = readFileSync('src/core/routes.js', 'utf8');
+  check('routes.js describes SUSPENSION as muted by default', /SUSPENSION: 'MUTED by default \(config\.suspensionNotices\)/.test(routes));
 }
 
 // A block that mutes the console and forgets to restore it hides every section header after it.

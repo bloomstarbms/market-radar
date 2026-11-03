@@ -153,6 +153,41 @@ export function suspensionInterest(asset, exch, deps = {}) {
   if (soon.length) reasons.push('a verified unlock falls within 7 days — supply cannot move during the halt');
   return reasons;
 }
+// DEPOSIT/WITHDRAWAL NOTICES ARE MUTED BY DEFAULT (operator, 2026-11-03). Every SUSPENSION
+// the classifier finds — routine or open-ended, suspension or stated resumption — is still
+// DETECTED, run through suspensionInterest (so the cross-venue memory keeps working), logged
+// to bot.log and recorded in state.suspensionLog; only the message is withheld, to the channel
+// and to the operator DM alike. config.suspensionNotices (SUSPENSION_NOTICES=1) restores it.
+// Nothing else reads a suspension: delistings write pendingDelists, suspensions read it, not the
+// reverse; CONFLUENCE, listings and the digest take no suspension input.
+// Returns 'review' (routine, nothing worth sending — the review log, as before), 'muted', or
+// 'send'. The poller dispatches only on 'send'.
+export const SUSPENSION_LOG_CAP = 500;
+export function processSuspension(exch, it, c, deps = {}) {
+  const st = deps.st ?? getState();
+  const now = deps.now ?? Date.now();
+  const enabled = deps.enabled ?? config.suspensionNotices;
+  const log = deps.log ?? ((s) => console.log(s));
+  const asset = assetOf(it.title);
+  let action = 'send';
+  if (c.routine) {
+    const reasons = suspensionInterest(asset, exch, deps);
+    if (reasons.length) c.interest = reasons; else action = 'review';
+  }
+  if (action === 'send' && !enabled) action = 'muted';
+  (st.suspensionLog ??= []).push({ ts: now, venue: exch, id: it.id ?? null, asset, which: c.which, routine: !!c.routine, interest: c.interest ?? [], action, title: String(it.title || '').slice(0, 160) });
+  while (st.suspensionLog.length > SUSPENSION_LOG_CAP) st.suspensionLog.shift();
+  if (!deps.st) save();
+  if (action === 'review') (deps.noteUnclassified ?? noteUnclassified)(exch, `[ROUTINE_SUSPENSION] ${it.title}`);
+  if (action === 'muted') log(`[announce] SUSPENSION muted (config.suspensionNotices off) · ${exch} · ${asset ?? '?'} ${c.which} · ${c.routine ? 'resumption stated' : 'no resumption stated'}${c.interest?.length ? ` · ${c.interest.join('; ')}` : ''} · "${String(it.title || '').slice(0, 110)}"`);
+  return action;
+}
+// The heartbeat's one line. "seen" is every detection in 24h, whatever its action.
+export function suspensionNoticeStatus(st = getState(), now = Date.now(), enabled = config.suspensionNotices) {
+  const n = (st.suspensionLog || []).filter((e) => now - e.ts < 24 * 3600e3).length;
+  return { n, line: `Deposit/withdrawal notices: ${enabled ? 'ON' : 'muted'} · ${n} seen 24h` };
+}
+
 let unlockCache = { at: 0, events: [] };
 export function loadUnlockEvents(path = null) {
   if (!path && Date.now() - unlockCache.at < 3600e3) return unlockCache.events;
@@ -282,7 +317,7 @@ export async function pollAnnouncements() {
   // Warm the equity-perp symbol set (6h cache) so classify() can tell a stock perp
   // from a crypto perp. Failure is non-fatal: the name-based checks still apply.
   await loadDerivStockSymbols().catch(() => {});
-  let total = 0, fired = 0, routineSuppressed = 0;
+  let total = 0, fired = 0, routineSuppressed = 0, suspensionsMuted = 0;
   const noiseDropped = {};
   for (const [exch, fetcher] of Object.entries(FEEDS)) {
     const items = await fetcher();
@@ -317,16 +352,12 @@ export async function pollAnnouncements() {
       //   UNLOCK OVERLAP   supply cannot move during the window, distorting the event
       //   PENDING DELIST   suspension before delisting is what traps holders
       //   CROSS-VENUE      two venues halting the same asset at once is not maintenance
-      // Anything else goes to the review log, not the channel.
-      if (c.type === 'SUSPENSION' && c.routine) {
-        const asset = assetOf(it.title);
-        const reasons = suspensionInterest(asset, exch);
-        if (!reasons.length) {
-          noteUnclassified(exch, `[ROUTINE_SUSPENSION] ${it.title}`);
-          routineSuppressed++;
-          continue;
-        }
-        c.interest = reasons;
+      // Anything else goes to the review log, not the channel. And since 2026-11-03 every
+      // suspension that WOULD be sent is muted unless config.suspensionNotices is on.
+      if (c.type === 'SUSPENSION') {
+        const action = processSuspension(exch, it, c);
+        if (action === 'review') { routineSuppressed++; continue; }
+        if (action === 'muted') { suspensionsMuted++; continue; }
       }
       if (c.type === 'UNRECOGNISED') {
         // Degrade to caution, not to a default. Never pushed: recorded to the digest
@@ -382,7 +413,7 @@ export async function pollAnnouncements() {
     }
   }
   const noiseStr = Object.entries(noiseDropped).map(([k, v]) => `${v} ${k}`).join(', ');
-  console.log(`[announce] ${total} announcements scanned${fired ? ` · ${fired} alerts` : ''}${noiseStr ? ` · dropped ${noiseStr}` : ''}${routineSuppressed ? ` · ${routineSuppressed} routine suspensions -> review log` : ''}`);
+  console.log(`[announce] ${total} announcements scanned${fired ? ` · ${fired} alerts` : ''}${noiseStr ? ` · dropped ${noiseStr}` : ''}${routineSuppressed ? ` · ${routineSuppressed} routine suspensions -> review log` : ''}${suspensionsMuted ? ` · ${suspensionsMuted} suspension notice(s) muted` : ''}`);
 }
 
 // ANNOUNCEMENT MESSAGES, pure (message diet, CEX remainder). Public: the venue, the

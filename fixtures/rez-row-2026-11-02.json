@@ -1,0 +1,70 @@
+{
+ "note": "REZ's unlocks.json row at v0.37.10 (commit d5e597d), the last state with the index-contradicted stamp; it lapsed by operator decision on 2026-11-03. Frozen so fixtures that test the mechanism's behaviour do not depend on today's data.",
+ "row": {
+  "sym": "REZ",
+  "name": "Renzo",
+  "provenance": "sourced",
+  "source": "defillama",
+  "sourceFetchedAt": "2026-11-02T20:02",
+  "sourceEvents": [
+   {
+    "t": 1785438261,
+    "type": "cliff",
+    "n": 83333333,
+    "cats": "insiders"
+   },
+   {
+    "t": 1788068004,
+    "type": "cliff",
+    "n": 83333333,
+    "cats": "insiders"
+   },
+   {
+    "t": 1790697747,
+    "type": "cliff",
+    "n": 83333333,
+    "cats": "insiders"
+   },
+   {
+    "t": 1793327490,
+    "type": "cliff",
+    "n": 83333333,
+    "cats": "insiders"
+   },
+   {
+    "t": 1795957233,
+    "type": "cliff",
+    "n": 83333333,
+    "cats": "insiders"
+   },
+   {
+    "t": 1798586976,
+    "type": "cliff",
+    "n": 83333333,
+    "cats": "insiders"
+   },
+   {
+    "t": 1801216719,
+    "type": "cliff",
+    "n": 83333333,
+    "cats": "insiders"
+   },
+   {
+    "t": 1803846462,
+    "type": "cliff",
+    "n": 83333333,
+    "cats": "insiders"
+   }
+  ],
+  "chain": "ethereum",
+  "stage": "LOGGED",
+  "note": "",
+  "mechanism": "index-contradicted",
+  "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified. MECHANISM index-contradicted (2026-10-01): 0/4 index cliffs (2026-06-30, 2026-07-30, 2026-08-30, 2026-09-29) show a claim cluster from 0x97061282 at any of 9 parameterisations, while the contract clustered 4x off-index (2026-04-30 13.97x/23r, 2026-05-05 8.42x/12r, 2026-05-10 4.76x/11r, 2026-05-25 5.72x/5r) — the listed dates are not where the claims are",
+  "mechanismBasis": "0/4 index cliffs (2026-06-30, 2026-07-30, 2026-08-30, 2026-09-29) show a claim cluster from 0x97061282 at any of 9 parameterisations, while the contract clustered 4x off-index (2026-04-30 13.97x/23r, 2026-05-05 8.42x/12r, 2026-05-10 4.76x/11r, 2026-05-25 5.72x/5r) — the listed dates are not where the claims are",
+  "token": "ethereum:0x3b50805453023a91a8bf641e279401a0b23fa6f9",
+  "circSupply": 9583333333.333313,
+  "totalLocked": 416666666.66666603,
+  "maxSupply": 9999999999.999979
+ }
+}

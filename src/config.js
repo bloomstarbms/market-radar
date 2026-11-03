@@ -13,7 +13,7 @@ if (existsSync(envPath)) {
   }
 }
 
-export const VERSION = '0.37.11';
+export const VERSION = '0.37.12';
 
 // A COPY OF THE TREE MUST NOT SEND. Twice (2026-09-15, 2026-09-17) a boot check on a
 // tree copy carried .env and pushed "cliff today" reminders that the live bot then
@@ -60,6 +60,10 @@ export const config = {
   cexExchanges: (process.env.CEX_EXCHANGES ?? 'binance,mexc,bybit,gate,kucoin,bitget')
     .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
   heartbeatHours: Number(process.env.HEARTBEAT_HOURS ?? 24),
+  // Deposit/withdrawal suspension (and resumption) notices: OFF by default (operator,
+  // 2026-11-03). Still detected, logged to bot.log and state.suspensionLog, and counted on
+  // the heartbeat; SUSPENSION_NOTICES=1 sends them again (announcements.js processSuspension).
+  suspensionNotices: ['1', 'true', 'yes'].includes((process.env.SUSPENSION_NOTICES || '').toLowerCase()),
   etherscanKey: process.env.ETHERSCAN_API_KEY || '',
   heliusKey: process.env.HELIUS_API_KEY || '',
   arkhamKey: process.env.ARKHAM_API_KEY || '',

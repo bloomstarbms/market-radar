@@ -27,6 +27,7 @@ import { tmpSweepStatus } from './tmp-sweep.js';
 import { flowsStatus } from '../sources/etf/flows.js';
 import { cadenceStatus } from '../sources/calendar/cadence-watch.js';
 import { unlockCoverage, sourcedFiring } from '../sources/calendar/unlocks.js';
+import { suspensionNoticeStatus } from '../sources/cex/announcements.js';
 import { verdictCorrections } from '../sources/calendar/cadence-watch.js';
 
 const DIGEST_HOUR = Number(process.env.DIGEST_HOUR_UTC ?? 18);
@@ -274,6 +275,9 @@ export function buildHeartbeat(now = Date.now(), deps = {}) {
           + (x.overdue ? ` · ${x.mark} ${x.xstockSinceReview} xStock unreviewed ${x.reviewAgeD === null ? '(never reviewed)' : `for ${x.reviewAgeD.toFixed(0)}d`} — run node review-exclusions.js` : '')
           + (x.seen24h === 0 && !looking ? ' · 🚨 zero with NO live text feed — not looking, not clean' : '');
       })(),
+      // Muted by default (2026-11-03): the notices are not sent, so their count is the only
+      // place the detector's pulse is visible.
+      (deps.suspensionNotices ?? suspensionNoticeStatus(getState(), now)).line,
       // Behavioural rows carry their falsifier; this line is the falsifier's own
       // pulse — a cadence watch that stops confirming must be visible, not assumed.
       (deps.coverage ?? unlockCoverage()).line,
