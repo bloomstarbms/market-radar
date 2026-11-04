@@ -5413,3 +5413,45 @@ Operator decisions on the 2026-11-02 report, as implemented:
   the suite, and three LIVE fixtures pinned REZ as index-contradicted — the tree failed its own suite
   until this patch. The LIVE checks now pin the lapse; the stamp's behaviour is tested on REZ's row
   frozen at v0.37.10 (fixtures/rez-row-2026-11-02.json). A data commit runs the suite like a code commit.
+
+## 2026-11-04 — ARB ON ARBITRUM ONE AND STRK ON ETHEREUM: WHAT THE CHAIN CAN AND CANNOT CHECK
+
+v0.37.14 ships the Arbitrum One reader (discover-vesting --chain arbitrum by genesis trace;
+detect-cadence --chain arbitrum via Etherscan V2). The cadence watch is NOT extended: nothing found
+matches ARB's claim. Report to the operator before any further build.
+
+ARB (claim: 92.65M on the 16th, team/advisors/investors):
+- Discovery (2026-11-04T10:14): 246 addresses — 160 vesting wallets (A), 54 Safes (D), 10 other
+  contracts (C), 22 EOAs — 32.4% of supply. Genesis matches the published allocation: airdrop
+  TokenDistributor 1,162.2M, DAO FixedDelegateErc20Wallet 3,527.0M, four GnosisSafeL2 5,310.8M
+  (team 2,694.0M · investors 1,754.0M · foundation 750.0M · 112.8M).
+- detect-cadence over 224 wallets, all covered: NO cadence on the 16th (16 Sep 258k, 16 Oct 395k).
+  Family MONTH-END x30, cv 1.12. Two month-end metronomes, neither the claim:
+  ArbitrumFoundationVestingWallet 0x15533b77 (funded 699.5M by the foundation Safe), mean 14.40M,
+  cv 0.07, 30 months; a GnosisSafe 0xd6c8a4e7 exactly 10.00M at month end for 27 months.
+- WHY no 16th: ArbitrumVestingWallet (159 wallets, start 2024-03-16, duration 1,095d) overrides
+  OZ's linear curve — a quarter vests at start, the rest "proportionally each month"
+  (SECONDS_PER_MONTH = 365d/12). The monthly unlock is a CONTRACT STEP; tokens move only when a
+  beneficiary claims. The claim's arithmetic is the allocation's: (2,694M + 1,753M) x 3/4 / 36 =
+  92.65M. The trace found 793.3M of it; 3,306M of team+investor ARB went through EOA 0x9db4e304,
+  which the trace does not follow past hop 1.
+- A check that can fail EXISTS in principle: vestedAmount(ARB, t) (OZ view) on every
+  ArbitrumVestingWallet just before/after each monthly step, summed vs 92.65M — after following the
+  distribution EOA to the remaining wallets. Not built (operator decision).
+
+STRK (claim: 127M on the 15th through 2027-03-15):
+- The vesting is NOT on Starknet L2. The L2 token's first 6,000 transfers (blocks 505,964-556,867)
+  carry ~205M across 3 large recipients, none of which sent anything on 09-15 or 10-15. Supply
+  originates on Ethereum (CoinGecko platforms.ethereum, confirmed by the token's own name/symbol):
+  holders include StarknetERC20Bridge 4,384.7M, ten GnosisSafes 1,007.3M, 104 LockedTokenGrant
+  contracts 405.5M, 1,279 EOAs 4,054.9M (holders down to ~98k STRK).
+- Grant outflows Jun-Oct 2026 (all 104 covered): 4.37M, 4.89M, 6.85M, 49.18M (one 38.6M day on
+  09-05), 7.31M — against 127M a month. Pull-based claims: outflows cannot test the claim, and the
+  ~635M still to unlock exceeds what the grants hold.
+- Starknet readers: starknet-rpc.publicnode.com answers starknet_getEvents keyless (keys = [Transfer,
+  from, to]); Nethermind free RPC failed to connect; OnFinality public 429s without a key; dRPC and
+  1RPC public do not serve the methods; Voyager's API has /token-transfers with a free key by form.
+  None is needed: there is no STRK vesting on L2 to read.
+- No transfer-based check of the 127M claim exists. A contract read of the grants' unlock state
+  might; not investigated. Per the operator's rule, the 2026-11-20 task recommends a lapse unless an
+  on-chain check that can fail is shown.
