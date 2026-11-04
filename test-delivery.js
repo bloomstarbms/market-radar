@@ -4451,6 +4451,67 @@ console.log('99. deposit/withdrawal notices are detected and logged, sent nowher
   check('routes.js describes SUSPENSION as muted by default', /SUSPENSION: 'MUTED by default \(config\.suspensionNotices\)/.test(routes));
 }
 
+console.log('100. Arbitrum One reader: vesting wallets found by genesis trace (no typed address), outflows read through Etherscan V2 with coverage stated');
+{
+  // (2026-11-04) Arbitrum One has no free holder list (Blockscout challenge-walled, Etherscan holder
+  // list is API Pro). A stub Etherscan world: genesis mint to a deployer EOA, which funds a Safe and
+  // a distributor; the Safe funds two ArbitrumVestingWallet proxies, a team EOA, and dust.
+  const dv = await import('./discover-vesting.js');
+  const dc = await import('./detect-cadence.js');
+  const A = (n) => '0x' + String(n).padStart(40, '0');
+  const TOK = A('70'), DEP = A('1'), SAFE = A('2'), DIST = A('3'), VW1 = A('4'), VW2 = A('5'), EOA1 = A('6'), DUST = A('7'), IMPL = A('8');
+  const e18 = (n) => BigInt(Math.round(n * 1e6)) * 10n ** 12n + '';
+  const tx = (from, to, amt, ts) => ({ from, to, value: e18(amt), timeStamp: String(ts), tokenDecimal: '18' });
+  const genesis = [tx(A('0'), DEP, 10000, 1.68e9), tx(DEP, SAFE, 6000, 1.68e9 + 60), tx(DEP, DIST, 1000, 1.68e9 + 120), tx(DEP, A('9'), 0.5, 1.68e9 + 180)];
+  const fromSafe = [tx(SAFE, VW1, 2000, 1.69e9), tx(SAFE, VW2, 1500, 1.69e9 + 60), tx(SAFE, EOA1, 2000, 1.69e9 + 120), tx(SAFE, DUST, 0.5, 1.69e9 + 180)];
+  const contracts = { [SAFE]: { ContractName: 'GnosisSafeL2' }, [DIST]: { ContractName: 'TokenDistributor' }, [VW1]: { ContractName: 'TransparentUpgradeableProxy', Proxy: '1', Implementation: IMPL }, [VW2]: { ContractName: 'TransparentUpgradeableProxy', Proxy: '1', Implementation: IMPL }, [IMPL]: { ContractName: 'ArbitrumVestingWallet' } };
+  const bal = { [VW1]: 1200, [VW2]: 900, [SAFE]: 500, [DIST]: 50, [EOA1]: 2000, [DEP]: 3000 };
+  const urls = [];
+  const world = async (url) => {
+    urls.push(String(url));
+    const q = new URL(url).searchParams, a = (q.get('address') || '').toLowerCase();
+    const ok = (result) => ({ ok: true, status: 200, json: async () => ({ status: '1', message: 'OK', result }) });
+    if (q.get('action') === 'tokensupply') return ok(e18(10000));
+    if (q.get('action') === 'tokentx') return ok(!a ? genesis : (a === DEP.toLowerCase() ? genesis.filter((t) => t.from === DEP || t.to === DEP) : a === SAFE.toLowerCase() ? fromSafe : []));
+    if (q.get('action') === 'eth_getCode') return ok(contracts[Object.keys(contracts).find((k) => k.toLowerCase() === a)] ? '0x6080' : '0x');
+    if (q.get('action') === 'tokenbalance') return ok(e18(bal[Object.keys(bal).find((k) => k.toLowerCase() === a)] ?? 0));
+    if (q.get('action') === 'getsourcecode') return ok([contracts[Object.keys(contracts).find((k) => k.toLowerCase() === a)] ?? { ContractName: '' }]);
+    return ok(null);
+  };
+  const index = { protocols: [{ symbol: 'FXA', token: 'arbitrum:' + TOK }, { symbol: 'FXE', token: 'ethereum:' + TOK }] };
+  const prevFetch = globalThis.fetch;
+  let r, noKey, unres;
+  try {
+    globalThis.fetch = world;
+    r = await dv.discoverArbitrum('FXA', { key: 'FX-NOT-A-KEY', index });
+    noKey = await dv.discoverArbitrum('FXA', { key: '', index });
+    unres = await dv.discoverArbitrum('FXE', { key: 'FX-NOT-A-KEY', index });
+  } finally { globalThis.fetch = prevFetch; }
+  const by = Object.fromEntries((r.contracts || []).map((c) => [c.addr, c]));
+  check('the trace finds both vesting-wallet proxies as bucket A by their IMPLEMENTATION name, one hop below the Safe', by[VW1]?.bucket === 'A' && by[VW2]?.bucket === 'A' && /ArbitrumVestingWallet \(proxy\)/.test(by[VW1].why) && by[VW1].depth === 2 && by[VW1].parents.includes(SAFE), JSON.stringify(by[VW1]));
+  check('...the Safe is custody (D, from genesis), the distributor custom (C), EOAs are listed skip-eoa, dust below 0.01% is dropped',
+    by[SAFE]?.bucket === 'D' && by[SAFE].depth === 1 && by[DIST]?.bucket === 'C' && by[EOA1]?.bucket === 'skip-eoa' && by[DEP]?.bucket === 'skip-eoa' && !by[DUST] && !by[A('9')]);
+  check('...balances from tokenbalance, verdict A-READABLE, token from the index (never typed), every call on chain 42161',
+    by[VW1].bal === 1200 && r.verdict === 'A-READABLE' && r.token === TOK && r.chain === 'arbitrum-one' && urls.length > 0 && urls.every((u) => /chainid=42161/.test(u)) && urls.filter((u) => /action=tokentx/.test(u)).every((u) => u.includes(`contractaddress=${TOK}`)));
+  check('no key -> NO-KEY; a token that is not on arbitrum -> UNRESOLVED (nothing is guessed)', noKey.verdict === 'NO-KEY' && unres.verdict === 'UNRESOLVED');
+  // The outflow reader: outflows only, by contract address, and coverage stated.
+  const W = A('44');
+  let calls = [];
+  const day = (iso) => Date.parse(iso + 'T12:00:00Z') / 1000;
+  try {
+    globalThis.fetch = async (url) => { calls.push(String(url)); return { ok: true, json: async () => ({ status: '1', result: [tx(W, A('99'), 5, day('2026-10-16')), tx(W, A('98'), 7, day('2026-10-16')), tx(A('97'), W, 100, day('2026-10-01')), tx(W, A('99'), 3, day('2026-09-16'))] }) }; };
+    var f1 = await dc.outflowsByDayEtherscan(W, TOK, 'arbitrum', { now: Date.parse('2026-11-04T00:00:00Z') });
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ status: '1', result: Array.from({ length: 1000 }, () => tx(W, A('99'), 1, day('2026-10-20'))) }) });
+    var f2 = await dc.outflowsByDayEtherscan(W, TOK, 'arbitrum', { maxPages: 2, now: Date.parse('2026-11-04T00:00:00Z') });
+  } finally { globalThis.fetch = prevFetch; }
+  check('outflowsByDayEtherscan sums OUTflows per day (an inflow is not counted) and is covered when the history ends', f1.covered && f1.byDay['2026-10-16'] === 12 && f1.byDay['2026-09-16'] === 3 && !f1.byDay['2026-10-01']
+    && calls.every((u) => /chainid=42161/.test(u) && u.includes(`contractaddress=${TOK}`) && u.includes(`address=${W}`)), JSON.stringify(f1));
+  check('...and says NOT covered, with the reason, when the page cap stops it before 14 months (we did not look is not empty)', f2.covered === false && /page cap/.test(f2.reason));
+  const cli = readFileSync('detect-cadence.js', 'utf8');
+  check('detect-cadence --chain refuses typed addresses (SYM mode only) and scans vesting wallets (A) as well as custody on Arbitrum',
+    /--chain needs SYM mode: wallets and the token address come from data\/vesting-discovery\.json, never typed/.test(cli) && /chain === 'ethereum' \? \['D', 'C'\] : \['A', 'D', 'C'\]/.test(cli));
+}
+
 // A block that mutes the console and forgets to restore it hides every section header after it.
 check('the suite ends with console.log and console.error as it started (every mute restored)', console.log === OUT && console.error === ERR);
 console.error = origErr;

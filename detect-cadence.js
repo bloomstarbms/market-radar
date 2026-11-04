@@ -55,6 +55,38 @@ export async function outflowsByDay(addr, tokenSym, maxPages = 30, deadlineTs = 
   return byDay;
 }
 
+// ARBITRUM ONE (2026-11-04): the same per-day outflow series, read through Etherscan V2 (chainid
+// 42161, the bot's existing free key — tokentx answers there; Blockscout's Arbitrum instance is
+// challenge-walled). Filtered by the token's CONTRACT ADDRESS, not its symbol (a spoof token can
+// carry any symbol). Etherscan pages by page×offset ≤ 10,000 rows, newest first; the walk stops
+// when the date span is covered (spanCovered, the same guard as above) and reports `covered`.
+const ES_KEY = (() => { try { return readFileSync('.env', 'utf8').match(/ETHERSCAN_API_KEY=(\S+)/)?.[1] ?? ''; } catch { return ''; } })();
+const ES_CHAIN = { arbitrum: 42161 };
+export async function outflowsByDayEtherscan(addr, tokenAddr, chain, { maxPages = 10, now = Date.now() } = {}) {
+  const byDay = {};
+  let oldest = null;
+  const cutoff = new Date(now - 14 * 30.44 * 86400e3).toISOString().slice(0, 10);
+  for (let page = 1; page <= maxPages; page++) {
+    let j = null;
+    for (let i = 0; i < 4 && !j; i++) {
+      j = await jget(`https://api.etherscan.io/v2/api?chainid=${ES_CHAIN[chain]}&module=account&action=tokentx&contractaddress=${tokenAddr}&address=${addr}&page=${page}&offset=1000&sort=desc&apikey=${ES_KEY}`);
+      if (j && /rate limit/i.test(String(j.result))) { j = null; await sleep(1500); }
+    }
+    if (!j) return { byDay, covered: false, oldest, reason: 'fetch failed' };
+    const rows = Array.isArray(j.result) ? j.result : [];
+    for (const t of rows) {
+      const d = new Date(Number(t.timeStamp) * 1000).toISOString().slice(0, 10);
+      if (!oldest || d < oldest) oldest = d;
+      if (t.from.toLowerCase() !== addr.toLowerCase()) continue;
+      byDay[d] = (byDay[d] || 0) + Number(t.value) / 10 ** Number(t.tokenDecimal || 18);
+    }
+    if (rows.length < 1000) return { byDay, covered: true, oldest }; // the wallet's whole history
+    if (spanCovered(oldest, cutoff)) return { byDay, covered: true, oldest };
+    await sleep(350);
+  }
+  return { byDay, covered: false, oldest, reason: `page cap (${maxPages * 1000} rows) before ${cutoff}` };
+}
+
 const lastDayOfMonth = (y, m) => new Date(Date.UTC(y, m, 0)).getUTCDate(); // m is 1-based
 
 // Dominant-class detection, NOT largest-per-month. Validation lesson (EIGEN wallet
@@ -154,19 +186,32 @@ if (IS_CLI) (async () => {
   const args = process.argv.slice(2);
   const topIdx = args.indexOf('--top');
   const topN = topIdx >= 0 ? Number(args[topIdx + 1]) : 10;
-  const positional = args.filter((a, i) => !a.startsWith('--') && (topIdx < 0 || (i !== topIdx + 1)));
-  if (!positional.length) { console.log('usage: node detect-cadence.js SYM|0xaddr... [--top N]'); process.exit(1); }
+  const chainIdx = args.indexOf('--chain');
+  const chain = chainIdx >= 0 ? args[chainIdx + 1] : 'ethereum';
+  if (chain !== 'ethereum' && !ES_CHAIN[chain]) { console.error(`--chain ${chain}: supported are ethereum (default) and ${Object.keys(ES_CHAIN).join(', ')}`); process.exit(1); }
+  if (chain !== 'ethereum' && !ES_KEY) { console.error('ETHERSCAN_API_KEY missing from .env — the Arbitrum reader needs it'); process.exit(1); }
+  const positional = args.filter((a, i) => !a.startsWith('--') && (topIdx < 0 || (i !== topIdx + 1)) && (chainIdx < 0 || i !== chainIdx + 1));
+  if (!positional.length) { console.log('usage: node detect-cadence.js SYM|0xaddr... [--top N] [--chain arbitrum]'); process.exit(1); }
 
-  let sym = null, wallets = [];
-  if (positional[0].startsWith('0x')) wallets = positional.map((a) => ({ addr: a, bal: 0 }));
-  else {
+  let sym = null, wallets = [], tokenAddr = null;
+  if (positional[0].startsWith('0x')) {
+    if (chain !== 'ethereum') { console.error('--chain needs SYM mode: wallets and the token address come from data/vesting-discovery.json, never typed'); process.exit(1); }
+    wallets = positional.map((a) => ({ addr: a, bal: 0 }));
+  } else {
     sym = positional[0].toUpperCase();
     const rep = JSON.parse(readFileSync('data/vesting-discovery.json', 'utf8'))[sym];
-    if (!rep?.contracts?.length) { console.error(`${sym} not in data/vesting-discovery.json — run discover-vesting.js first`); process.exit(1); }
-    wallets = rep.contracts.filter((c) => c.bucket === 'D' || c.bucket === 'C')
+    if (!rep?.contracts?.length) { console.error(`${sym} not in data/vesting-discovery.json — run discover-vesting.js${chain !== 'ethereum' ? ` ${sym} --chain ${chain}` : ''} first`); process.exit(1); }
+    // On Arbitrum the discovery's chain must match, and VESTING WALLETS (bucket A) are scanned too:
+    // there the schedule's emitters ARE the vesting wallets (a release is the outflow).
+    if (chain !== 'ethereum') {
+      if (rep.chain !== 'arbitrum-one') { console.error(`${sym}'s discovery is for ${rep.chain}, not ${chain} — run discover-vesting.js ${sym} --chain ${chain}`); process.exit(1); }
+      tokenAddr = rep.token;
+    }
+    const buckets = chain === 'ethereum' ? ['D', 'C'] : ['A', 'D', 'C'];
+    wallets = rep.contracts.filter((c) => buckets.includes(c.bucket))
       .sort((a, b) => b.bal - a.bal).slice(0, topN);
   }
-  console.log(`cadence scan: ${sym ?? 'explicit'} · ${wallets.length} wallets`);
+  console.log(`cadence scan: ${sym ?? 'explicit'} · ${chain} · ${wallets.length} wallets`);
 
   // Months the operator excluded through annotate-verdict.js (catch-up windows): read
   // from the watch's own file, never typed. They stay in the run, out of the mean.
@@ -178,16 +223,25 @@ if (IS_CLI) (async () => {
   if (exclude.size) console.log(`excluded from the mean (annotate-verdict.js): ${[...exclude].join(', ')}`);
   const familyByDay = {};
   const perWallet = [];
+  const uncovered = [];
   for (const w of wallets) {
-    const byDay = await outflowsByDay(w.addr, sym);
+    let byDay, covered = true;
+    if (chain === 'ethereum') byDay = await outflowsByDay(w.addr, sym);
+    else { const f = await outflowsByDayEtherscan(w.addr, tokenAddr, chain); byDay = f.byDay; covered = f.covered; if (!covered) uncovered.push(`${w.addr.slice(0, 12)} (${f.reason})`); }
     for (const [d, v] of Object.entries(byDay)) familyByDay[d] = (familyByDay[d] || 0) + v;
     const solo = detectCadence(byDay, { exclude });
-    perWallet.push({ addr: w.addr, bal: w.bal, days: Object.keys(byDay).length, solo: solo.verdict === 'CADENCE' ? solo : solo.verdict });
+    perWallet.push({ addr: w.addr, bal: w.bal, bucket: w.bucket, name: w.name ?? null, days: Object.keys(byDay).length, covered, solo: solo.verdict === 'CADENCE' ? solo : solo.verdict });
     process.stdout.write('.');
     await sleep(350);
   }
   console.log();
   const family = detectCadence(familyByDay, { exclude });
+  // An uncovered wallet is "we did not look" for its older days: said, not hidden.
+  if (uncovered.length) console.log(`\n⚠️ ${uncovered.length} wallet(s) not covered back 14 months — their older days are missing, not empty: ${uncovered.join(', ')}`);
+  // Day-level family series, last 6 months: what the windows held, for the report.
+  const recentDays = Object.entries(familyByDay).filter(([d]) => d >= new Date(Date.now() - 183 * 86400e3).toISOString().slice(0, 10)).sort();
+  console.log(`\nfamily outflows by day, last 6 months (${recentDays.length} days with outflows):`);
+  for (const [d, v] of recentDays) console.log(`  ${d}  ${Math.round(v).toLocaleString()}`);
   console.log('\nFAMILY AGGREGATE:', JSON.stringify(family, null, 1));
   console.log('\nper-wallet:');
   for (const p of perWallet) {
@@ -197,7 +251,7 @@ if (IS_CLI) (async () => {
   }
   const reportPath = 'data/cadence-report.json';
   const rep = existsSync(reportPath) ? JSON.parse(readFileSync(reportPath, 'utf8')) : {};
-  rep[sym ?? wallets[0].addr] = { at: new Date().toISOString().slice(0, 16), family, perWallet };
+  rep[sym ?? wallets[0].addr] = { at: new Date().toISOString().slice(0, 16), chain, family, perWallet, ...(uncovered.length ? { uncovered } : {}) };
   writeFileSync(reportPath + '.tmp', JSON.stringify(rep, null, 1));
   renameSync(reportPath + '.tmp', reportPath);
   console.log('\n-> data/cadence-report.json');

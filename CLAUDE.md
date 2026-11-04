@@ -161,6 +161,19 @@ suite, or at minimum `node -e "import('./path.js').then(m => m.theFunction(...))
 "A patch's exit code is not evidence the function changed" applies to the checker as
 much as to the patcher.
 
+**Data-only commits run the suite before push.** Many fixtures are LIVE checks: they read
+the real rows in `unlocks.json` and the real files in `data/`. On 2026-11-03 a data commit
+lapsing REZ's mechanism stamp was pushed without a suite run, while three LIVE fixtures
+still pinned the old stamp, so the tree failed its own suite. The same day, the v0.37.12
+gated deploy refused to restart: a LIVE fixture read the VPS-only
+`data/verdict-annotations.json`, which the desktop suite never saw. The fix shipped as the
+next version, because a tag never moves.
+- After any write through `promote-unlock.js` or `annotate-verdict.js`, run the suite
+  (`node boot-check.js`) before pushing.
+- Before deploying, mirror onto the desktop the VPS `data/` files the fixtures read.
+- When an operator decision changes a state a LIVE fixture pins, pin the new state, and
+  freeze the old row as a fixture file so the behaviour stays tested.
+
 ## A boot check on a copy is a live sender
 
 Verifying boot on a tree copy copies `.env` with it. On 2026-09-17 a `--once` run on
