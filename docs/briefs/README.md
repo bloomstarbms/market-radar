@@ -96,7 +96,9 @@ Assumes:
 - Section 11's build order is THOROUGHLY SUPERSEDED; do not execute it.
 - Section 8's anti-pattern list REMAINS the reference for what the original bot
   did wrong, and is the reason to keep this file at all.
-- The $0/month and zero-dependency constraints it set are still in force.
+- The $0/month and zero-dependency constraints it set are still in force, except
+  approved paid sources (twitterapi.io for builder-follows, capped at $40/month,
+  approved 2026-10-21). See CLAUDE.md.
 -->
 ```
 

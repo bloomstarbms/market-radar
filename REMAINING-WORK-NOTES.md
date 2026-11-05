@@ -5455,3 +5455,49 @@ STRK (claim: 127M on the 15th through 2027-03-15):
 - No transfer-based check of the 127M claim exists. A contract read of the grants' unlock state
   might; not investigated. Per the operator's rule, the 2026-11-20 task recommends a lapse unless an
   on-chain check that can fail is shown.
+
+## 2026-11-05 — ARB TEAM+INVESTOR TRACE PAST THE DISTRIBUTION EOA: INCOMPLETE
+
+Step 1 of the operator's 2026-11-05 ARB decision (report only). Probes, not repo code: the trace
+(Etherscan V2, chain 42161) followed the team and investor Safes outward, at most 400 addresses and
+5 hops, classifying 2,778 addresses in 3,905 calls (2026-11-05T10:18Z, no truncated history). A replay
+then re-read the 400 followed addresses (93,160 transfers, 489 calls) and moved team ARB through them
+in chain order. Every number below comes from deduplicated transfers, never the discovery file's
+`received` field. That field double-counted genesis Safes, and v0.37.15 fixed it.
+
+DENOMINATOR, the on-chain genesis: team Safe 0x148440e0 2,693,961,299 + investor Safe 0x33225c65
+1,753,992,622 = 4,447,953,921 ARB. The row's and the index's 92,645,833/month is the published round
+split (26.94% + 17.53% = 4,447M) x 3/4 / 36. On-chain genesis gives 92,665,707 (+19,874/month, 0.02%).
+Not corrected: the monthly figure that matters is what the vesting wallets were funded with (step 2).
+
+THREE BUCKETS. The main figure is pro-rata. The range is team-first to team-last at the 322 mixed
+addresses that received both team and outside ARB.
+  1. in identified vesting contracts   810.7M  18.2%  (18.2–18.3%)  220 ArbitrumVestingWallets
+  2. reached, not in vesting           859.6M  19.3%  (19.2–19.9%)  held at followed EOAs, largest 0x1190cea3 112.9M
+  3. not reached                      2,777.6M 62.4%  (61.9–62.5%)  2,110 queued-not-followed addresses
+CALL: INCOMPLETE (not reached 62.4% > 10%). This is not "under 90%". The range is narrow because the
+vesting wallets were funded from pure team/investor addresses: ordering at mixed addresses barely
+matters. Exchange 0.0M is not "no exchange": exchange wallets on Arbitrum are mostly plain EOAs, and
+EOAs are not classified.
+
+WHAT DRIVES IT. The distribution EOA 0x9db4e304 sent its whole 3,436.8M in 22 transfers to ONE EOA,
+0x1e7016f7. That EOA took in 4,947.0M of team ARB and 7,048.0M of outside ARB, sent 4,923.4M of the
+team ARB on, and sent 0.6M of it straight to vesting. Below it, team ARB is spread over EOAs at
+hops 3–4. Not reached by address: top 10 593.3M, top 50 1,334.8M, top 200 2,392.8M. The largest are
+0x0659fb78 215.5M and 0x98c7f1db 104.8M (both EOAs, hop 4).
+
+COST TO FINISH (trace pace ~0.48 s/call; ~9.8 calls per followed address including classifying its
+~7.9 new recipients >= 1,000 ARB):
+- getting not-reached under 10% needs 2,332.9M resolved, which the top 180 addresses carry:
+  ~1,800 calls, ~15 min. That moves the mass one hop. It ends the flow only if those addresses pay
+  into vesting contracts. None below the hub has so far.
+- the whole queue (2,148): ~21,000 calls, ~2.8 h. It yields ~17,000 new addresses, and the next
+  hop costs ~166,000 calls (~22 h). Each hop is ~8x the last. Check the free key's daily quota
+  before any such run.
+No decision taken. Step 2 (the contract-schedule check) is not reached.
+
+The 2026-11-04 "trace found 793.3M" was a sum of `received` and is superseded: 810.7M pro-rata
+(813.1M raw edges).
+
+Probes kept in the session scratchpad: probe-arb-eoa-trace.mjs, probe-arb-partition.mjs (stub-tested:
+INCOMPLETE and AMBIGUOUS worlds, denominator derived from genesis).

@@ -1,6 +1,6 @@
 <!-- PREMISE
 Written against: v0.31.8
-Reviewed: 2026-09-07
+Reviewed: 2026-11-05
 Assumes:
 - Nothing about the code. The restriction below is version-independent and does not
   expire with a release; a version bump is never a reason to re-read it as stale.
@@ -76,9 +76,9 @@ accident and that should be reported, not used.
 
 ## ⚠️ TWO AGENTS, ONE REPO — ownership split
 
-As of 2026-09-13 the Cowork workspace cannot reach these files (a Windows update
-released 2026-09-08; being tracked). Claude Code is unaffected. So work may be split
-across two agents on the same working tree at the same time.
+From 2026-09-13 the Cowork workspace could not reach these files (a Windows update
+released 2026-09-08). As of 2026-11-05 it can read them again. Either way, work may be
+split across two agents on the same working tree at the same time.
 
 **Preferred: do not run them concurrently.** One at a time removes the problem
 entirely and costs nothing but patience.
@@ -156,8 +156,8 @@ backticks, `$`, quotes, CRLF) goes in a file the edit script reads, never into t
 command line.
 
 **And a syntax check is not an execution.** `node --check` passes on an undeclared
-reference inside a function body. After any non-trivial edit, run the thing: the
-suite, or at minimum `node -e "import('./path.js').then(m => m.theFunction(...))"`.
+reference inside a function body. After any non-trivial edit, run the thing: run the
+suite, or a small script file that imports the function and calls it.
 "A patch's exit code is not evidence the function changed" applies to the checker as
 much as to the patcher.
 
@@ -173,6 +173,16 @@ next version, because a tag never moves.
 - Before deploying, mirror onto the desktop the VPS `data/` files the fixtures read.
 - When an operator decision changes a state a LIVE fixture pins, pin the new state, and
   freeze the old row as a fixture file so the behaviour stays tested.
+
+**Long probes print progress, so silence means stuck.** On 2026-11-05 the ARB trace probe
+went quiet for over 30 minutes after hitting its follow cap: the classification phase that
+followed logged nothing. "Busy" could not be told from "hung" except from `/proc` and its
+sockets, and it had in fact just finished.
+- Any probe or script that can run more than a few minutes prints a progress line every
+  100 items or every 2 minutes, whichever comes first.
+- Each line carries a UTC time, items done/total, and API calls so far.
+- The rule holds in every phase (fetch, classify, replay). A phase change, such as
+  follow becoming classify-only after a cap, gets its own line.
 
 ## A boot check on a copy is a live sender
 
@@ -190,8 +200,9 @@ the tree is the thing that sent, twice.
 
 ## Project
 
-Crypto alert system. Zero-dependency Node, JSON storage under `data/`, $0/month —
-no paid APIs. Full standing context is **Part 0 of `REMAINING-WORK.md`**; paste it
+Crypto alert system. Zero-dependency Node, JSON storage under `data/`, $0/month
+except approved paid sources: twitterapi.io for builder-follows, capped at $40/month.
+Any new paid source needs the operator's approval. Full standing context is **Part 0 of `REMAINING-WORK.md`**; paste it
 at the start of every session. Document statuses are in `docs/briefs/README.md`.
 
 The live version is whatever `src/config.js` reports. Do not trust a version

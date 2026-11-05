@@ -58,9 +58,10 @@ complete an acceptance check. That was permitted then and is not now.
 
 ## Hard constraints — do not violate
 
-- $0/month. No paid API. If a step appears to need one, it has a free
-  path — find it or ask. DefiLlama emissions is now paywalled (HTTP 402);
-  do not reach for it.
+- $0/month except approved paid sources: twitterapi.io for builder-follows,
+  capped at $40/month. Any new paid source needs the operator's approval. If
+  a step appears to need one, look for a free path first, or ask. DefiLlama
+  emissions is now paywalled (HTTP 402); do not reach for it.
 - Zero-dependency Node 22+. Storage is JSON FILES under data/ (outcomes.json,
   state.json); hot state is an in-process Map. The node:sqlite migration was
   planned and never done — do not "migrate" a database that does not exist.
