@@ -1013,14 +1013,14 @@ console.log('49. FALSIFIER STRENGTH is derived on EVERY verified row (chance rat
   check('a verified cadence row WITHOUT derived strength fails the boot gate', verifiedRowProblems([row]).some((p) => /no derived falsifier strength/.test(p)));
   check('a reviewBy row needs verdict NONE, not a number', falsifierProblems({ sym: 'R', verified: true, reviewBy: '2026-12-01', events: [{}], falsifier: { verdict: 'NONE', basis: 'b' } }).length === 0);
   check('falsifierLine says underived rather than skipping', /underived/.test(falsifierLine({ sym: 'U' })));
-  // Live: every verified row carries it; the line shows every one. (2026-11-05: ARB returned to
-  // sourced by operator decision; its verified dead-man row is frozen in fixtures/arb-row-2026-11-05.json
+  // Live: every verified row carries it; the line shows every one. (2026-11-05: ARB and STRK returned
+  // to sourced by operator decision; their verified dead-man rows are frozen in fixtures/*-row-2026-11-05.json
   // and still tested below, so the dead-man behaviour does not depend on today's data.)
-  const LIVE_VERIFIED = ['EIGEN', 'STRK', 'MOVE', 'ENA', 'ZRO'];
+  const LIVE_VERIFIED = ['EIGEN', 'MOVE', 'ENA', 'ZRO'];
   const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens.filter((t) => t.verified && !t.retired && (t.cadence || t.enforcement === 'contract' || t.reviewBy));
   check(`LIVE: exactly ${LIVE_VERIFIED.length} verified rows (${LIVE_VERIFIED.join(', ')}), every one carrying derived strength`, live.map((t) => t.sym).sort().join() === [...LIVE_VERIFIED].sort().join() && live.every((t) => t.falsifier?.verdict), live.map((t) => t.sym).join());
   check('LIVE: EIGEN/ENA/MOVE have NUMBERS, not an implicit "strong"', ['EIGEN', 'ENA', 'MOVE'].every((s) => { const f = live.find((t) => t.sym === s).falsifier; return f.chanceRate > 0 && f.replayRate === 1 && /days ≥50% of mean/.test(f.basis); }));
-  check('LIVE: no verified row is WEAK (retired) and every numeric margin clears the bar; dead-man rows are NONE', live.every((t) => t.falsifier.verdict !== 'WEAK' && (t.falsifier.verdict === 'NONE' || t.falsifier.margin >= MIN_FALSIFIER_MARGIN)) && ['STRK', 'ZRO'].every((s) => live.find((t) => t.sym === s).falsifier.verdict === 'NONE'));
+  check('LIVE: no verified row is WEAK (retired) and every numeric margin clears the bar; dead-man rows are NONE', live.every((t) => t.falsifier.verdict !== 'WEAK' && (t.falsifier.verdict === 'NONE' || t.falsifier.margin >= MIN_FALSIFIER_MARGIN)) && live.find((t) => t.sym === 'ZRO').falsifier.verdict === 'NONE');
   // The FROZEN verified dead-man rows keep the old behaviour tested: a reviewBy row with verdict NONE
   // passes the boot gate, shows in the strength list, and states its strength.
   const frozenDeadMan = ['arb', 'strk'].map((s) => JSON.parse(readFileSync(`fixtures/${s}-row-2026-11-05.json`, 'utf8')).row);
@@ -1035,11 +1035,21 @@ console.log('49. FALSIFIER STRENGTH is derived on EVERY verified row (chance rat
   check('LIVE: ARB keeps its amount (92,645,833 every event) and takes the index day (15th, Aug–Dec 2026), with the 16th-vs-15th discrepancy noted',
     arbNow.sourceEvents.length === 8 && arbNow.sourceEvents.every((e) => e.n === 92645833) && arbNow.sourceEvents.filter((e) => /^2026-(08|09|10|11|12)-15$/.test(new Date(e.t * 1000).toISOString().slice(0, 10))).length === 5
     && /retired verified claim said the 16th/.test(arbNow.operatorNote) && /looks like a custodian/.test(arbNow.operatorNote));
+  // LIVE: STRK is sourced too. The index figure is the claim now; the old 127M is retracted, with
+  // where it sits inside the index recorded as an observation.
+  const strkNow = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens.find((t) => t.sym === 'STRK');
+  const strkN = (d) => strkNow.sourceEvents.find((e) => new Date(e.t * 1000).toISOString().slice(0, 10) === d)?.n;
+  check('LIVE: STRK is SOURCED by tier correction: reason cites the LockedTokenGrants, retracted keeps the 127M claim (15th, reviewBy, NONE)',
+    strkNow.provenance === 'sourced' && !strkNow.verified && !strkNow.events && strkNow.source === 'defillama' && strkNow.tierHistory?.from === 'verified' && /LockedTokenGrants/.test(strkNow.tierHistory.reason)
+    && strkNow.tierHistory.retracted.monthlyDay === 15 && strkNow.tierHistory.retracted.reviewBy === '2026-11-30' && strkNow.tierHistory.retracted.falsifier?.verdict === 'NONE' && /127M STRK monthly/.test(strkNow.tierHistory.retracted.events?.[0]?.detail));
+  check('LIVE: STRK carries the index figure (226,356,431 on the 13th–14th through Dec 2026) and the observation that 127M = Jan–Feb total 190,523,098 − 63,523,098',
+    strkNow.sourceEvents.length === 17 && strkN('2026-11-13') === 226356431 && strkN('2026-12-14') === 226356431 && strkN('2027-01-13') - strkN('2027-03-15') === 127000000
+    && /OBSERVED, NOT CLAIMED \(2026-11-05\): the retired verified claim \(127M STRK/.test(strkNow.operatorNote) && /exactly 127,000,000/.test(strkNow.operatorNote));
   const cov = unlockCoverage();
   check(`coverage (the heartbeat line) counts ${LIVE_VERIFIED.length} verified`, cov.verified === LIVE_VERIFIED.length && cov.line.includes(`· ${LIVE_VERIFIED.length} verified (`), cov.line.slice(0, 140));
   check('coverage line carries the admission bar and the LOWEST live margin (arithmetic over rows)', cov.marginBar === MIN_FALSIFIER_MARGIN && /margin bar 0\.4 \(lowest (EIGEN|ENA|MOVE) 0\.\d+\)/.test(cov.line) && cov.lowestMargin.margin === Math.min(...live.filter((t) => Number.isFinite(t.falsifier?.margin)).map((t) => t.falsifier.margin)));
   check('MUTATION: with no numeric margins the line says so rather than omitting the bar', /margin bar 0\.4 \(no margins live\)/.test(unlockCoverage([{ sym: 'R', verified: true, events: [{}], reviewBy: '2026-12-01', falsifier: { verdict: 'NONE', basis: 'b' } }]).line));
-  check(`coverage line shows chance/window for all ${LIVE_VERIFIED.length} verified rows, and none for a sourced one`, /falsifier chance→replay: .*EIGEN \d+%\/window/.test(cov.line) && !/WEAK/.test(cov.line) && LIVE_VERIFIED.every((s) => new RegExp('\\b' + s + ' ').test(cov.strength)) && !/\bARB /.test(cov.strength) && !cov.underived, cov.strength);
+  check(`coverage line shows chance/window for all ${LIVE_VERIFIED.length} verified rows, and none for a sourced one`, /falsifier chance→replay: .*EIGEN \d+%\/window/.test(cov.line) && !/WEAK/.test(cov.line) && LIVE_VERIFIED.every((s) => new RegExp('\\b' + s + ' ').test(cov.strength)) && !/\bARB /.test(cov.strength) && !/\bSTRK /.test(cov.strength) && !cov.underived, cov.strength);
   check('every verified claimCoverage line states its strength (cadence, contract, dead-man)', live.every((t) => /Falsifier strength: /.test(claimCoverage(t, 3).line)));
   // COMPOUND: the row's weight is the replay series, not the per-window figure.
   const { compoundChance } = await import('./src/core/unlock-promote.js');
@@ -1672,7 +1682,7 @@ console.log('47. sourced PRESSURE FLOOR is derived from the index distribution, 
 {
   const { SOURCED_PRESSURE_FLOOR: F, derivePressureFloor, pressureStage, NON_PRESSURE_CATS } = await import('./src/core/unlock-promote.js');
   const { unlockCoverage, leadsFor } = await import('./src/sources/calendar/unlocks.js');
-  check('floor is recorded with percentile, n and a basis sentence naming the index it was derived from', F.pctOfMaxSupply > 0 && F.percentile === 15 && F.n === 31 && /percentile/.test(F.basis) && /index 2026-10-01T20:06/.test(F.basis));
+  check('floor is recorded with percentile, n and a basis sentence naming the index it was derived from', F.pctOfMaxSupply > 0 && F.percentile === 15 && F.n === 32 && /percentile/.test(F.basis) && /index 2026-10-01T20:06/.test(F.basis));
   // The recorded static must be what the live index derives (re-derive on refresh, record again).
   const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
   const d = derivePressureFloor(live);
@@ -1869,9 +1879,10 @@ console.log('45. SOURCED tier — a named source pushes, labelled; its falsifier
   // 30 ingested; ORDER superseded to contract-cliff in v0.30.0 (sourceHistory kept) and
   // corrected back to sourced 2026-09-15 (tierHistory kept), so sourced +
   // supersessions-from-sourced must still account for all 30. 2026-11-05: ARB, verified on the
-  // announcement path, returned to sourced by tier correction (tierHistory kept): 31.
+  // announcement path, returned to sourced by tier correction (tierHistory kept): 31. STRK the same
+  // way, the same day: 32.
   const supersededFromSourced = live.filter((t) => t.provenance !== 'sourced' && !!t.sourceHistory?.source && !!t.sourceHistory?.supersededAt).length;
-  check('LIVE: the 31 sourced ingests are all accounted for (sourced + superseded; ARB joined by tier correction)', live.filter((t) => t.provenance === 'sourced').length + supersededFromSourced === 31);
+  check('LIVE: the 32 sourced ingests are all accounted for (sourced + superseded; ARB and STRK joined by tier correction)', live.filter((t) => t.provenance === 'sourced').length + supersededFromSourced === 32);
   check('LIVE: every sourced row passes the boot gate', verifiedRowProblems(live).length === 0);
   check('LIVE: the six formerly-unconfirmed chains are resolved and recorded', ['ASTER', 'FF', 'LISTA', 'STO', 'SOLV', 'RE'].every((s) => live.find((t) => t.sym === s)?.chain !== 'unconfirmed'));
 }
@@ -4583,6 +4594,32 @@ console.log('101. discover-vesting progress meter: a line every 100 items or 2 m
   check('the Ethereum path has both phases (holder pages, classify contracts) and every meter is ended in a finally',
     /pm\.phase\(`\$\{sym\} holder pages`, 4\)/.test(src) && /pm\.phase\(`\$\{sym\} classify contracts`, out\.contracts\.length\)/.test(src)
     && (src.match(/const pm = progressMeter\(/g) || []).length === 2 && (src.match(/\} finally \{ pm\.end\(\); \}/g) || []).length === 2);
+}
+
+console.log('102. refresh chore steps 5 and 7 are committed files: reingest-sourced.js diffs KEYS per row, derive-pressure-floor.js reports the floor');
+{
+  // (2026-11-05) The chore carried both steps as inline `node -e`, which CLAUDE.md forbids. The
+  // 2026-10-01 loss (a re-ingest dropped ORDER's tierHistory; a six-field diff said "all
+  // expected") is exactly what rowKeyDiff must catch.
+  const { rowKeyDiff } = await import('./reingest-sourced.js');
+  const { floorReport } = await import('./derive-pressure-floor.js');
+  const { SOURCED_PRESSURE_FLOOR: F } = await import('./src/core/unlock-promote.js');
+  const order = { sym: 'ORDER', provenance: 'sourced', stage: 'STANDARD', sourceEvents: [{ t: 1789948800, n: 1 }], tierHistory: { from: 'verified' }, operatorNote: 'x' };
+  const cfg = { sym: 'CFG', provenance: 'sourced', stage: 'STANDARD', sourceEvents: [{ t: 1789948800, n: 1 }] };
+  const d = rowKeyDiff([order, cfg, { sym: 'GONE' }], [{ ...order, tierHistory: undefined, sourceFetchedAt: 'new' }, { ...cfg, stage: 'LOGGED', sourceEvents: [{ t: 1792540800, n: 2 }] }].map((t) => JSON.parse(JSON.stringify(t))));
+  check('rowKeyDiff catches the ORDER loss (tierHistory dropped), a missing row, a stage flip and a moved first event; a value change alone is not a loss',
+    d.lost.length === 1 && d.lost[0].sym === 'ORDER' && d.lost[0].keys.join() === 'tierHistory' && d.missingRows.join() === 'GONE'
+    && d.stageFlips.length === 1 && d.stageFlips[0].sym === 'CFG' && d.firstEventMoved.length === 1 && d.firstEventMoved[0].to === new Date(1792540800e3).toISOString().slice(0, 10) && d.added.some((x) => x.sym === 'ORDER' && x.keys.join() === 'sourceFetchedAt'), JSON.stringify(d));
+  const liveTokens = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
+  const same = floorReport(liveTokens), stale = floorReport(liveTokens, { ...F, n: F.n - 1, pctOfMaxSupply: 0.07 });
+  check('floorReport: the live rows derive the recorded floor (unchanged); a stale record reads MOVED and lists the flips recording would cause',
+    same.moved === false && same.derived.pctOfMaxSupply === F.pctOfMaxSupply && same.flips.length === 0 && stale.moved === true && stale.flips.length >= 0 && same.nearest.length === 4, JSON.stringify({ same: same.derived, flips: stale.flips }));
+  const ns = readFileSync('NEXT-SESSION.md', 'utf8');
+  const steps = ns.slice(ns.indexOf('5. Re-ingest every sourced row'), ns.indexOf('8. `node boot-check.js` ON THE VPS TREE'));
+  check('NEXT-SESSION.md steps 5 and 7 run the committed files, with no inline command left to paste',
+    steps.length > 0 && /`node reingest-sourced\.js`/.test(steps) && /`node derive-pressure-floor\.js`/.test(steps) && !/`node -e "/.test(steps) && !/\$\(node -e/.test(steps));
+  const pu = readFileSync('promote-unlock.js', 'utf8');
+  check('promote-unlock.js prints TIER CORRECTION only when the run made one (a re-ingest of ORDER/ARB/STRK is not a new correction)', /if \(wasVerified && row\.tierHistory\) console\.log\(`\$\{row\.sym\} TIER CORRECTION/.test(pu));
 }
 
 // A block that mutes the console and forgets to restore it hides every section header after it.

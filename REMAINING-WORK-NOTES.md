@@ -5579,3 +5579,51 @@ INDEX: fetched 2026-11-02T20:02; SOURCE_STALE_DAYS 21, so it goes stale about 20
 A report-only reminder is scheduled for 2026-11-18 to run NEXT-SESSION.md's per-protocol
 browser-pane refresh (Route B). Steps 5 and 7 of that chore are still written as inline node -e,
 which CLAUDE.md forbids: write them as files.
+
+## 2026-11-05 — STRK RETURNS TO SOURCED AT THE INDEX FIGURE; THE REFRESH CHORE RUNS FILES
+
+Operator decision, later the same day as the hold: convert STRK to sourced, and let the index
+figure become the claim.
+
+STRK, tier correction verified -> sourced (promote-unlock.js provenance=sourced
+source=defillama reason="vesting on Ethereum LockedTokenGrants, outflows 4–7M/month vs claimed
+127M; no on-chain check can fail"):
+- The claim is now the index's: 226,356,431 a month on the 13th–14th through Dec 2026, then
+  190,523,098 (Jan–Feb 2027), then 63,523,098 (from 2027-03-15, insiders+liquidity). There are
+  17 events. Stage STANDARD (median 0.6355% of max supply); chain starknet.
+- The retired claim (127M on the 15th through 2027-03-15) is in tierHistory.retracted with
+  monthlyDay 15, reviewBy and falsifier NONE.
+- operatorNote records, as OBSERVED, NOT CLAIMED, where the 127M sits inside the index. The
+  arithmetic was checked against the row's own events before writing:
+  - the Jan–Feb 2027 total, 190,523,098, minus the 63,523,098 that continues from March is
+    exactly 127,000,000;
+  - that step ends after 2027-02-13, when privateSale leaves the event categories;
+  - the Jul–Dec 2026 total, 226,356,431, carries a further 35,833,333 that ends after December.
+  "The index total minus 63,523,098" holds only for the Jan–Feb total, not for 226,356,431.
+- Fixtures: LIVE pins exactly 4 verified rows (EIGEN, MOVE, ENA, ZRO), and the heartbeat's
+  coverage line reads "4 verified". STRK is pinned as sourced, with its history and the
+  observation. Its frozen verified row (fixtures/strk-row-2026-11-05.json) still feeds the
+  dead-man checks and the T-0 acceptance replay. Sourced ingests 31 -> 32.
+- Pressure floor re-derived: 0.0597 unchanged, n 31 -> 32, no stage flips.
+- The 2026-11-20 review task is cancelled (disabled, kept for the record): neither row has a
+  review left to lapse.
+
+THE REFRESH CHORE RUNS FILES. NEXT-SESSION.md steps 5 and 7 were inline `node -e`, which
+CLAUDE.md forbids. They are now committed root scripts:
+- reingest-sourced.js (step 5): copies unlocks.json aside to data/chore/unlocks.pre-<stamp>.json,
+  re-ingests every sourced row (or the named ones) through promote-unlock.js with a progress
+  line per row, then diffs every row's KEYS (the 2026-10-01 ORDER loss) and prints stage
+  flips, moved first events and [OPERATOR] lines. Exit 1 on a lost key, a missing row or a
+  failed run.
+- derive-pressure-floor.js (step 7): read-only. Prints recorded vs derived, the rows nearest
+  the floor, and the stage flips recording would cause. Exit 0 unchanged, 2 moved.
+- Run on a boot-check copy against the 2026-11-02 index: no row lost a key, and ARB and STRK
+  came through byte-identical. The one change was CFG STANDARD -> LOGGED: CFG sits exactly
+  on the floor (median 0.0597), as the floor's basis already says.
+- Fixture 102 covers rowKeyDiff (the ORDER loss, a missing row, a stage flip, a moved first
+  event; a value change alone is not a loss), floorReport (live unchanged; a stale record
+  reads MOVED), and NEXT-SESSION.md steps 5 and 7 carrying no inline command.
+- promote-unlock.js printed "TIER CORRECTION verified -> sourced" on every re-ingest of a row
+  that already carried tierHistory. It now prints only when the run made the correction.
+- The 2026-11-18 reminder now points at both files and runs derive-pressure-floor.js as a
+  read-only baseline.

@@ -220,7 +220,14 @@ that is bot detection, and getting past it is not an option. Do not re-run it.
    could see must match). The file goes to the VPS as `data/unlock-index.json`
    (old one to `data/unlock-index.<date>.bak.json` first).
 5. Re-ingest every sourced row through the write path (never edit unlocks.json):
-   `for s in $(node -e "console.log(JSON.parse(require('fs').readFileSync('unlocks.json')).tokens.filter(t=>t.provenance==='sourced').map(t=>t.sym).join(' '))"); do node promote-unlock.js $s provenance=sourced source=defillama; done`
+   `node reingest-sourced.js` (a committed file since 2026-11-05; it replaced an inline
+   `node -e` loop, which CLAUDE.md forbids). It copies unlocks.json aside to
+   `data/chore/unlocks.pre-<stamp>.json` first, runs `promote-unlock.js SYM
+   provenance=sourced source=defillama` row by row with a progress line each, then diffs
+   every row's KEYS and prints stage flips, moved first events and `[OPERATOR]` lines.
+   Exit 1 if any row lost a key or a run failed; the copy aside is the way back.
+   Rows that came back from verified (ORDER, ARB, STRK) must keep their tierHistory and
+   operatorNote observations. The key diff checks exactly that.
 6. Watch for two things in that output:
    - `[OPERATOR] ... index dates MOVED and this row carries mechanism ...` — re-run
      `detect-cliff-cluster.js` for that symbol and re-stamp; the old verdict was
@@ -228,17 +235,21 @@ that is bot detection, and getting past it is not an option. Do not re-run it.
      with `0x/0r` on recent cliffs is a stale cache, not an empty window (2026-11-02:
      the CLI passed no needUpTo and scored L3/REZ from 2026-09-05 caches; fixed).
    - a stage flip on a row you expected to stay put.
-7. Re-derive and RE-RECORD the pressure floor if it moved:
-   `node -e "import('./src/core/unlock-promote.js').then(m=>console.log(JSON.stringify(m.derivePressureFloor(JSON.parse(require('fs').readFileSync('unlocks.json')).tokens))))"`
-   — update `SOURCED_PRESSURE_FLOOR` (value, n, basis) in `src/core/unlock-promote.js`.
-   Fixture 47 fails until you do; that is the point of it.
+7. Re-derive and RE-RECORD the pressure floor if it moved: `node derive-pressure-floor.js`
+   (read-only, committed 2026-11-05 in place of an inline `node -e`). It prints recorded
+   vs derived, the rows nearest the floor, and the stage flips recording would cause.
+   Exit 0 means unchanged; exit 2 means it moved: update `SOURCED_PRESSURE_FLOOR` (value,
+   n, basis) in `src/core/unlock-promote.js` by hand. Fixture 47 fails until you do;
+   that is the point of it.
+   CFG sits ON the floor (median 0.0597). A re-ingest defaults it LOGGED, and step 5's
+   output shows that as a stage flip. Decide its stage by hand if that matters.
 8. `node boot-check.js` ON THE VPS TREE (ALL GREEN) before the restart, then
    `sudo systemctl restart market-radar`; scp unlocks.json and the changed data/ files
    back to the desktop tree and push from there.
 
 **Two rules learned 2026-10-01, both from the same incident:**
-- Before step 5, copy `unlocks.json` aside (`/tmp/chore/unlocks.pre.json`) and after it
-  diff KEYS per row, not just stages and dates. The re-ingest rebuilt ORDER and dropped
+- Before step 5, copy `unlocks.json` aside, and after it diff KEYS per row, not just
+  stages and dates. Since 2026-11-05, `reingest-sourced.js` does both. The re-ingest rebuilt ORDER and dropped
   its `tierHistory` (the 2026-09-17 tier correction, grid and all); a six-field diff
   said "23 changes, all expected". Fixed in `sourceRow` (history survives a re-ingest)
   — but diff keys anyway; the next dropped field will be a different one.

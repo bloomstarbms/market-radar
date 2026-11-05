@@ -137,7 +137,9 @@ if (args.provenance === 'sourced') {
   j.lastReviewed = new Date().toISOString().slice(0, 10) + ` (sourced ${row.sym} via promote-unlock.js)`;
   writeFileSync('unlocks.json.tmp', JSON.stringify(j, null, 1));
   renameSync('unlocks.json.tmp', 'unlocks.json');
-  if (row.tierHistory) console.log(`${row.sym} TIER CORRECTION verified → sourced (${row.tierHistory.retractedAt}): ${row.tierHistory.reason}${row.tierHistory.evidence?.grid ? `\n   evidence: ${row.tierHistory.evidence.grid.points.map((p) => `w${p.w}/r${p.r} ${p.margin}`).join(' · ')} · best ${row.tierHistory.evidence.grid.best.margin} vs bar ${row.tierHistory.evidence.bar}` : ''}`);
+  // Only when THIS run made the correction: a re-ingest of a row that already carries tierHistory
+  // (ORDER, ARB, STRK) is not a new correction, and the chore's output must not read as one.
+  if (wasVerified && row.tierHistory) console.log(`${row.sym} TIER CORRECTION verified → sourced (${row.tierHistory.retractedAt}): ${row.tierHistory.reason}${row.tierHistory.evidence?.grid ? `\n   evidence: ${row.tierHistory.evidence.grid.points.map((p) => `w${p.w}/r${p.r} ${p.margin}`).join(' · ')} · best ${row.tierHistory.evidence.grid.best.margin} vs bar ${row.tierHistory.evidence.bar}` : ''}`);
   console.log(`${row.sym} SOURCED (${args.source}, ${sourceEvents.length} batch events, chain ${chain}, stage ${row.stage}${args.stage ? ' (explicit)' : ` (pressure rule: ${defaultStage})`}${mechanism !== 'pending' ? `, mechanism ${mechanism} carried` : ''}).`);
   if (datesMoved && mechanism !== 'pending') console.log(`   [OPERATOR] ${row.sym}: the index dates MOVED and this row carries mechanism '${mechanism}' — re-run detect-cliff-cluster.js ${row.sym} and re-stamp; the old verdict was against the old dates.`);
   process.exit(0);

@@ -1,7 +1,7 @@
 {
  "comment": "Token unlock watchlist. Two entry types: 'monthlyDay' = recurring cliff on that day each month (most vesting contracts release monthly); 'date' = one-off YYYY-MM-DD. Bot pings 7 days and 3 days before. verified:true = confirmed against cryptorank.io/token-unlock on 2026-08-01; others are recurring-schedule estimates — check the date on cryptorank before acting.",
  "source": "https://cryptorank.io/token-unlock (free public page)",
- "lastReviewed": "2026-11-05 (observation on ARB via promote-unlock.js)",
+ "lastReviewed": "2026-11-05 (observation on STRK via promote-unlock.js)",
  "tokens": [
   {
    "sym": "EIGEN",
@@ -330,24 +330,144 @@
   {
    "sym": "STRK",
    "name": "Starknet",
-   "monthlyDay": 15,
-   "verified": true,
-   "events": [
+   "provenance": "sourced",
+   "source": "defillama",
+   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceEvents": [
     {
-     "date": "2026-09-15",
-     "source": "announcement",
-     "detail": "127M STRK monthly on the 15th per Starknet documentation (core contributors + investors), through 2027-03-15."
+     "t": 1784093604,
+     "type": "cliff",
+     "n": 226356431,
+     "cats": "insiders+liquidity+privateSale"
+    },
+    {
+     "t": 1786723347,
+     "type": "cliff",
+     "n": 226356431,
+     "cats": "insiders+liquidity+privateSale"
+    },
+    {
+     "t": 1789353090,
+     "type": "cliff",
+     "n": 226356431,
+     "cats": "insiders+liquidity+privateSale"
+    },
+    {
+     "t": 1791982833,
+     "type": "cliff",
+     "n": 226356431,
+     "cats": "insiders+liquidity+privateSale"
+    },
+    {
+     "t": 1794612576,
+     "type": "cliff",
+     "n": 226356431,
+     "cats": "insiders+liquidity+privateSale"
+    },
+    {
+     "t": 1797242319,
+     "type": "cliff",
+     "n": 226356431,
+     "cats": "insiders+liquidity+privateSale"
+    },
+    {
+     "t": 1799872062,
+     "type": "cliff",
+     "n": 190523098,
+     "cats": "insiders+liquidity+privateSale"
+    },
+    {
+     "t": 1802501805,
+     "type": "cliff",
+     "n": 190523098,
+     "cats": "insiders+liquidity+privateSale"
+    },
+    {
+     "t": 1805131548,
+     "type": "cliff",
+     "n": 63523098,
+     "cats": "insiders+liquidity"
+    },
+    {
+     "t": 1807761291,
+     "type": "cliff",
+     "n": 63523098,
+     "cats": "insiders+liquidity"
+    },
+    {
+     "t": 1810391034,
+     "type": "cliff",
+     "n": 63523098,
+     "cats": "insiders+liquidity"
+    },
+    {
+     "t": 1813020777,
+     "type": "cliff",
+     "n": 63523098,
+     "cats": "insiders+liquidity"
+    },
+    {
+     "t": 1815650520,
+     "type": "cliff",
+     "n": 63523098,
+     "cats": "insiders+liquidity"
+    },
+    {
+     "t": 1818280263,
+     "type": "cliff",
+     "n": 63523098,
+     "cats": "insiders+liquidity"
+    },
+    {
+     "t": 1820910006,
+     "type": "cliff",
+     "n": 63523098,
+     "cats": "insiders+liquidity"
+    },
+    {
+     "t": 1823539749,
+     "type": "cliff",
+     "n": 63523098,
+     "cats": "insiders+liquidity"
+    },
+    {
+     "t": 1826169492,
+     "type": "cliff",
+     "n": 63523098,
+     "cats": "insiders+liquidity"
     }
    ],
-   "reviewBy": "2026-11-30",
+   "chain": "starknet",
    "stage": "STANDARD",
-   "falsifier": {
-    "verdict": "NONE",
-    "basis": "reviewBy 2026-11-30 tests freshness, not the claim — no chance rate exists because nothing on chain is checked",
-    "at": "2026-09-05T22:04",
-    "kind": "dead-man"
+   "note": "",
+   "mechanism": "pending",
+   "operatorNote": "Vesting on Starknet L2 (no eth_call path in our stack): up to 127M STRK on the 15th monthly through Mar 2027 per docs.starknet.io. Enforcement unverifiable from here — reviewBy dead-man's switch; re-attest by the date or the row demotes itself. OBSERVED, NOT CLAIMED (2026-11-05): the retired verified claim (127M STRK on the 15th through 2027-03-15, kept in tierHistory.retracted) sits inside the index: the Jan-Feb 2027 total 190,523,098 minus the 63,523,098 that continues from 2027-03-15 is exactly 127,000,000, and that step ends after 2027-02-13, when privateSale leaves the event categories (insiders+liquidity from March). The Jul-Dec 2026 total, 226,356,431, carries a further 35,833,333 that ends after December. The row now carries the index figures (DefiLlama, fetched 2026-11-02T20:02): 226,356,431 a month on the 13th-14th through Dec 2026.",
+   "tierHistory": {
+    "from": "verified",
+    "retractedAt": "2026-11-05",
+    "reason": "vesting on Ethereum LockedTokenGrants, outflows 4–7M/month vs claimed 127M; no on-chain check can fail",
+    "retracted": {
+     "events": [
+      {
+       "date": "2026-09-15",
+       "source": "announcement",
+       "detail": "127M STRK monthly on the 15th per Starknet documentation (core contributors + investors), through 2027-03-15."
+      }
+     ],
+     "reviewBy": "2026-11-30",
+     "falsifier": {
+      "verdict": "NONE",
+      "basis": "reviewBy 2026-11-30 tests freshness, not the claim — no chance rate exists because nothing on chain is checked",
+      "at": "2026-09-05T22:04",
+      "kind": "dead-man"
+     },
+     "monthlyDay": 15
+    }
    },
-   "operatorNote": "Vesting on Starknet L2 (no eth_call path in our stack): up to 127M STRK on the 15th monthly through Mar 2027 per docs.starknet.io. Enforcement unverifiable from here — reviewBy dead-man's switch; re-attest by the date or the row demotes itself."
+   "token": "starknet:0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
+   "circSupply": 7145762221.26087,
+   "totalLocked": 2849237770.73913,
+   "maxSupply": 9994999992
   },
   {
    "sym": "ARB",
