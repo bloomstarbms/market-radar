@@ -5501,3 +5501,35 @@ The 2026-11-04 "trace found 793.3M" was a sum of `received` and is superseded: 8
 
 Probes kept in the session scratchpad: probe-arb-eoa-trace.mjs, probe-arb-partition.mjs (stub-tested:
 INCOMPLETE and AMBIGUOUS worlds, denominator derived from genesis).
+
+## 2026-11-05 — ARB AND STRK LAPSE AT THE 30 NOV REVIEW; DISCOVERY PRINTS PROGRESS
+
+OPERATOR DECISIONS (2026-11-05):
+- ARB lapses to sourced at the 2026-11-30 review, with no further trace hops. ARB's operatorNote
+  records, as OBSERVED, NOT CLAIMED, that EOA 0x1e7016f7 received ~4.9B of team ARB alongside
+  ~7.0B from elsewhere and looks like a custodian, so on-chain vesting cannot be verified.
+  Written through promote-unlock.js observe=; only operatorNote changed.
+- STRK: the 2026-11-20 task recommends the lapse; the operator confirms then. The task was
+  rewritten to recommend the lapse for both rows, with no new probes.
+
+THE TWO LAPSES ARE NOT THE SAME. From 2026-12-01 (reviewBy < today) the cadence watch records a
+review-expired demotion and DMs the operator. The row then goes SILENT (cadence-demoted), not
+sourced. "Lapse to sourced" is a separate step: promote-unlock.js provenance=sourced
+source=defillama reason="..." rebuilds the row from data/unlock-index.json as a tier correction.
+That breaks two LIVE checks that pin ARB/STRK as verified dead-man rows (the "no verified row is
+WEAK" and "coverage line ... all six" checks), so it ships with fixture updates and a suite run.
+The 20 Nov task writes the commands out and does not run them.
+
+v0.37.16: discover-vesting.js prints progress (CLAUDE.md "Long probes print progress"). Every
+phase gets a start line, then a line every 100 items or 2 minutes; each line carries the UTC time,
+done/total and API calls. The 2-minute line comes from a timer, so a hanging item still prints with
+an unmoving count. Phases: Ethereum, holder pages and classify contracts; Arbitrum, genesis
+transfers, trace and classify the rest; the CLI, tokens when more than one. Silent unless a log is
+given, so bulk-scan's imported discover() stays quiet. Fixture 101 checks count, time and timer;
+fixture 100 checks the Arbitrum phase order and silence. A mutation (timer disabled, trace phase
+line removed) fails exactly those 2 checks. Suite 1,403.
+
+ALSO 2026-11-05: the ARB discovery re-run with v0.37.15 (VPS data/vesting-discovery.json, backup
+at /tmp/vesting-discovery.before-0.37.15.json) reads each genesis Safe's single transfer (team
+2,693,961,299, was 5,387,922,598). Only the 6 genesis-funded addresses changed; bucket A is
+unchanged at 1,492,827,525.

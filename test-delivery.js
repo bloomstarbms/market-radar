@@ -4488,6 +4488,10 @@ console.log('100. Arbitrum One reader: vesting wallets found by genesis trace (n
     r = await dv.discoverArbitrum('FXA', { key: 'FX-NOT-A-KEY', index });
     noKey = await dv.discoverArbitrum('FXA', { key: '', index });
     unres = await dv.discoverArbitrum('FXE', { key: 'FX-NOT-A-KEY', index });
+    // (2026-11-05) progress: every phase prints when a log is given; nothing prints without one.
+    var progA = []; await dv.discoverArbitrum('FXA', { key: 'FX-NOT-A-KEY', index, progress: (s) => progA.push(s) });
+    var spokeA = 0; const cl = console.log; console.log = () => { spokeA++; };
+    try { await dv.discoverArbitrum('FXA', { key: 'FX-NOT-A-KEY', index }); } finally { console.log = cl; }
   } finally { globalThis.fetch = prevFetch; }
   const by = Object.fromEntries((r.contracts || []).map((c) => [c.addr, c]));
   check('the trace finds both vesting-wallet proxies as bucket A by their IMPLEMENTATION name, one hop below the Safe', by[VW1]?.bucket === 'A' && by[VW2]?.bucket === 'A' && /ArbitrumVestingWallet \(proxy\)/.test(by[VW1].why) && by[VW1].depth === 2 && by[VW1].parents.includes(SAFE), JSON.stringify(by[VW1]));
@@ -4496,6 +4500,10 @@ console.log('100. Arbitrum One reader: vesting wallets found by genesis trace (n
   check('...balances from tokenbalance, verdict A-READABLE, token from the index (never typed), every call on chain 42161',
     by[VW1].bal === 1200 && r.verdict === 'A-READABLE' && r.token === TOK && r.chain === 'arbitrum-one' && urls.length > 0 && urls.every((u) => /chainid=42161/.test(u)) && urls.filter((u) => /action=tokentx/.test(u)).every((u) => u.includes(`contractaddress=${TOK}`)));
   check('no key -> NO-KEY; a token that is not on arbitrum -> UNRESOLVED (nothing is guessed)', noKey.verdict === 'NO-KEY' && unres.verdict === 'UNRESOLVED');
+  const ph = (rx) => progA.findIndex((l) => rx.test(l));
+  check('progress: the Arbitrum trace prints a line at each phase, in order (genesis, trace, classify the rest), each with API calls',
+    ph(/FXA genesis transfers/) === 0 && ph(/FXA trace/) > 0 && ph(/FXA classify the rest/) > ph(/FXA trace/) && progA.every((l) => /^  … \d\d:\d\d:\d\dZ FXA .* · \d+ API calls$/.test(l)), JSON.stringify(progA));
+  check('...and prints nothing without a log (the library default when imported, as bulk-scan does)', spokeA === 0, String(spokeA));
   // (2026-11-05) DEP->SAFE is in the genesis window AND among the traced minter's outflows. It was counted
   // twice (ARB's team Safe read 5,387.9M received for one 2,694.0M transfer).
   check('received counts each transfer once: a Safe funded by ONE genesis transfer (also seen as the traced minter\'s outflow) reads 6000, not 12000',
@@ -4517,6 +4525,39 @@ console.log('100. Arbitrum One reader: vesting wallets found by genesis trace (n
   const cli = readFileSync('detect-cadence.js', 'utf8');
   check('detect-cadence --chain refuses typed addresses (SYM mode only) and scans vesting wallets (A) as well as custody on Arbitrum',
     /--chain needs SYM mode: wallets and the token address come from data\/vesting-discovery\.json, never typed/.test(cli) && /chain === 'ethereum' \? \['D', 'C'\] : \['A', 'D', 'C'\]/.test(cli));
+}
+
+console.log('101. discover-vesting progress meter: a line every 100 items or 2 minutes, in every phase, so silence means stuck');
+{
+  // (2026-11-05) The ARB trace probe went silent for 30+ minutes after its follow cap. CLAUDE.md
+  // "Long probes print progress". The meter counts items, checks the clock on each item, and runs
+  // a timer, so one hanging item still produces lines whose count does not move.
+  const dv = await import('./discover-vesting.js');
+  let lines = [], t = Date.parse('2026-11-05T12:00:00Z');
+  let pm = dv.progressMeter((s) => lines.push(s), { now: () => t, calls: () => 7 });
+  pm.phase('fx classify', 250);
+  for (let i = 0; i < 250; i++) pm.tick();
+  pm.end();
+  check('count: a line at the phase start, then one every 100 items (3 for 250), each with UTC time, phase, done/total and API calls',
+    lines.length === 3 && lines[0] === '  … 12:00:00Z fx classify 0/250 · 7 API calls' && lines[2] === '  … 12:00:00Z fx classify 200/250 · 7 API calls', JSON.stringify(lines));
+  lines = []; pm = dv.progressMeter((s) => lines.push(s), { now: () => t, calls: () => 0 });
+  pm.phase('fx trace', null);
+  t += 61e3; pm.tick('queue 5'); const after1 = lines.length;
+  t += 61e3; pm.tick('queue 4');
+  pm.end();
+  check('time: in a slow phase a line comes within 2 minutes of the last one (not at 61s, yes at 122s), with the item info',
+    after1 === 1 && lines.length === 2 && lines[1] === '  … 12:02:02Z fx trace 2/? · queue 4 · 0 API calls', JSON.stringify(lines));
+  lines = []; pm = dv.progressMeter((s) => lines.push(s), { intervalMs: 40, calls: () => 0 });
+  pm.phase('fx hang', 1);
+  await new Promise((r) => setTimeout(r, 150));
+  const during = lines.length; pm.end();
+  await new Promise((r) => setTimeout(r, 120));
+  check('timer: while ONE item hangs the meter still prints (count stays 0/1 = stuck), and end() stops it',
+    during >= 2 && lines.length === during && lines.every((l) => / fx hang 0\/1 · 0 API calls$/.test(l)), JSON.stringify(lines));
+  const src = readFileSync('discover-vesting.js', 'utf8');
+  check('the Ethereum path has both phases (holder pages, classify contracts) and every meter is ended in a finally',
+    /pm\.phase\(`\$\{sym\} holder pages`, 4\)/.test(src) && /pm\.phase\(`\$\{sym\} classify contracts`, out\.contracts\.length\)/.test(src)
+    && (src.match(/const pm = progressMeter\(/g) || []).length === 2 && (src.match(/\} finally \{ pm\.end\(\); \}/g) || []).length === 2);
 }
 
 // A block that mutes the console and forgets to restore it hides every section header after it.

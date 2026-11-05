@@ -23,7 +23,26 @@ const KEY = (() => {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // 15s abort: one stalled connection must not eat a whole scan slice (the runtime
 // kills any invocation at ~170s; an un-timed-out fetch turns that into lost work).
-const jget = async (url) => { try { const r = await fetch(url, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(15000) }); return await r.json(); } catch { return null; } };
+let apiCalls = 0;
+const jget = async (url) => { apiCalls++; try { const r = await fetch(url, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(15000) }); return await r.json(); } catch { return null; } };
+
+// PROGRESS (2026-11-05, CLAUDE.md "Long probes print progress"): a line every 100 items or every
+// 2 minutes, whichever comes first, in every phase. Each line carries the UTC time, the phase,
+// items done/total and API calls so far. The 2-minute line comes from a timer, so it prints even
+// while one slow item (a 10-page transfer history) holds the loop: a count that stops moving
+// across timer lines means stuck. Silent unless a log is given. The CLI passes console.log;
+// bulk-scan imports discover() and stays quiet.
+export function progressMeter(log, { every = 100, intervalMs = 120e3, now = Date.now, calls = () => apiCalls } = {}) {
+  if (!log) return { phase() {}, tick() {}, end() {} };
+  let label = '', total = null, done = 0, extra = '', last = now(), timer = null;
+  const line = () => { last = now(); log(`  … ${new Date(now()).toISOString().slice(11, 19)}Z ${label} ${done}/${total ?? '?'}${extra ? ' · ' + extra : ''} · ${calls()} API calls`); };
+  const arm = () => { if (timer) clearInterval(timer); timer = setInterval(() => { if (now() - last >= intervalMs) line(); }, Math.min(intervalMs, 30e3)); timer.unref?.(); };
+  return {
+    phase(l, t = null) { label = l; total = t; done = 0; extra = ''; line(); arm(); },
+    tick(info = '') { done++; extra = info; if (done % every === 0 || now() - last >= intervalMs) line(); },
+    end() { if (timer) clearInterval(timer); timer = null; },
+  };
+}
 
 const SEL = {  // OZ VestingWallet + TokenTimelock view selectors
   start: '0xbe9a6555', duration: '0x0fb5a6b4', beneficiary: '0x38af3eed',
@@ -138,10 +157,14 @@ export async function discover(sym, opts = {}) {
   // failed/empty info fetch would make THRESH=0 and cascade into a false verdict.
   if (!info || !(supply > 0)) { out.verdict = 'FETCH-FAILED'; out.note += ' Token info fetch failed or zero supply — RETRYABLE, not a vesting verdict.'; return out; }
   out.totalSupply = supply;
+  const pm = progressMeter(opts.progress ?? (IS_CLI ? console.log : null));
+  try {
   const THRESH = supply * 0.003; // 0.3% of supply
   let next = '';
+  pm.phase(`${sym} holder pages`, 4);
   for (let p = 0; p < 4; p++) {
     const j = await jget(`https://eth.blockscout.com/api/v2/tokens/${addr}/holders${next}`);
+    pm.tick(`${out.contracts.length} contracts so far`);
     let below = false;
     for (const it of (j?.items || [])) {
       const bal = Number(it.value) / 10 ** dec;
@@ -158,10 +181,13 @@ export async function discover(sym, opts = {}) {
     next = '?' + Object.entries(j.next_page_params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
     await sleep(300);
   }
+  pm.phase(`${sym} classify contracts`, out.contracts.length);
   for (const c of out.contracts) {
     await sleep(250);
     Object.assign(c, await classifyContract(c.addr, c.name));
+    pm.tick();
   }
+  } finally { pm.end(); }
   const real = out.contracts.filter((c) => !String(c.bucket).startsWith('skip'));
   const buckets = {};
   for (const c of real) buckets[c.bucket] = (buckets[c.bucket] || 0) + 1;
@@ -245,9 +271,13 @@ export async function discoverArbitrum(sym, opts = {}) {
   const supply = Number(sup?.result ?? 0) / 1e18;
   if (!(supply > 0)) { out.verdict = 'FETCH-FAILED'; out.note = 'token supply fetch failed — RETRYABLE, not a vesting verdict'; return out; }
   out.totalSupply = supply;
+  const pm = progressMeter(opts.progress ?? (IS_CLI ? console.log : null));
+  try {
   const seen = new Map();
   const add = (to, amt, parent, depth) => { const k = to.toLowerCase(); const r = seen.get(k) || { addr: to, received: 0, parents: new Set(), depth }; r.received += amt; r.parents.add(parent); r.depth = Math.min(r.depth, depth); seen.set(k, r); return r; };
+  pm.phase(`${sym} genesis transfers (up to 10 pages)`, 1);
   const g = await arbTransfers(token, null, 10, key);
+  pm.tick(`${g.rows.length} transfers`);
   out.genesisWindow = g.rows.length ? [new Date(+g.rows[0].timeStamp * 1000).toISOString().slice(0, 10), new Date(+g.rows.at(-1).timeStamp * 1000).toISOString().slice(0, 10)] : null;
   // Each transfer is counted once. The genesis window holds the minter's own sends, and the minter is
   // then traced as a depth-1 EOA, so the same transfer comes back as one of its outflows (2026-11-05:
@@ -261,8 +291,10 @@ export async function discoverArbitrum(sym, opts = {}) {
   for (const { to, amt, keys } of level1.values()) if (amt >= supply * 0.003) { frontier.push(add(to, amt, 'genesis', 1)); for (const k of keys) counted.add(k); }
   // Trace outward from custody / unverified contracts, at most three hops from genesis.
   const traced = new Set();
+  pm.phase(`${sym} trace (classify + outflows), addresses taken from the queue`, null);
   while (frontier.length) {
     const r = frontier.shift();
+    pm.tick(`queue ${frontier.length}, seen ${seen.size}`);
     if (!r.cls) Object.assign(r, { cls: await arbClassify(r.addr, token, key) });
     const b = r.cls.bucket;
     if (traced.has(r.addr.toLowerCase()) || r.depth >= 3 || !(b === 'D' || b === 'C' || (b === 'skip-eoa' && r.depth === 1))) continue;
@@ -277,11 +309,13 @@ export async function discoverArbitrum(sym, opts = {}) {
     }
     for (const { to, amt } of by.values()) if (amt >= supply * 0.0001) frontier.push(add(to, amt, r.addr, r.depth + 1));
   }
+  pm.phase(`${sym} classify the rest`, [...seen.values()].filter((r) => !r.cls).length);
   for (const r of seen.values()) {
-    if (!r.cls) r.cls = await arbClassify(r.addr, token, key);
+    if (!r.cls) { r.cls = await arbClassify(r.addr, token, key); pm.tick(); }
     out.contracts.push({ addr: r.addr, depth: r.depth, parents: [...r.parents], received: Math.round(r.received), bal: Math.round(r.cls.balance), pctSupply: +(100 * r.cls.balance / supply).toFixed(3),
       bucket: r.cls.bucket, why: r.cls.why ?? null, name: r.cls.name ?? null, ...(r.outComplete === false ? { outflowsTruncated: true } : {}) });
   }
+  } finally { pm.end(); }
   out.contracts.sort((a, b) => b.bal - a.bal);
   const real = out.contracts.filter((c) => !String(c.bucket).startsWith('skip'));
   const buckets = {};
@@ -311,7 +345,10 @@ if (IS_CLI) (async () => {
   if (!syms.length) { console.log('usage: node discover-vesting.js SYM [SYM...] | --watchlist'); process.exit(1); }
   const reportPath = 'data/vesting-discovery.json';
   const report = existsSync(reportPath) ? JSON.parse(readFileSync(reportPath, 'utf8')) : {};
+  const tokens = progressMeter(syms.length > 1 ? console.log : null);
+  tokens.phase('tokens', syms.length);
   for (const sym of syms) {
+    tokens.tick(sym);
     process.stdout.write(`\n== ${sym} == `);
     try {
       const r = onArbitrum ? await discoverArbitrum(sym) : await discover(sym);
@@ -324,6 +361,7 @@ if (IS_CLI) (async () => {
     } catch (e) { console.log('FAILED: ' + e.message); report[sym] = { sym, verdict: 'ERROR', error: e.message }; }
     await sleep(500);
   }
+  tokens.end();
   writeFileSync(reportPath + '.tmp', JSON.stringify(report, null, 1));
   renameSync(reportPath + '.tmp', reportPath);
   const counts = {};
