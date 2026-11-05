@@ -992,6 +992,10 @@ console.log('49. FALSIFIER STRENGTH is derived on EVERY verified row (chance rat
   const reingested = sourceRow(corrected, { ...src, sourceFetchedAt: '2026-10-01T20:06' });
   check('a sourced row re-ingested from a new index KEEPS its tierHistory, byte-identical (the 2026-10-01 ORDER loss)', JSON.stringify(reingested.tierHistory) === JSON.stringify(corrected.tierHistory) && reingested.sourceFetchedAt === '2026-10-01T20:06');
   check('with a reason the row is SOURCED and carries tierHistory with what was retracted', corrected.provenance === 'sourced' && corrected.events === undefined && corrected.tierHistory.from === 'verified' && corrected.tierHistory.retracted.enforcement === 'contract' && corrected.tierHistory.retracted.falsifier.margin === 0.17 && /0\.40/.test(corrected.tierHistory.reason));
+  // (2026-11-05) The claim's DAY is retracted too: ARB said the 16th, its index says the 15th.
+  const dayRow = sourceRow({ ...wasVer, monthlyDay: 16, reviewBy: '2026-11-30' }, { ...src, tierCorrection: { reason: 'verified claim not checkable on chain' } });
+  check('a tier correction keeps the retired claim\'s monthlyDay (and reviewBy) in tierHistory.retracted, and the sourced row itself carries no monthlyDay',
+    dayRow.tierHistory.retracted.monthlyDay === 16 && dayRow.tierHistory.retracted.reviewBy === '2026-11-30' && dayRow.monthlyDay === undefined, JSON.stringify(dayRow.tierHistory.retracted));
   // The EVIDENCE travels with the decision. A row that held a clusterSpec cannot be
   // corrected on "the grid" without the grid: margins per point, computed from the
   // tool's report, recorded beside the reason — so the question stays settled.
@@ -1009,15 +1013,33 @@ console.log('49. FALSIFIER STRENGTH is derived on EVERY verified row (chance rat
   check('a verified cadence row WITHOUT derived strength fails the boot gate', verifiedRowProblems([row]).some((p) => /no derived falsifier strength/.test(p)));
   check('a reviewBy row needs verdict NONE, not a number', falsifierProblems({ sym: 'R', verified: true, reviewBy: '2026-12-01', events: [{}], falsifier: { verdict: 'NONE', basis: 'b' } }).length === 0);
   check('falsifierLine says underived rather than skipping', /underived/.test(falsifierLine({ sym: 'U' })));
-  // Live: all seven carry it; the line shows all seven.
+  // Live: every verified row carries it; the line shows every one. (2026-11-05: ARB returned to
+  // sourced by operator decision; its verified dead-man row is frozen in fixtures/arb-row-2026-11-05.json
+  // and still tested below, so the dead-man behaviour does not depend on today's data.)
+  const LIVE_VERIFIED = ['EIGEN', 'STRK', 'MOVE', 'ENA', 'ZRO'];
   const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens.filter((t) => t.verified && !t.retired && (t.cadence || t.enforcement === 'contract' || t.reviewBy));
-  check('LIVE: every verified row carries derived strength', live.length === 6 && live.every((t) => t.falsifier?.verdict));
+  check(`LIVE: exactly ${LIVE_VERIFIED.length} verified rows (${LIVE_VERIFIED.join(', ')}), every one carrying derived strength`, live.map((t) => t.sym).sort().join() === [...LIVE_VERIFIED].sort().join() && live.every((t) => t.falsifier?.verdict), live.map((t) => t.sym).join());
   check('LIVE: EIGEN/ENA/MOVE have NUMBERS, not an implicit "strong"', ['EIGEN', 'ENA', 'MOVE'].every((s) => { const f = live.find((t) => t.sym === s).falsifier; return f.chanceRate > 0 && f.replayRate === 1 && /days ≥50% of mean/.test(f.basis); }));
-  check('LIVE: no verified row is WEAK (retired) and every numeric margin clears the bar; dead-man rows are NONE', live.every((t) => t.falsifier.verdict !== 'WEAK' && (t.falsifier.verdict === 'NONE' || t.falsifier.margin >= MIN_FALSIFIER_MARGIN)) && ['ARB', 'STRK', 'ZRO'].every((s) => live.find((t) => t.sym === s).falsifier.verdict === 'NONE'));
+  check('LIVE: no verified row is WEAK (retired) and every numeric margin clears the bar; dead-man rows are NONE', live.every((t) => t.falsifier.verdict !== 'WEAK' && (t.falsifier.verdict === 'NONE' || t.falsifier.margin >= MIN_FALSIFIER_MARGIN)) && ['STRK', 'ZRO'].every((s) => live.find((t) => t.sym === s).falsifier.verdict === 'NONE'));
+  // The FROZEN verified dead-man rows keep the old behaviour tested: a reviewBy row with verdict NONE
+  // passes the boot gate, shows in the strength list, and states its strength.
+  const frozenDeadMan = ['arb', 'strk'].map((s) => JSON.parse(readFileSync(`fixtures/${s}-row-2026-11-05.json`, 'utf8')).row);
+  check('FROZEN ARB/STRK verified dead-man rows: boot gate clean, verdict NONE, strength listed, claimCoverage states it',
+    verifiedRowProblems(frozenDeadMan).length === 0 && frozenDeadMan.every((t) => t.verified && t.reviewBy === '2026-11-30' && t.falsifier.verdict === 'NONE' && /Falsifier strength: /.test(claimCoverage(t, 3).line))
+    && ['ARB', 'STRK'].every((s) => new RegExp('\\b' + s + ' ').test(unlockCoverage(frozenDeadMan).strength)) && unlockCoverage(frozenDeadMan).reviewBy === 2, JSON.stringify(verifiedRowProblems(frozenDeadMan)));
+  // LIVE: ARB is sourced, with the verification it held recorded, and the index's numbers.
+  const arbNow = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens.find((t) => t.sym === 'ARB');
+  check('LIVE: ARB is SOURCED by tier correction: reason cites the custodian, retracted keeps the claim (16th, reviewBy, NONE), no events/verified on the row',
+    arbNow.provenance === 'sourced' && !arbNow.verified && !arbNow.events && arbNow.source === 'defillama' && arbNow.tierHistory?.from === 'verified' && /custodian-like 0x1e7016f7/.test(arbNow.tierHistory.reason)
+    && arbNow.tierHistory.retracted.monthlyDay === 16 && arbNow.tierHistory.retracted.reviewBy === '2026-11-30' && arbNow.tierHistory.retracted.falsifier?.verdict === 'NONE' && /92\.65M ARB monthly/.test(arbNow.tierHistory.retracted.events?.[0]?.detail));
+  check('LIVE: ARB keeps its amount (92,645,833 every event) and takes the index day (15th, Aug–Dec 2026), with the 16th-vs-15th discrepancy noted',
+    arbNow.sourceEvents.length === 8 && arbNow.sourceEvents.every((e) => e.n === 92645833) && arbNow.sourceEvents.filter((e) => /^2026-(08|09|10|11|12)-15$/.test(new Date(e.t * 1000).toISOString().slice(0, 10))).length === 5
+    && /retired verified claim said the 16th/.test(arbNow.operatorNote) && /looks like a custodian/.test(arbNow.operatorNote));
   const cov = unlockCoverage();
+  check(`coverage (the heartbeat line) counts ${LIVE_VERIFIED.length} verified`, cov.verified === LIVE_VERIFIED.length && cov.line.includes(`· ${LIVE_VERIFIED.length} verified (`), cov.line.slice(0, 140));
   check('coverage line carries the admission bar and the LOWEST live margin (arithmetic over rows)', cov.marginBar === MIN_FALSIFIER_MARGIN && /margin bar 0\.4 \(lowest (EIGEN|ENA|MOVE) 0\.\d+\)/.test(cov.line) && cov.lowestMargin.margin === Math.min(...live.filter((t) => Number.isFinite(t.falsifier?.margin)).map((t) => t.falsifier.margin)));
   check('MUTATION: with no numeric margins the line says so rather than omitting the bar', /margin bar 0\.4 \(no margins live\)/.test(unlockCoverage([{ sym: 'R', verified: true, events: [{}], reviewBy: '2026-12-01', falsifier: { verdict: 'NONE', basis: 'b' } }]).line));
-  check('coverage line shows chance/window for all six', /falsifier chance→replay: .*EIGEN \d+%\/window/.test(cov.line) && !/WEAK/.test(cov.line) && ['EIGEN', 'STRK', 'ARB', 'MOVE', 'ENA', 'ZRO'].every((s) => new RegExp('\\b' + s + ' ').test(cov.strength)) && !cov.underived);
+  check(`coverage line shows chance/window for all ${LIVE_VERIFIED.length} verified rows, and none for a sourced one`, /falsifier chance→replay: .*EIGEN \d+%\/window/.test(cov.line) && !/WEAK/.test(cov.line) && LIVE_VERIFIED.every((s) => new RegExp('\\b' + s + ' ').test(cov.strength)) && !/\bARB /.test(cov.strength) && !cov.underived, cov.strength);
   check('every verified claimCoverage line states its strength (cadence, contract, dead-man)', live.every((t) => /Falsifier strength: /.test(claimCoverage(t, 3).line)));
   // COMPOUND: the row's weight is the replay series, not the per-window figure.
   const { compoundChance } = await import('./src/core/unlock-promote.js');
@@ -1650,7 +1672,7 @@ console.log('47. sourced PRESSURE FLOOR is derived from the index distribution, 
 {
   const { SOURCED_PRESSURE_FLOOR: F, derivePressureFloor, pressureStage, NON_PRESSURE_CATS } = await import('./src/core/unlock-promote.js');
   const { unlockCoverage, leadsFor } = await import('./src/sources/calendar/unlocks.js');
-  check('floor is recorded with percentile, n and a basis sentence naming the index it was derived from', F.pctOfMaxSupply > 0 && F.percentile === 15 && F.n === 30 && /percentile/.test(F.basis) && /index 2026-10-01T20:06/.test(F.basis));
+  check('floor is recorded with percentile, n and a basis sentence naming the index it was derived from', F.pctOfMaxSupply > 0 && F.percentile === 15 && F.n === 31 && /percentile/.test(F.basis) && /index 2026-10-01T20:06/.test(F.basis));
   // The recorded static must be what the live index derives (re-derive on refresh, record again).
   const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
   const d = derivePressureFloor(live);
@@ -1846,9 +1868,10 @@ console.log('45. SOURCED tier — a named source pushes, labelled; its falsifier
   const live = JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens;
   // 30 ingested; ORDER superseded to contract-cliff in v0.30.0 (sourceHistory kept) and
   // corrected back to sourced 2026-09-15 (tierHistory kept), so sourced +
-  // supersessions-from-sourced must still account for all 30.
+  // supersessions-from-sourced must still account for all 30. 2026-11-05: ARB, verified on the
+  // announcement path, returned to sourced by tier correction (tierHistory kept): 31.
   const supersededFromSourced = live.filter((t) => t.provenance !== 'sourced' && !!t.sourceHistory?.source && !!t.sourceHistory?.supersededAt).length;
-  check('LIVE: the 30 sourced ingests are all accounted for (sourced + superseded)', live.filter((t) => t.provenance === 'sourced').length + supersededFromSourced === 30);
+  check('LIVE: the 31 sourced ingests are all accounted for (sourced + superseded; ARB joined by tier correction)', live.filter((t) => t.provenance === 'sourced').length + supersededFromSourced === 31);
   check('LIVE: every sourced row passes the boot gate', verifiedRowProblems(live).length === 0);
   check('LIVE: the six formerly-unconfirmed chains are resolved and recorded', ['ASTER', 'FF', 'LISTA', 'STO', 'SOLV', 'RE'].every((s) => live.find((t) => t.sym === s)?.chain !== 'unconfirmed'));
 }
@@ -2392,7 +2415,9 @@ console.log('64. MESSAGE DIET — two renderings, one row; public is lint-clean,
   const replay = [
     ['CYBER', 0, '2026-09-14'], ['RE', 3, '2026-09-17'], ['EIGEN', 14, '2026-09-30'], ['STRK', 0, '2026-09-15'],
   ].map(([sym, lead, dateKey]) => {
-    const t = live.find((x) => x.sym === sym);
+    // STRK is replayed from its FROZEN verified row: this replay is of the verified shape
+    // (2026-11-05: the live row may be sourced; fixtures/strk-row-2026-11-05.json keeps the shape).
+    const t = sym === 'STRK' ? JSON.parse(readFileSync('fixtures/strk-row-2026-11-05.json', 'utf8')).row : live.find((x) => x.sym === sym);
     if (!t) return null;
     const ctx = t.provenance === 'sourced' ? { ev: (t.sourceEvents || []).find((e) => new Date(e.t * 1000).toISOString().slice(0, 10) === dateKey) ?? t.sourceEvents[0], lead, now, second: U.loadSecondIndex() } : { lead, dateKey };
     return { sym, p: renderFact(t, 'public', ctx), o: renderFact(t, 'operator', ctx) };

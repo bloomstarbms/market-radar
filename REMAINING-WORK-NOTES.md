@@ -5533,3 +5533,49 @@ ALSO 2026-11-05: the ARB discovery re-run with v0.37.15 (VPS data/vesting-discov
 at /tmp/vesting-discovery.before-0.37.15.json) reads each genesis Safe's single transfer (team
 2,693,961,299, was 5,387,922,598). Only the 6 genesis-funded addresses changed; bucket A is
 unchanged at 1,492,827,525.
+
+## 2026-11-05 — ARB RETURNS TO SOURCED NOW; STRK HELD VERIFIED (THE INDEX DOES NOT CARRY ITS CLAIM)
+
+Operator decision: convert ARB and STRK to sourced now rather than wait for 30 Nov, with a check
+that both rows keep their dates and amounts after the rebuild. ARB passed it; STRK did not.
+
+ARB, tier correction verified -> sourced (promote-unlock.js provenance=sourced source=defillama
+reason="verified claim not checkable on-chain: team ARB passed through custodian-like
+0x1e7016f7; see 2026-11-05 notes"):
+- Amount kept: 8 index events, every one 92,645,833.
+- The day is settled by the index: 07-16, then the 15th Aug–Dec 2026 and the 14th Jan–Feb 2027
+  (DefiLlama steps ~30.44 days). The retired verified claim said the 16th. That discrepancy is
+  recorded twice: in tierHistory.retracted.monthlyDay, and as an OBSERVED, NOT CLAIMED line on
+  operatorNote.
+- Stage STANDARD by the pressure rule (median 0.9265% of max supply). Chain arbitrum.
+- The custodian observation in operatorNote was carried over.
+
+CODE: sourceRow's tier correction now retracts monthlyDay and date along with events, reviewBy,
+falsifier and the rest. Before this, a verified row's day claim vanished without trace on the
+way back to sourced. There is a fixture for it.
+
+STRK, HELD VERIFIED (operator's call after the check failed). The index carries 226,356,431 a
+month on the 14th (13th from November) across insiders+liquidity+privateSale, where the row claims
+127M on the 15th. The 127M is visible inside the index: 190,523,098 − 63,523,098 = 127,000,000,
+ending March 2027. But a sourced row cannot split categories, so it would alert the full 226M.
+STRK's review lapses on 2026-11-30: from 2026-12-01 the dead-man check demotes it and it goes
+silent. The 2026-11-20 task is now STRK-only and recommends that lapse.
+
+FIXTURES:
+- ARB's and STRK's verified rows are frozen in fixtures/arb-row-2026-11-05.json and
+  fixtures/strk-row-2026-11-05.json. The dead-man checks run on both.
+- The STRK T-0 acceptance replay reads the frozen row, so it stays the verified shape whatever
+  the live row becomes.
+- LIVE checks pin exactly 5 verified rows (EIGEN, STRK, MOVE, ENA, ZRO); the heartbeat's
+  coverage line now reads "5 verified".
+- ARB is pinned as sourced: the custodian reason, retracted 16th/reviewBy/NONE, 92,645,833 on the
+  15th, and both observations.
+- Sourced ingests: 30 -> 31.
+
+PRESSURE FLOOR re-derived with ARB in the sourced population: value unchanged at 0.0597, n 30 ->
+31, no stage flips. With STRK it would also have stayed 0.0597 (n 32).
+
+INDEX: fetched 2026-11-02T20:02; SOURCE_STALE_DAYS 21, so it goes stale about 2026-11-23T20:02.
+A report-only reminder is scheduled for 2026-11-18 to run NEXT-SESSION.md's per-protocol
+browser-pane refresh (Route B). Steps 5 and 7 of that chore are still written as inline node -e,
+which CLAUDE.md forbids: write them as files.

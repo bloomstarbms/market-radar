@@ -1,0 +1,25 @@
+{
+ "note": "STRK's unlocks.json row at commit 1f49989 (v0.37.16): the dead-man verified row (reviewBy 2026-11-30, falsifier NONE). Frozen 2026-11-05. The operator HELD it verified that day: the index carries 226,356,431 a month across insiders+liquidity+privateSale on the 13th-14th, not the claimed 127M on the 15th, and a sourced row cannot split categories. Its review lapses on 2026-11-30 (silent from 2026-12-01). Frozen so fixtures that test the verified dead-man behaviour do not depend on today's data.",
+ "row": {
+  "sym": "STRK",
+  "name": "Starknet",
+  "monthlyDay": 15,
+  "verified": true,
+  "events": [
+   {
+    "date": "2026-09-15",
+    "source": "announcement",
+    "detail": "127M STRK monthly on the 15th per Starknet documentation (core contributors + investors), through 2027-03-15."
+   }
+  ],
+  "reviewBy": "2026-11-30",
+  "stage": "STANDARD",
+  "falsifier": {
+   "verdict": "NONE",
+   "basis": "reviewBy 2026-11-30 tests freshness, not the claim — no chance rate exists because nothing on chain is checked",
+   "at": "2026-09-05T22:04",
+   "kind": "dead-man"
+  },
+  "operatorNote": "Vesting on Starknet L2 (no eth_call path in our stack): up to 127M STRK on the 15th monthly through Mar 2027 per docs.starknet.io. Enforcement unverifiable from here — reviewBy dead-man's switch; re-attest by the date or the row demotes itself."
+ }
+}

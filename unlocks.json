@@ -352,24 +352,90 @@
   {
    "sym": "ARB",
    "name": "Arbitrum",
-   "monthlyDay": 16,
-   "verified": true,
-   "events": [
+   "provenance": "sourced",
+   "source": "defillama",
+   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceEvents": [
     {
-     "date": "2026-09-16",
-     "source": "announcement",
-     "detail": "92.65M ARB monthly (team/advisors/investors), 16th of each month per Arbitrum published schedule; Aug 16 2026 event occurred as scheduled (multiple public confirmations)."
+     "t": 1784183604,
+     "type": "cliff",
+     "n": 92645833,
+     "cats": "insiders+privateSale"
+    },
+    {
+     "t": 1786813347,
+     "type": "cliff",
+     "n": 92645833,
+     "cats": "insiders+privateSale"
+    },
+    {
+     "t": 1789443090,
+     "type": "cliff",
+     "n": 92645833,
+     "cats": "insiders+privateSale"
+    },
+    {
+     "t": 1792072833,
+     "type": "cliff",
+     "n": 92645833,
+     "cats": "insiders+privateSale"
+    },
+    {
+     "t": 1794702576,
+     "type": "cliff",
+     "n": 92645833,
+     "cats": "insiders+privateSale"
+    },
+    {
+     "t": 1797332319,
+     "type": "cliff",
+     "n": 92645833,
+     "cats": "insiders+privateSale"
+    },
+    {
+     "t": 1799962062,
+     "type": "cliff",
+     "n": 92645833,
+     "cats": "insiders+privateSale"
+    },
+    {
+     "t": 1802591805,
+     "type": "cliff",
+     "n": 92645833,
+     "cats": "insiders+privateSale"
     }
    ],
-   "reviewBy": "2026-11-30",
+   "chain": "arbitrum",
    "stage": "STANDARD",
-   "falsifier": {
-    "verdict": "NONE",
-    "basis": "reviewBy 2026-11-30 tests freshness, not the claim — no chance rate exists because nothing on chain is checked",
-    "at": "2026-09-05T22:04",
-    "kind": "dead-man"
+   "note": "",
+   "mechanism": "pending",
+   "operatorNote": "Team+investor linear vesting, 92.65M ARB monthly on the 16th, through 2027. Announcement path; hundreds of on-chain vesting wallets (bucket C) not enumerated by us, so NOT claimed contract-enforced — reviewBy dead-man's switch instead. Re-attest by the date or the row demotes itself. OBSERVED, NOT CLAIMED (2026-11-05): team+investor trace of the 4,447,953,921 ARB genesis (2026-11-05, report-only probes): 18.2% reached identified ArbitrumVestingWallet contracts. The distribution EOA 0x9db4e304 sent its whole 3,436.8M to EOA 0x1e7016f7, which received ~4.9B of team ARB alongside ~7.0B from elsewhere and looks like a custodian; below it team ARB spreads over ~2,000 EOAs. On-chain vesting of the 92.65M/month cannot be verified on Arbitrum One. Lapses to sourced at the 2026-11-30 review (operator decision). OBSERVED, NOT CLAIMED (2026-11-05): day settled by the index (DefiLlama, fetched 2026-11-02T20:02): the monthly event falls on the 15th (07-16, then the 15th Aug-Dec 2026 and the 14th Jan-Feb 2027; the index steps ~30.44 days). The retired verified claim said the 16th (kept in tierHistory.retracted.monthlyDay). Amount unchanged: 92,645,833 = 4,447M x 3/4 / 36 from the published split; the on-chain genesis (4,447,953,921) gives 92,665,707.",
+   "tierHistory": {
+    "from": "verified",
+    "retractedAt": "2026-11-05",
+    "reason": "verified claim not checkable on-chain: team ARB passed through custodian-like 0x1e7016f7; see 2026-11-05 notes",
+    "retracted": {
+     "events": [
+      {
+       "date": "2026-09-16",
+       "source": "announcement",
+       "detail": "92.65M ARB monthly (team/advisors/investors), 16th of each month per Arbitrum published schedule; Aug 16 2026 event occurred as scheduled (multiple public confirmations)."
+      }
+     ],
+     "reviewBy": "2026-11-30",
+     "falsifier": {
+      "verdict": "NONE",
+      "basis": "reviewBy 2026-11-30 tests freshness, not the claim — no chance rate exists because nothing on chain is checked",
+      "at": "2026-09-05T22:04",
+      "kind": "dead-man"
+     },
+     "monthlyDay": 16
+    }
    },
-   "operatorNote": "Team+investor linear vesting, 92.65M ARB monthly on the 16th, through 2027. Announcement path; hundreds of on-chain vesting wallets (bucket C) not enumerated by us, so NOT claimed contract-enforced — reviewBy dead-man's switch instead. Re-attest by the date or the row demotes itself. OBSERVED, NOT CLAIMED (2026-11-05): team+investor trace of the 4,447,953,921 ARB genesis (2026-11-05, report-only probes): 18.2% reached identified ArbitrumVestingWallet contracts. The distribution EOA 0x9db4e304 sent its whole 3,436.8M to EOA 0x1e7016f7, which received ~4.9B of team ARB alongside ~7.0B from elsewhere and looks like a custodian; below it team ARB spreads over ~2,000 EOAs. On-chain vesting of the 92.65M/month cannot be verified on Arbitrum One. Lapses to sourced at the 2026-11-30 review (operator decision)."
+   "token": "arbitrum:0x912ce59144191c1204e64559fe8253a0e49e6548",
+   "circSupply": 7147500300.6129265,
+   "totalLocked": 2852499699.3870735,
+   "maxSupply": 10000000000
   },
   {
    "sym": "OP",
