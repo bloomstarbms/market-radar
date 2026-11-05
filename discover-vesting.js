@@ -249,10 +249,16 @@ export async function discoverArbitrum(sym, opts = {}) {
   const add = (to, amt, parent, depth) => { const k = to.toLowerCase(); const r = seen.get(k) || { addr: to, received: 0, parents: new Set(), depth }; r.received += amt; r.parents.add(parent); r.depth = Math.min(r.depth, depth); seen.set(k, r); return r; };
   const g = await arbTransfers(token, null, 10, key);
   out.genesisWindow = g.rows.length ? [new Date(+g.rows[0].timeStamp * 1000).toISOString().slice(0, 10), new Date(+g.rows.at(-1).timeStamp * 1000).toISOString().slice(0, 10)] : null;
+  // Each transfer is counted once. The genesis window holds the minter's own sends, and the minter is
+  // then traced as a depth-1 EOA, so the same transfer comes back as one of its outflows (2026-11-05:
+  // ARB's team Safe read 5,387.9M received for one 2,694.0M transfer). A genesis row is marked counted
+  // only when its recipient is admitted here, so a recipient too small for level 1 is still found as a hop.
+  const txKey = (t) => `${t.hash}:${t.logIndex ?? ''}:${t.from}:${t.to}:${t.value}`.toLowerCase();
+  const counted = new Set();
   const level1 = new Map();
-  for (const t of g.rows) { const v = Number(t.value) / 1e18; level1.set(t.to.toLowerCase(), { to: t.to, amt: (level1.get(t.to.toLowerCase())?.amt ?? 0) + v }); }
+  for (const t of g.rows) { const v = Number(t.value) / 1e18; const k = t.to.toLowerCase(); const e = level1.get(k) || { to: t.to, amt: 0, keys: [] }; e.amt += v; e.keys.push(txKey(t)); level1.set(k, e); }
   const frontier = [];
-  for (const { to, amt } of level1.values()) if (amt >= supply * 0.003) frontier.push(add(to, amt, 'genesis', 1));
+  for (const { to, amt, keys } of level1.values()) if (amt >= supply * 0.003) { frontier.push(add(to, amt, 'genesis', 1)); for (const k of keys) counted.add(k); }
   // Trace outward from custody / unverified contracts, at most three hops from genesis.
   const traced = new Set();
   while (frontier.length) {
@@ -264,7 +270,11 @@ export async function discoverArbitrum(sym, opts = {}) {
     const o = await arbTransfers(token, r.addr, 10, key);
     r.outComplete = o.complete;
     const by = new Map();
-    for (const t of o.rows) if (t.from.toLowerCase() === r.addr.toLowerCase()) { const k = t.to.toLowerCase(); by.set(k, { to: t.to, amt: (by.get(k)?.amt ?? 0) + Number(t.value) / 1e18 }); }
+    for (const t of o.rows) {
+      if (t.from.toLowerCase() !== r.addr.toLowerCase() || counted.has(txKey(t))) continue;
+      counted.add(txKey(t));
+      const k = t.to.toLowerCase(); by.set(k, { to: t.to, amt: (by.get(k)?.amt ?? 0) + Number(t.value) / 1e18 });
+    }
     for (const { to, amt } of by.values()) if (amt >= supply * 0.0001) frontier.push(add(to, amt, r.addr, r.depth + 1));
   }
   for (const r of seen.values()) {

@@ -4461,9 +4461,11 @@ console.log('100. Arbitrum One reader: vesting wallets found by genesis trace (n
   const A = (n) => '0x' + String(n).padStart(40, '0');
   const TOK = A('70'), DEP = A('1'), SAFE = A('2'), DIST = A('3'), VW1 = A('4'), VW2 = A('5'), EOA1 = A('6'), DUST = A('7'), IMPL = A('8');
   const e18 = (n) => BigInt(Math.round(n * 1e6)) * 10n ** 12n + '';
-  const tx = (from, to, amt, ts) => ({ from, to, value: e18(amt), timeStamp: String(ts), tokenDecimal: '18' });
+  let txN = 0;
+  const tx = (from, to, amt, ts) => ({ hash: '0x' + (++txN).toString(16).padStart(64, '0'), from, to, value: e18(amt), timeStamp: String(ts), tokenDecimal: '18' });
   const genesis = [tx(A('0'), DEP, 10000, 1.68e9), tx(DEP, SAFE, 6000, 1.68e9 + 60), tx(DEP, DIST, 1000, 1.68e9 + 120), tx(DEP, A('9'), 0.5, 1.68e9 + 180)];
-  const fromSafe = [tx(SAFE, VW1, 2000, 1.69e9), tx(SAFE, VW2, 1500, 1.69e9 + 60), tx(SAFE, EOA1, 2000, 1.69e9 + 120), tx(SAFE, DUST, 0.5, 1.69e9 + 180)];
+  // VW2 is funded by two DISTINCT transfers of the same amount: both count (dedup is by transfer, not by value).
+  const fromSafe = [tx(SAFE, VW1, 2000, 1.69e9), tx(SAFE, VW2, 1500, 1.69e9 + 60), tx(SAFE, VW2, 1500, 1.69e9 + 90), tx(SAFE, EOA1, 2000, 1.69e9 + 120), tx(SAFE, DUST, 0.5, 1.69e9 + 180)];
   const contracts = { [SAFE]: { ContractName: 'GnosisSafeL2' }, [DIST]: { ContractName: 'TokenDistributor' }, [VW1]: { ContractName: 'TransparentUpgradeableProxy', Proxy: '1', Implementation: IMPL }, [VW2]: { ContractName: 'TransparentUpgradeableProxy', Proxy: '1', Implementation: IMPL }, [IMPL]: { ContractName: 'ArbitrumVestingWallet' } };
   const bal = { [VW1]: 1200, [VW2]: 900, [SAFE]: 500, [DIST]: 50, [EOA1]: 2000, [DEP]: 3000 };
   const urls = [];
@@ -4494,6 +4496,11 @@ console.log('100. Arbitrum One reader: vesting wallets found by genesis trace (n
   check('...balances from tokenbalance, verdict A-READABLE, token from the index (never typed), every call on chain 42161',
     by[VW1].bal === 1200 && r.verdict === 'A-READABLE' && r.token === TOK && r.chain === 'arbitrum-one' && urls.length > 0 && urls.every((u) => /chainid=42161/.test(u)) && urls.filter((u) => /action=tokentx/.test(u)).every((u) => u.includes(`contractaddress=${TOK}`)));
   check('no key -> NO-KEY; a token that is not on arbitrum -> UNRESOLVED (nothing is guessed)', noKey.verdict === 'NO-KEY' && unres.verdict === 'UNRESOLVED');
+  // (2026-11-05) DEP->SAFE is in the genesis window AND among the traced minter's outflows. It was counted
+  // twice (ARB's team Safe read 5,387.9M received for one 2,694.0M transfer).
+  check('received counts each transfer once: a Safe funded by ONE genesis transfer (also seen as the traced minter\'s outflow) reads 6000, not 12000',
+    by[SAFE]?.received === 6000 && by[DIST]?.received === 1000 && by[VW1]?.received === 2000, JSON.stringify({ safe: by[SAFE]?.received, dist: by[DIST]?.received, vw1: by[VW1]?.received }));
+  check('...and two DISTINCT transfers of the same amount both count (VW2: 1500 + 1500)', by[VW2]?.received === 3000, String(by[VW2]?.received));
   // The outflow reader: outflows only, by contract address, and coverage stated.
   const W = A('44');
   let calls = [];
