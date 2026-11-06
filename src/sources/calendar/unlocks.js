@@ -187,9 +187,16 @@ export function claimCoverage(t, lead = 3) {
 // bulk scan (29 Aug) established that unlock coverage is an Ethereum/EVM feature:
 // 55 of 156 scanned symbols vest on their own chains, invisible from here. Absence
 // of an unlock row must never read as "this token has no unlocks".
-export function unlockCoverage(tokens = null) {
-  if (!tokens) { const s = loadSchedule(); tokens = s?.tokens ?? []; }
+//
+// A demoted row is still a verified row (its tier lives in unlocks.json) but it alerts
+// as nothing, so the count splits active from demoted and names the demoted. Called
+// bare (the heartbeat), demotions come from cadence-watch state; called with rows,
+// it is pure and counts only the demotions passed in.
+export function unlockCoverage(tokens = null, { demoted = null } = {}) {
+  if (!tokens) { const s = loadSchedule(); tokens = s?.tokens ?? []; demoted ??= activeDemotions(tokens, loadWatchState()); }
+  demoted ??= {};
   const verified = tokens.filter((t) => !t.retired && t.events?.length);
+  const demotedSyms = verified.filter((t) => demoted[t.sym]).map((t) => t.sym).sort();
   const rc = loadRecheckState();
   const sourced = tokens.filter((t) => !t.retired && t.provenance === 'sourced').map((t) => effectiveSourced(t, rc));
   const stale = sourced.filter((t) => !t.sourceDemoted && sourceIsStale(t));
@@ -199,6 +206,8 @@ export function unlockCoverage(tokens = null) {
   const c = {
     tracked: tokens.length,
     verified: verified.length,
+    verifiedActive: verified.length - demotedSyms.length,
+    verifiedDemoted: demotedSyms,
     sourced: sourced.length,
     staleSourced: stale.length,
     belowFloor: sourced.filter((t) => t.stage !== 'LOGGED' && pressureStage(t) === 'LOGGED').length,
@@ -222,7 +231,7 @@ export function unlockCoverage(tokens = null) {
     stages,
   };
   c.sourceDemoted = sourceDemoted;
-  c.line = `Unlock coverage: ${c.tracked} tracked · ${c.verified} verified (${c.cadence} cadence-watched · ${c.contractCliff} contract-cliff · ${c.reviewBy} review-dated) · falsifier chance→replay: ${c.strength}${c.underived ? ` (${c.underived} UNDERIVED)` : ''} · margin bar ${c.marginBar}${c.lowestMargin ? ` (lowest ${c.lowestMargin.sym} ${c.lowestMargin.margin})` : ' (no margins live)'} · ${c.sourced} sourced (${c.sourcedPending} pending verification · ${c.sourcedUnverifiable} unverifiable by mechanism: ${c.continuousClaim} continuous-claim, ${c.indexContradicted} index-contradicted)${c.staleSourced ? ` (${c.staleSourced} STALE, silent)` : ''}${c.belowFloor ? ` (${c.belowFloor} below pressure floor, silent)` : ''} · 2nd source: ${c.agreement['both-agree']} agree · ${c.agreement['both-differ']} DISAGREE · ${c.agreement['single-source']} single-source${c.agreement['not-checked'] ? ` · ${c.agreement['not-checked']} unchecked` : ''}${sourceDemoted ? ` (${sourceDemoted} retracted by source)` : ''} · ${c.estimated} estimated (silent) · ${c.retired} retired · stages ${Object.entries(stages).map(([k, v]) => k + ':' + v).join(' ')} · verified reads are Ethereum/EVM only — sourced rows cite a named calendar and are not independently checked`;
+  c.line = `Unlock coverage: ${c.tracked} tracked · ${c.verified} verified (${c.verifiedActive} active · ${demotedSyms.length} demoted${demotedSyms.length ? ': ' + demotedSyms.join(', ') : ''}) (${c.cadence} cadence-watched · ${c.contractCliff} contract-cliff · ${c.reviewBy} review-dated) · falsifier chance→replay: ${c.strength}${c.underived ? ` (${c.underived} UNDERIVED)` : ''} · margin bar ${c.marginBar}${c.lowestMargin ? ` (lowest ${c.lowestMargin.sym} ${c.lowestMargin.margin})` : ' (no margins live)'} · ${c.sourced} sourced (${c.sourcedPending} pending verification · ${c.sourcedUnverifiable} unverifiable by mechanism: ${c.continuousClaim} continuous-claim, ${c.indexContradicted} index-contradicted)${c.staleSourced ? ` (${c.staleSourced} STALE, silent)` : ''}${c.belowFloor ? ` (${c.belowFloor} below pressure floor, silent)` : ''} · 2nd source: ${c.agreement['both-agree']} agree · ${c.agreement['both-differ']} DISAGREE · ${c.agreement['single-source']} single-source${c.agreement['not-checked'] ? ` · ${c.agreement['not-checked']} unchecked` : ''}${sourceDemoted ? ` (${sourceDemoted} retracted by source)` : ''} · ${c.estimated} estimated (silent) · ${c.retired} retired · stages ${Object.entries(stages).map(([k, v]) => k + ':' + v).join(' ')} · verified reads are Ethereum/EVM only — sourced rows cite a named calendar and are not independently checked`;
   return c;
 }
 

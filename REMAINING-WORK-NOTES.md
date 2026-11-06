@@ -5627,3 +5627,19 @@ CLAUDE.md forbids. They are now committed root scripts:
   that already carried tierHistory. It now prints only when the run made the correction.
 - The 2026-11-18 reminder now points at both files and runs derive-pressure-floor.js as a
   read-only baseline.
+
+## 2026-11-06 — THE COVERAGE LINE SPLITS VERIFIED INTO ACTIVE AND DEMOTED
+
+The heartbeat's coverage line read "4 verified" while two of the four were demoted: EIGEN
+(cadence watch PARTIAL, 2026-11-02) and ZRO (review expired 2026-09-22). Both are silent until
+re-verified, so the count overstated what alerts.
+- unlockCoverage now reads "4 verified (2 active · 2 demoted: EIGEN, ZRO) (3 cadence-watched ·
+  0 contract-cliff · 1 review-dated)". The total stays 4, because a demoted row keeps its
+  verified tier in unlocks.json. The mechanism breakdown is kept and still counts all four.
+- Demotions come from activeDemotions over data/cadence-watch.json, the same set the alert
+  loop skips. A demotion on a sourced row (ORDER) or one superseded by a newer event does not
+  count. With no demotions the line reads "(N active · 0 demoted)", counted not omitted.
+- Called with rows (fixtures), unlockCoverage is pure and counts only the demotions passed in.
+  Called bare (the heartbeat), it loads the watch state.
+- Fixture 103: synthetic split, the pure call, and LIVE "2 active · 2 demoted: EIGEN, ZRO"
+  against the mirrored VPS cadence-watch.json.

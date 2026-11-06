@@ -4622,6 +4622,33 @@ console.log('102. refresh chore steps 5 and 7 are committed files: reingest-sour
   check('promote-unlock.js prints TIER CORRECTION only when the run made one (a re-ingest of ORDER/ARB/STRK is not a new correction)', /if \(wasVerified && row\.tierHistory\) console\.log\(`\$\{row\.sym\} TIER CORRECTION/.test(pu));
 }
 
+console.log('103. heartbeat coverage line splits verified into active and demoted, naming the demoted');
+{
+  // (2026-11-06) The line read "4 verified" while EIGEN (cadence PARTIAL) and ZRO (review
+  // expired) were both demoted, silent until re-verified. A demoted row keeps its verified
+  // tier in unlocks.json, so the count stays 4; the split says how many of them alert.
+  const { unlockCoverage } = await import('./src/sources/calendar/unlocks.js');
+  const { activeDemotions, loadWatchState } = await import('./src/sources/calendar/cadence-watch.js');
+  const rows = [
+    { sym: 'A', events: [{}], cadence: { wallet: '0x' } },
+    { sym: 'Z', events: [{}], reviewBy: '2026-09-22' },
+    { sym: 'M', events: [{}], reviewBy: '2026-12-01' },
+    { sym: 'S', provenance: 'sourced', source: 'defillama', sourceEvents: [] },
+  ];
+  const split = unlockCoverage(rows, { demoted: { Z: { type: 'review-expired' }, A: { kind: 'PARTIAL' }, S: { type: 'x' } } });
+  check('a demotion splits the count: 3 verified (1 active · 2 demoted: A, Z), the mechanism breakdown kept; a demotion on a sourced row is not counted',
+    split.verified === 3 && split.verifiedActive === 1 && split.verifiedDemoted.join() === 'A,Z'
+    && split.line.includes('· 3 verified (1 active · 2 demoted: A, Z) (1 cadence-watched · 0 contract-cliff · 2 review-dated) ·'), split.line.slice(0, 140));
+  const none = unlockCoverage(rows);
+  check('with rows and no demotions passed, the call is pure: 0 demoted, counted not omitted',
+    none.verifiedActive === 3 && none.verifiedDemoted.length === 0 && none.line.includes('· 3 verified (3 active · 0 demoted) ('), none.line.slice(0, 140));
+  const live = unlockCoverage();
+  const liveDem = Object.keys(activeDemotions(JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens, loadWatchState())).sort();
+  check('LIVE: the heartbeat line reads "4 verified (2 active · 2 demoted: EIGEN, ZRO) (3 cadence-watched · 0 contract-cliff · 1 review-dated)"',
+    liveDem.join() === 'EIGEN,ZRO' && live.verifiedDemoted.join() === 'EIGEN,ZRO'
+    && live.line.includes('· 4 verified (2 active · 2 demoted: EIGEN, ZRO) (3 cadence-watched · 0 contract-cliff · 1 review-dated) ·'), live.line.slice(0, 140));
+}
+
 // A block that mutes the console and forgets to restore it hides every section header after it.
 check('the suite ends with console.log and console.error as it started (every mute restored)', console.log === OUT && console.error === ERR);
 console.error = origErr;
