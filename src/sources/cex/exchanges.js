@@ -20,10 +20,13 @@ export const isStockName = (name) => STOCK_NAME_RX.test(name || '');
 // contract, so the spot-derived sets above never contained it. Bybit flags these with
 // symbolType:'stock', which is the authoritative source. Call this to warm the cache
 // before classifying announcements; it self-caches for 6h.
+// The default list is Trading-only: PreLaunch contracts (DANGOTEUSDT, 2026-11-11) are in
+// it only when asked for by status, so both lists are read.
 export async function loadDerivStockSymbols() {
   return stockSet('bybit-linear', async () => {
-    const j = await json('https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000');
-    return new Set((j?.result?.list || [])
+    const base = 'https://api.bybit.com/v5/market/instruments-info?category=linear&limit=1000';
+    const [j, pre] = await Promise.all([json(base), json(`${base}&status=PreLaunch`)]);
+    return new Set([...(j?.result?.list || []), ...(pre?.result?.list || [])]
       .filter((x) => String(x.symbolType).toLowerCase() === 'stock')
       .map((x) => String(x.symbol).toUpperCase()));
   });

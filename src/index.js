@@ -20,6 +20,7 @@ import { pollUpbit, startUpbitNoticeWatch } from './sources/cex/upbit.js';
 import { startBuilderFollows } from './sources/social/builder-follows.js';
 import { startEtfFlows } from './sources/etf/flows.js';
 import { pollCoinbase } from './sources/cex/coinbase.js';
+import { pollPerpLists } from './sources/cex/perp-watch.js';
 import { pollCascade } from './sources/cex/cascade.js';
 import { pollHyperliquid } from './sources/perp/hyperliquid.js';
 import { checkWhales } from './sources/chain/whale.js';
@@ -113,7 +114,7 @@ async function pollDex() {
 // messages (content vs telemetry), both idempotent-across-restart via persisted,
 // delivery-gated markers. Do not reintroduce in-memory sent-flags here.
 async function pollAll() {
-  const settled = await Promise.allSettled([pollDex(), pollCex(), pollFunding(), pollCascade(), pollAnnouncements(), pollMacro(), pollEvents(), pollUnlocks(), pollUpbit(), pollCadence(), pollSourceRecheck(), pollCliffWatch(), pollHyperliquid(), pollCoinbase()]);
+  const settled = await Promise.allSettled([pollDex(), pollCex(), pollFunding(), pollCascade(), pollAnnouncements(), pollMacro(), pollEvents(), pollUnlocks(), pollUpbit(), pollCadence(), pollSourceRecheck(), pollCliffWatch(), pollHyperliquid(), pollCoinbase(), pollPerpLists()]);
   settled.forEach((r, i) => { if (r.status === 'rejected') console.error('[OPERATOR] poller #' + i + ' rejected:', r.reason?.stack || r.reason); });
   await checkPendingListings().catch((e) => console.error('[listing] pending re-check failed:', e.message));
   await checkOutcomes().catch(() => {});

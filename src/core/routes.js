@@ -50,6 +50,7 @@ const FACT_ROUTES = {
   OI: 'push at detection once the market holds 7d of its own hourly OI samples; digest pool before (perp/hyperliquid.js)',
   FOLLOW: 'ONE daily message at 13:00 UTC (looks at 01:00 and 13:00), fresh accounts only; a second watcher within 7d is listed in it as convergence, no edits (social/builder-follows.js)',
   FLOWS: 'one message per US trading day, edited as late funds report (etf/flows.js)',
+  TRADFI: 'push at detection, at most 5 per UTC day (the rest share one digest line), edited when trading opens; never tier-1, no outcomes row (cex/tradfi.js, cex/perp-watch.js)',
 };
 
 // Returns { ok, problems[] }. calendarEvents / tiers injectable for tests.
@@ -134,6 +135,8 @@ const EMITTERS = {
   'sources/cex/listings.js': { emits: 'LISTING (symbol-set diff)', mustCall: ['classifySymbol'] },
   'sources/cex/announcements.js': { emits: 'LISTING/PERP/SUSPENSION/DELIST (titles)', mustCall: ['classifyAnnouncementText'] },
   'sources/perp/hyperliquid.js': { emits: 'PERP (market-list diff)', mustCall: ['classifySymbol'] },
+  'sources/cex/perp-watch.js': { emits: 'PERP/TRADFI (instrument-list diff)', mustCall: ['classifySymbol', 'postTradfi'] },
+  'sources/cex/tradfi.js': { emits: 'TRADFI', mustCall: ['tradfiProblems'] },
   'sources/social/builder-follows.js': { emits: 'FOLLOW (followings diff)', mustCall: ['followProblems'] },
   'sources/etf/flows.js': { emits: 'FLOWS (daily ETF net flows)', mustCall: ['proseProblems'] },
   'core/dispatcher.js': { emits: 'all pushes', mustCall: ['allowPriceDetector'] },

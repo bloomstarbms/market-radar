@@ -7,7 +7,8 @@ import { dispatch } from '../../core/dispatcher.js';
 import { loadDerivStockSymbols } from './exchanges.js';
 import { classifyAnnouncementText, setNovelTokenFn } from '../../core/taxonomy.js';
 import { novelTokens, notePending, pendingUrgency } from '../../core/vocab.js';
-import { noteUnclassified } from '../../core/unclassified.js';
+import { noteUnclassified, noteExcluded } from '../../core/unclassified.js';
+import { tradfiFromNotice, flushHeld } from './tradfi.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { config, ROOT } from '../../config.js';
@@ -225,6 +226,11 @@ export function assetOf(title) {
   return m ? m[1] : null;
 }
 
+// A perp/futures LISTING phrase (lower-cased title). One definition, shared by the
+// crypto PERP branch and the TradFi branch, so the two cannot drift apart.
+const isPerpListing = (t) => /perpetual|\bperps?\b|futures|x-perp/.test(t)
+  && /will list|to list|lists |listing of|new listing|now launched|will launch|launches|now available|will add/.test(t);
+
 export function classify(title) {
   const t = (title || '').toLowerCase();
   // Noise first: cheapest check, and it must precede novelty so a rebranded promo
@@ -235,8 +241,17 @@ export function classify(title) {
   // the perp branch and the derivatives drop. UNRECOGNISED (novel product-line
   // vocabulary) is handled by the caller, which routes it to digest and tells the
   // operator; here it is simply not pushable.
+  //
+  // (2026-11-11, operator decision) An equity title is no longer a silent null. A perp
+  // LISTING on a stock or ETF is a TradFi perp, posted in its own category (tradfi.js);
+  // anything else equity-shaped (tokenized-stock spot lines, "bStocks") is EXCLUDED and
+  // recorded as such. Both used to fall into the "matched nothing" log, which is why
+  // DANGOTE read as unclassified when it had in fact been recognised and dropped.
   const eq = classifyAnnouncementText(title);
-  if (eq.cls === 'EQUITY') return null;
+  if (eq.cls === 'EQUITY') {
+    const winding = DELIST_RX.test(title) || SUSPEND_RX.test(title) || /settle|expir|adjust|parameter/.test(t);
+    return !winding && isPerpListing(t) ? { type: 'TRADFI', sev: 'MEDIUM' } : { type: 'EQUITY' };
+  }
 
   const kind = (() => {
     // SUSPENSION before delist: "suspend withdrawals" would match the delist pattern.
@@ -273,10 +288,7 @@ export function classify(title) {
     if (/unlock|vesting|cliff release/.test(t)) return { type: 'UNLOCK', sev: 'HIGH' };
     if (/token generation|\btge\b|launchpool|launchpad|airdrop/.test(t)) return { type: 'TGE', sev: 'HIGH' };
     // Perp/futures LISTING — before the spot branch, whose "will list" also matches these.
-    if (/perpetual|\bperps?\b|futures|x-perp/.test(t)
-        && /will list|to list|lists |listing of|new listing|now launched|will launch|launches|now available|will add/.test(t)) {
-      return { type: 'PERP', sev: 'MEDIUM' };
-    }
+    if (isPerpListing(t)) return { type: 'PERP', sev: 'MEDIUM' };
     // Remaining derivatives are plumbing, not events: settlement, expiry, param changes.
     if (/x-perp|perpetual|\bperp\b|expiry|futures|margined|quarterly|options?\b|dual currency|dual investment|leveraged token|structured/.test(t)) return null;
     // "new listing" / "gets listed" / "now listed" were MISSING — the most common
@@ -336,6 +348,11 @@ export async function pollAnnouncements() {
       // unrecoverable because nothing was written down. Review with
       // `node review-unclassified.js`.
       if (!c) { noteUnclassified(exch, it.title); continue; }
+      if (c.type === 'EQUITY') {
+        noteExcluded(assetOf(it.title) ?? it.title.slice(0, 60), 'TOKENIZED_EQUITY', `equity announcement, not a perp listing: "${it.title.slice(0, 80)}"`, exch);
+        continue;
+      }
+      if (c.type === 'TRADFI') { await tradfiFromNotice(exch, it, assetOf(it.title)); continue; }
       if (c.type === 'NOISE') { noiseDropped[c.noise] = (noiseDropped[c.noise] || 0) + 1; continue; }
       // PARSE FAILURE — the event is real but a field we depend on could not be read.
       // Loud to the operator, recorded for review, and NOT pushed in degraded form.
@@ -397,21 +414,18 @@ export async function pollAnnouncements() {
       group.length = 0; // consumed
     }
     for (const { it, c } of Object.values(byKind).flat()) {
-      const isDelist = !!c.delist;
       // Remember scheduled delistings so a later suspension on the same asset can
       // recognise the suspension-then-delisting sequence that traps holders.
       if (c.type === 'DELIST_SCHEDULED') {
         const a = assetOf(it.title);
         if (a) { const s = getState(); (s.pendingDelists ??= {})[a] = { at: Date.now(), venue: exch, dateText: c.dateText }; save(); }
       }
-      if (await dispatch({
-        source: 'CEX', type: c.type === 'LISTING' ? 'ANNOUNCE' : c.type,
-        venue: exch, delist: isDelist,
-        severity: c.sev, key: `${exch}:${it.id}`, cooldownMin: 24 * 60,
-        ...announcementMessage(exch, it, c),
-      })) fired++;
+      if (await dispatch(announcementAlert(exch, it, c))) fired++;
     }
   }
+  // TradFi notices held for the instrument-list watcher are posted here once their hold
+  // ends, so a watcher that is down cannot swallow them.
+  await flushHeld().catch((e) => console.error('[tradfi] held-notice flush failed:', e.message));
   const noiseStr = Object.entries(noiseDropped).map(([k, v]) => `${v} ${k}`).join(', ');
   console.log(`[announce] ${total} announcements scanned${fired ? ` · ${fired} alerts` : ''}${noiseStr ? ` · dropped ${noiseStr}` : ''}${routineSuppressed ? ` · ${routineSuppressed} routine suspensions -> review log` : ''}${suspensionsMuted ? ` · ${suspensionsMuted} suspension notice(s) muted` : ''}`);
 }
@@ -437,6 +451,19 @@ export function announcementMessage(exch, it, c) {
     ...(c.type === 'DELIST_SCHEDULED' ? ['Dated forward event; reminders at T-7d and T-1d'] : []),
   ];
   return { title: `${exch.toUpperCase()}: ${it.title.slice(0, 110)}`, lines: [fact], operatorLines, url: it.url };
+}
+// The dispatch object for one announcement. A PERP listing carries the shared event key
+// PERP:<venue>:<BASE> (and its asset) — the same key perp-watch.js gives the contract it
+// sees in the instrument list, so a perp seen by both alerts once.
+export function announcementAlert(exch, it, c) {
+  const perpBase = c.type === 'PERP' ? assetOf(it.title) : null;
+  return {
+    source: 'CEX', type: c.type === 'LISTING' ? 'ANNOUNCE' : c.type,
+    venue: exch, delist: !!c.delist,
+    severity: c.sev, key: `${exch}:${it.id}`, cooldownMin: 24 * 60,
+    ...(perpBase ? { asset: perpBase, dedupeKey: `PERP:${exch}:${perpBase}` } : {}),
+    ...announcementMessage(exch, it, c),
+  };
 }
 export function announcementBatchMessage(exch, type, items, url) {
   return {

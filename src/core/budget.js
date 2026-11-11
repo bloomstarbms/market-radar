@@ -33,6 +33,7 @@ const MAX_SCORE = 100;
 export const FACT_TYPES = new Set([
   'LISTING', 'ANNOUNCE', 'PERP', 'UPBIT', 'DELIST_SCHEDULED', 'SUSPENSION',
   'UNLOCK', 'TGE', 'CPI', 'MACRO', 'DEPEG', 'RUG', 'FUNDING', 'CASCADE', 'OI', 'FOLLOW', 'FLOWS',
+  'TRADFI', // a fact, deliberately NOT in RISK_TYPES: no bypass of any kind
 ]);
 export function isFact(alert) {
   if (alert.kind === 'CALL') return false;      // explicit call wins

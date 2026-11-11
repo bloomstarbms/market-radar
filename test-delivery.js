@@ -137,7 +137,8 @@ check('staleness reaches the heartbeat message', hbStale.lines.some((l) => l.inc
 console.log('10. equity-perp label drift (14 Aug: Bybit "TradFi" batch pushed 6 alerts)');
 const { classify: classifyAnn } = await import('./src/sources/cex/announcements.js');
 for (const sym of ['ZHONGJI', 'SAMSUNGEM', 'LGELECTRONICS', 'HANMI', 'NAVER', 'KODEX200'])
-  check(`${sym} TradFi perp -> dropped`, classifyAnn(`New listing: ${sym}USDT TradFi Perpetual Contract, with up to 25x leverage`) === null);
+  // 2026-11-11: TradFi perps are POSTED as their own category (TRADFI), never as a crypto PERP.
+  check(`${sym} TradFi perp -> TRADFI (own category), not PERP`, classifyAnn(`New listing: ${sym}USDT TradFi Perpetual Contract, with up to 25x leverage`)?.type === 'TRADFI');
 check('crypto perp still classifies as PERP', classifyAnn('New listing: NEWCOINUSDT Perpetual Contract, with up to 25x leverage')?.type === 'PERP');
 
 console.log('11. venue tiering covers the whole catalyst door (PERP/ANNOUNCE too)');
@@ -402,7 +403,8 @@ console.log('17. reference-window replay (24 real messages)');
   const seenEvent = new Set();
   for (const m of ref.messages) {
     const c = cl(m.title);
-    const noise = !c || c.type === 'NOISE' || c.type === 'UNRECOGNISED';
+    // EQUITY is excluded; TRADFI is posted in its own category (2026-11-11), not as a crypto fact.
+    const noise = !c || c.type === 'NOISE' || c.type === 'UNRECOGNISED' || c.type === 'EQUITY' || c.type === 'TRADFI';
     // cross-source dedup: same venue+asset+type inside the window
     const evKey = `${m.venue}:${m.title.slice(0, 30)}`;
     const dup = seenEvent.has(evKey); seenEvent.add(evKey);
@@ -412,6 +414,9 @@ console.log('17. reference-window replay (24 real messages)');
     if (wouldPush) pushed++; else suppressed++;
   }
   check('every message routes as specified', wrong.length === 0, wrong.slice(0, 3).join(' | '));
+  const tradfiRef = ref.messages.filter((m) => cl(m.title)?.type === 'TRADFI').map((m) => m.title.match(/\b([A-Z0-9]+)USDT\b/)?.[1]);
+  check('the 7 equity PERP listings in the window classify TRADFI (own category); the bStocks notice is EQUITY (excluded)',
+    tradfiRef.join() === 'ANET,LENOVOHKD,NAVER,LGELECTRONICS,HANMI,SAMSUNGEM,ZHONGJI' && cl('Binance Expands Tokenized Securities Access with bStocks')?.type === 'EQUITY', tradfiRef.join());
   check(`pushed facts within expected ${ref.expect.pushedFacts.join('-')}`,
     pushed >= ref.expect.pushedFacts[0] && pushed <= ref.expect.pushedFacts[1], `${pushed} pushed / ${suppressed} suppressed`);
 }
@@ -4647,6 +4652,167 @@ console.log('103. heartbeat coverage line splits verified into active and demote
   check('LIVE: the heartbeat line reads "4 verified (2 active · 2 demoted: EIGEN, ZRO) (3 cadence-watched · 0 contract-cliff · 1 review-dated)"',
     liveDem.join() === 'EIGEN,ZRO' && live.verifiedDemoted.join() === 'EIGEN,ZRO'
     && live.line.includes('· 4 verified (2 active · 2 demoted: EIGEN, ZRO) (3 cadence-watched · 0 contract-cliff · 1 review-dated) ·'), live.line.slice(0, 140));
+}
+
+console.log('104. perp-list watcher (Bybit linear + Binance USD-M) and the TradFi category, from the real DANGOTE record');
+{
+  // (2026-11-11) DANGOTEUSDT appeared on Bybit futures; the announcement poller saw the
+  // notice 11 s before the contract existed and filed it unclassified. Operator decision:
+  // TradFi perps are POSTED in their own category, and the instrument lists are watched.
+  const pw = await import('./src/sources/cex/perp-watch.js');
+  const tf = await import('./src/sources/cex/tradfi.js');
+  const ann = await import('./src/sources/cex/announcements.js');
+  const { renderMessage, catalystRoute, dispatch: realDispatch } = await import('./src/core/dispatcher.js');
+  const { isFact, FACT_TYPES } = await import('./src/core/budget.js');
+  const { proseProblems, tradfiProblems } = await import('./src/core/prose-lint.js');
+  const fx = JSON.parse(readFileSync('fixtures/perp-instruments-2026-11-11.json', 'utf8'));
+  const now = Date.parse(fx.fetchedAt);
+  const D = fx.bybit.dangote;
+  check('the fixture is the real record: DANGOTEUSDT stock, PreLaunch, isPreListing, LinearPerpetual, launchTime 2026-11-11T09:22:26Z, NG',
+    D.symbolType === 'stock' && D.status === 'PreLaunch' && D.isPreListing === true && D.contractType === 'LinearPerpetual' && new Date(Number(D.launchTime)).toISOString() === '2026-11-11T09:22:26.000Z' && D.marketRegion === 'NG');
+
+  // ---- Bybit, poll by poll, with injected edges
+  const sent = [], edits = [], excl = [], uncl = [];
+  const deps = (t = now) => ({ now: t, dispatch: async (a) => { sent.push(a); return true; }, edit: async (k, l) => { edits.push({ k, l }); return true; },
+    noteExcluded: (...a) => excl.push(a), noteUnclassified: (...a) => uncl.push(a), classify: () => ({ state: 'OK' }), tradfi: { save: () => {} } });
+  const B = (...xs) => xs.map(pw.normBybit);
+  const base = [fx.bybit.cryptoTrading, fx.bybit.stockTrading, fx.bybit.etf, fx.bybit.cryptoPre];
+  const st = {};
+  await pw.processList('bybit', B(...base), st, deps());
+  check('poll 1 seeds the baseline silently: nothing sent, nothing edited, every contract stored', sent.length === 0 && edits.length === 0 && Object.keys(st.perpLists.bybit.rows).length === 4);
+  await pw.processList('bybit', B(...base, D), st, deps());
+  const a = sent[0], r = a && renderMessage(a, 'public');
+  check('poll 2, DANGOTE in PreLaunch: ONE TradFi message in the operator\'s format', sent.length === 1 && a.type === 'TRADFI' && a.venue === 'bybit'
+    && r.title === '🏛 TRADFI PERP · Bybit' && r.lines[0] === 'DANGOTEUSDT: Dangote Petroleum Refinery and Petrochemicals (pre-IPO, NG)' && r.lines[1] === 'Auction 11:00 UTC · trading from 11:30 UTC' && r.lines.length === 2, r && r.text);
+  check('the TradFi alert is never a crypto listing: type TRADFI, a FACT, NO track (so no outcomes row, nothing for the ladder), key TRADFI:bybit:DANGOTE',
+    !a.track && isFact(a) && FACT_TYPES.has('TRADFI') && !['LISTING', 'PERP'].includes(a.type) && a.dedupeKey === 'TRADFI:bybit:DANGOTE' && a.kind === 'FACT');
+  check('TradFi never takes the tier-1 bypass, on Binance included; a Binance crypto PERP still does', catalystRoute({ type: 'TRADFI', venue: 'binance' }) === 'defer' && catalystRoute({ type: 'TRADFI', venue: 'bybit' }) === 'defer' && catalystRoute({ type: 'PERP', venue: 'binance' }) === 'push');
+  check('TRADFI is deliberately outside RISK_TYPES (no bypass of any kind)', !/const RISK_TYPES = new Set\(\[[^\]]*'TRADFI'/.test(readFileSync('src/core/budget.js', 'utf8')));
+  const live = { ...D, status: 'Trading', isPreListing: false };
+  await pw.processList('bybit', B(...base, live), st, deps(now + 3 * 3600e3));
+  check('poll 3, DANGOTE goes to Trading: the opening message is EDITED once under TRADFI:bybit:DANGOTE, not resent',
+    sent.length === 1 && edits.length === 1 && edits[0].k === 'TRADFI:bybit:DANGOTE' && edits[0].l === `Trading opened ${new Date(now + 3 * 3600e3).toISOString().slice(11, 16)} UTC (DANGOTEUSDT)`, JSON.stringify(edits));
+  await pw.processList('bybit', B(...base, live), st, deps(now + 3 * 3600e3 + 60e3));
+  check('poll 4, nothing changed: nothing sent, nothing edited', sent.length === 1 && edits.length === 1);
+  await pw.processList('bybit', B(...base), st, deps(now + 4 * 3600e3));
+  check('a symbol missing from the list is NOT a delisting: no event, and it is carried forward in the baseline, marked missing', sent.length === 1 && edits.length === 1 && st.perpLists.bybit.rows.DANGOTEUSDT?.missingSince === now + 4 * 3600e3);
+  await pw.processList('bybit', B(...base, live), st, deps(now + 5 * 3600e3));
+  check('when it comes back it is not new: no second alert', sent.length === 1 && !st.perpLists.bybit.rows.DANGOTEUSDT.missingSince);
+
+  // ---- what is not alerted, and what is excluded
+  const commodity = fx.bybit.commodity, forex = { ...fx.bybit.commodity, symbol: 'USDBRLUSDT', baseCoin: 'USDBRL', symbolType: 'forex' };
+  const dated = { ...fx.bybit.cryptoTrading, symbol: 'BTCUSDT-25DEC26', contractType: 'LinearFutures' };
+  const oddType = { ...fx.bybit.cryptoTrading, symbol: 'ZZODDUSDT', baseCoin: 'ZZODD', symbolType: 'basket' };
+  const st2 = {};
+  await pw.processList('bybit', B(...base), st2, deps());
+  const before = sent.length;
+  const res2 = await pw.processList('bybit', B(...base, commodity, forex, dated, oddType), st2, deps());
+  check('commodity and forex are EXCLUDED via noteExcluded, never sent', excl.some((x) => x[0] === commodity.symbol && x[1] === 'COMMODITY' && x[3] === 'bybit') && excl.some((x) => x[0] === 'USDBRLUSDT' && x[1] === 'FX') && sent.length === before, JSON.stringify(excl));
+  check('a dated future of a listed base is logged, not alerted; an unknown instrument type is recorded unclassified, never pushed',
+    res2.skipped.some((s) => /BTCUSDT-25DEC26 \(dated future\)/.test(s)) && uncl.some((x) => /PERP_TYPE_UNRECOGNISED\] ZZODDUSDT/.test(x[1])) && sent.length === before);
+  const cryptoNew = { ...fx.bybit.cryptoPre, symbol: 'ZZNEWUSDT', baseCoin: 'ZZNEW' };
+  await pw.processList('bybit', B(...base, commodity, forex, dated, oddType, cryptoNew), st2, deps());
+  const cp = sent.at(-1);
+  check('a new crypto perp in PreLaunch is a PERP fact under the shared key PERP:bybit:ZZNEW, titled like Hyperliquid\'s',
+    sent.length === before + 1 && cp.type === 'PERP' && cp.dedupeKey === 'PERP:bybit:ZZNEW' && cp.title === 'ZZNEW-PERP on BYBIT' && /^Not trading yet: pre-launch/.test(cp.lines[0]), JSON.stringify(cp && { t: cp.title, l: cp.lines }));
+
+  // ---- Binance: PENDING_TRADING, tier-1 crypto, TradFi, a second quote
+  const N = (...xs) => xs.map(pw.normBinance);
+  const hype = { ...fx.binance.btc, symbol: 'HYPEUSDT', baseAsset: 'HYPE' };
+  const trx = fx.binance.pending.find((x) => x.symbol === 'TRXUSDC'), hypeUsdc = fx.binance.pending.find((x) => x.symbol === 'HYPEUSDC');
+  const bnBase = [fx.binance.btc, fx.binance.tradfi, fx.binance.commodity, hype];
+  const st3 = {};
+  await pw.processList('binance', N(...bnBase), st3, deps());
+  const b0 = sent.length;
+  const eq = { ...fx.binance.tradfi, symbol: 'ZZEQUSDT', baseAsset: 'ZZEQ', status: 'PENDING_TRADING', onboardDate: now + 2 * 3600e3 };
+  const oil = { ...fx.binance.commodity, symbol: 'ZZOILUSDT', baseAsset: 'ZZOIL' };
+  const res3 = await pw.processList('binance', N(...bnBase, trx, hypeUsdc, eq, oil), st3, deps());
+  const bTrx = sent.find((x) => x.dedupeKey === 'PERP:binance:TRX'), bEq = sent.find((x) => x.dedupeKey === 'TRADFI:binance:ZZEQ');
+  check('Binance PENDING_TRADING crypto (TRXUSDC, real record): a PERP fact with its published start, and the tier-1 route', bTrx && bTrx.venue === 'binance' && bTrx.lines[0] === 'Not trading yet: pre-launch · trading from 16 Nov 08:35 UTC' && catalystRoute(bTrx) === 'push', bTrx && bTrx.lines[0]);
+  check('Binance TRADIFI_PERPETUAL × EQUITY: the TradFi category ("ZZEQUSDT: ZZEQ (equity)"), deferred, never tier-1; × COMMODITY excluded',
+    bEq && bEq.type === 'TRADFI' && bEq.lines[0] === 'ZZEQUSDT: ZZEQ (equity)' && /^Trading from \d\d:\d\d UTC$/.test(bEq.lines[1]) && catalystRoute(bEq) === 'defer' && excl.some((x) => x[0] === 'ZZOILUSDT' && x[1] === 'COMMODITY'), bEq && bEq.lines.join(' | '));
+  check('a second quote for a listed base (HYPEUSDC beside HYPEUSDT) is logged, not alerted', res3.skipped.some((s) => /HYPEUSDC \(new market for listed HYPE\)/.test(s)) && sent.length === b0 + 2);
+  const gaib = pw.perpMessage({ ...pw.normBinance(fx.binance.pending.find((x) => x.symbol === 'GAIBUSDT')), venue: 'binance' }, { state: 'OK' }, now);
+  check('a PENDING_TRADING row whose onboardDate has passed (GAIBUSDT, 2025-11-20) states no start time rather than a past one', gaib.lines[0] === 'Not trading yet: pre-launch · no start time published', gaib.lines[0]);
+
+  // ---- seeding the full lists sends nothing; a shrunken or cut-off list is refused
+  const many = (n, row, field) => Array.from({ length: n }, (_, i) => ({ ...row, symbol: `Z${i}USDT`, [field]: `Z${i}` }));
+  const bybitFetch = (list, cursor = '') => async (url) => ({ ok: true, json: async () => ({ retCode: 0, result: { list: /status=PreLaunch/.test(url) ? [D] : list, nextPageCursor: cursor } }) });
+  const st4 = {};
+  const seed = await pw.perpListCycle('bybit', st4, { ...deps(), fetchImpl: bybitFetch(many(930, fx.bybit.cryptoTrading, 'baseCoin')), pulse: () => {} });
+  const binSeed = await pw.perpListCycle('binance', st4, { ...deps(), fetchImpl: async () => ({ ok: true, json: async () => ({ symbols: many(944, fx.binance.btc, 'baseAsset') }) }), pulse: () => {} });
+  check('first run on ~1,900 contracts (931 Bybit incl. PreLaunch + 944 Binance) seeds silently: 0 sent', seed.status === 'baseline' && binSeed.status === 'baseline' && seed.sent === 0 && binSeed.sent === 0 && st4.perpLists.bybit.count === 931 && st4.perpLists.binance.count === 944);
+  const shrunk = await pw.perpListCycle('bybit', st4, { ...deps(), fetchImpl: bybitFetch(many(800, fx.bybit.cryptoTrading, 'baseCoin')), pulse: () => {} });
+  check('a list that shrank past 90% is REFUSED and the baseline kept', shrunk.status === 'failed' && /shrank from 931 to 801/.test(shrunk.error) && Object.keys(st4.perpLists.bybit.rows).length === 931 && st4.perpLists.bybit.refused.length === 1, shrunk.error);
+  const cut = await pw.perpListCycle('bybit', st4, { ...deps(), fetchImpl: bybitFetch(many(930, fx.bybit.cryptoTrading, 'baseCoin'), 'more'), pulse: () => {} });
+  check('a list still paginating at the page cap is CUT OFF: refused, baseline kept', cut.status === 'failed' && /still paginating after 5 pages/.test(cut.error) && Object.keys(st4.perpLists.bybit.rows).length === 931, cut.error);
+  const hb = pw.perpListStatus(st4, now + 30e3).lines;
+  check('heartbeat: one line per venue, with size, pre-launch count, age, 24h finds and refusals',
+    hb.length === 2 && /^Perp list Bybit: 931 contracts \(1 pre-launch\) · last good poll 30s ago · 24h: 0 new crypto · 0 TradFi · 0 excluded · 2 poll\(s\) refused \(last: still paginating/.test(hb[0]) && /^Perp list Binance: 944 contracts \(0 pre-launch\)/.test(hb[1]), hb.join(' || '));
+  const { buildHeartbeat } = await import('./src/core/telemetry.js');
+  check('the heartbeat carries the per-venue lines', buildHeartbeat(Date.now(), { rows: [], perpLists: { lines: ['PL-A', 'PL-B'] } }).lines.filter((l) => /^PL-[AB]$/.test(l)).length === 2);
+
+  // ---- a crypto perp seen by both an announcement and the watcher alerts ONCE (real dispatch, sending off)
+  const tok = config.telegramToken;
+  config.telegramToken = '';
+  const crow = (sym, b) => ({ ...pw.normBybit({ ...fx.bybit.cryptoTrading, symbol: sym, baseCoin: b }), venue: 'bybit' });
+  const notice = (sym) => ({ id: `zz-${sym}`, title: `New listing: ${sym}USDT Perpetual Contract, with up to 25x leverage`, url: 'https://announcements.bybit.com/' });
+  const cA = ann.classify(notice('ZZDUPA').title);
+  const aA = ann.announcementAlert('bybit', notice('ZZDUPA'), cA);
+  const firstA = await realDispatch(aA), thenW = await realDispatch(pw.perpAlert(crow('ZZDUPAUSDT', 'ZZDUPA'), { state: 'OK' }, Date.now()));
+  const firstW = await realDispatch(pw.perpAlert(crow('ZZDUPBUSDT', 'ZZDUPB'), { state: 'OK' }, Date.now()));
+  const thenA = await realDispatch(ann.announcementAlert('bybit', notice('ZZDUPB'), ann.classify(notice('ZZDUPB').title)));
+  config.telegramToken = tok;
+  check('announcement then watcher: the notice carries PERP:bybit:ZZDUPA and the watcher\'s alert for the same contract is dropped', aA.dedupeKey === 'PERP:bybit:ZZDUPA' && aA.asset === 'ZZDUPA' && firstA === true && thenW === false);
+  check('watcher then announcement: the same, the other way round', firstW === true && thenA === false);
+
+  // ---- the daily cap: more than 5 in a day -> the rest share ONE digest line
+  const st5 = {}, capSent = [];
+  const outs = [];
+  for (let i = 0; i < 7; i++) outs.push(await tf.postTradfi(tf.tradfiMessage({ ...pw.normBybit(fx.bybit.stockTrading), venue: 'bybit', symbol: `ZZT${i}USDT`, base: `ZZT${i}` }, now), { venue: 'bybit', base: `ZZT${i}`, key: `ZZT${i}USDT`, label: `ZZT${i}USDT` }, { dispatch: async (x) => { capSent.push(x); return true; }, state: st5, now, save: () => {} }));
+  const dl = (st5.digestPool || []).filter((x) => x.kind === 'TRADFI');
+  check('7 TradFi perps in one day: 5 messages, the 6th and 7th in ONE digest line naming both', outs.join() === 'sent,sent,sent,sent,sent,digest,digest' && capSent.length === 5 && dl.length === 1 && /beyond today's 5 messages \(2\): ZZT5USDT \(Bybit\), ZZT6USDT \(Bybit\)$/.test(dl[0].title), dl[0]?.title);
+  const nextDay = await tf.postTradfi(tf.tradfiMessage({ ...pw.normBybit(fx.bybit.stockTrading), venue: 'bybit' }, now), { venue: 'bybit', base: 'AAPL', key: 'AAPLUSDT', label: 'AAPLUSDT' }, { dispatch: async () => true, state: st5, now: now + 86400e3, save: () => {} });
+  check('the cap is per UTC day: the next day sends again', nextDay === 'sent' && st5.tradfi.sent === 1);
+
+  // ---- the prose lint
+  check('every TradFi and perp message shape is lint-clean (direction, frequency, and the TradFi claim rule)',
+    [tf.tradfiMessage(pw.normBybit(D), now), tf.tradfiNoticeMessage({ venue: 'bitget', base: 'ANET', title: 'Bitget Will List ANETUSDT Stock Perps', held: false }), pw.perpMessage(crow('ZZQUSDT', 'ZZQ'), { state: 'OK' }, now), pw.perpBatchMessage('bybit', [crow('A1USDT', 'A1'), crow('A2USDT', 'A2'), crow('A3USDT', 'A3')])]
+      .every((m) => { const x = renderMessage(m, 'public'); return !tradfiProblems(x.text).length && x.lines.concat(x.title).every((l) => !proseProblems(l).length); }));
+  check('the lint catches "IPO opportunity" framing', tradfiProblems('DANGOTEUSDT: a pre-IPO opportunity').length === 1 && tradfiProblems('get in early before the IPO').length >= 1);
+  let lintSent = 0;
+  const refused = await tf.postTradfi({ title: '🏛 TRADFI PERP · Bybit', lines: ['ZZXUSDT: Pre-IPO opportunity'], url: '' }, { venue: 'bybit', base: 'ZZX', key: 'ZZXUSDT', label: 'ZZXUSDT' }, { dispatch: async () => { lintSent++; return true; }, state: {}, now, save: () => {} });
+  check('a TradFi message that fails the lint is REFUSED, not sent', refused === 'refused' && lintSent === 0);
+
+  // ---- announcements: equity drops are exclusions; TradFi notices are held for the watcher
+  const dTitle = 'New listing: Listing of DANGOTEUSDT on Bybit Pre-IPO Tradfi Perpetual on Nov 11, 2026, 11:00AM UTC';
+  check('the real DANGOTE notice classifies TRADFI; "bStocks" and a TradFi DELISTING are EQUITY (excluded), not TradFi listings; a crypto perp is still PERP',
+    ann.classify(dTitle)?.type === 'TRADFI' && ann.classify('Binance Expands Tokenized Securities Access with bStocks')?.type === 'EQUITY'
+    && ann.classify('Delisting of NAVERUSDT TradFi Perpetual Contract')?.type === 'EQUITY' && ann.classify('New listing: NESAUSDT Perpetual Contract, with up to 25x leverage')?.type === 'PERP');
+  const annSrc = readFileSync('src/sources/cex/announcements.js', 'utf8');
+  check('an EQUITY announcement goes to noteExcluded, and a TRADFI one to the TradFi path — neither to unclassified.json',
+    /if \(c\.type === 'EQUITY'\) \{\s*noteExcluded\(/.test(annSrc) && /if \(c\.type === 'TRADFI'\) \{ await tradfiFromNotice\(/.test(annSrc) && /if \(eq\.cls === 'EQUITY'\) \{/.test(annSrc) && !/if \(eq\.cls === 'EQUITY'\) return null/.test(annSrc));
+  const st6 = {}, posted = [];
+  const post = async (m, meta) => { posted.push({ m, meta }); return 'sent'; };
+  const held = await tf.tradfiFromNotice('bybit', { id: 'n1', title: dTitle, url: 'u' }, ann.assetOf(dTitle), { state: st6, now, save: () => {}, post });
+  await pw.processList('bybit', B(...base), st6, deps());
+  await pw.processList('bybit', B(...base, D), st6, deps(now + 30e3));
+  await tf.flushHeld({ state: st6, now: now + 11 * 60e3, post, save: () => {} });
+  check('on a watched venue the notice is HELD; the watcher\'s fuller message claims it, and the hold never posts', held === 'held' && !st6.tradfiHeld['bybit:DANGOTE'] && posted.length === 0);
+  await tf.tradfiFromNotice('bybit', { id: 'n2', title: 'New listing: ZZHELDUSDT TradFi Perpetual Contract', url: 'u' }, 'ZZHELD', { state: st6, now, save: () => {}, post });
+  await tf.flushHeld({ state: st6, now: now + 9 * 60e3, post, save: () => {} });
+  const early = posted.length;
+  await tf.flushHeld({ state: st6, now: now + 11 * 60e3, post, save: () => {} });
+  check('a held notice the watcher never claims is posted from the notice after 10 min, and not before', early === 0 && posted.length === 1 && /Held 10 min for the instrument-list watcher/.test(posted[0].m.operatorLines[0]) && posted[0].m.title === '🏛 TRADFI PERP · Bybit');
+  await tf.tradfiFromNotice('bitget', { id: 'n3', title: 'Bitget Will List ANETUSDT Stock Perps, with up to 10x leverage', url: 'u' }, 'ANET', { state: st6, now, save: () => {}, post });
+  check('on a venue with no watcher (Bitget) the TradFi notice is posted at once', posted.length === 2 && posted[1].m.title === '🏛 TRADFI PERP · Bitget' && posted[1].m.lines[0] === 'ANET: from the Bitget notice');
+
+  // ---- the two small fixes and the wiring
+  const exSrc = readFileSync('src/sources/cex/exchanges.js', 'utf8');
+  check('loadDerivStockSymbols also reads the PreLaunch list (DANGOTE was absent from the default one)', /export async function loadDerivStockSymbols[\s\S]{0,600}status=PreLaunch[\s\S]{0,200}pre\?\.result\?\.list/.test(exSrc));
+  const { checkClassifiersWired } = await import('./src/core/routes.js');
+  check('perp-watch.js and tradfi.js are declared emitters and call their classifiers (classifySymbol, postTradfi, tradfiProblems)', checkClassifiersWired().ok && /'sources\/cex\/perp-watch\.js'/.test(readFileSync('src/core/routes.js', 'utf8')));
+  check('index.js polls the perp lists', /pollPerpLists\(\)\]\)/.test(readFileSync('src/index.js', 'utf8')));
 }
 
 // A block that mutes the console and forgets to restore it hides every section header after it.

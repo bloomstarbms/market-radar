@@ -29,7 +29,18 @@ export function proseProblems(text) {
 // The module runs this over its whole public rendering and refuses to send on a hit; an
 // account bio that trips it is withheld rather than quoted.
 // 2026-10-27: + "partner", "partnership" (and their plurals/tense), "in the ecosystem", "backed".
-export const FOLLOW_CLAIM = /\b(backed by|backed|backing|endorsed|invested|partners?|partnered|partnerships?|in the ecosystem)\b/i;
+// TRADFI CLAIM (2026-11-11). A TradFi perp message states a contract, its underlying and
+// its times. Nothing in it may frame the contract as a chance to be had ("IPO
+// opportunity", "get in early"). sources/cex/tradfi.js refuses to send on a hit.
+export const TRADFI_CLAIM = /\b(opportunit(?:y|ies)|early access|get in early|ground floor|before (?:the|its) ipo|ipo (?:play|pop|gains?)|upside|undervalued|don'?t miss|last chance|exclusive access)\b/i;
+export function tradfiProblems(text) {
+  const p = proseProblems(text);
+  const m = String(text ?? '').match(TRADFI_CLAIM);
+  if (m) p.push(`tradfi claim ("${m[0]}")`);
+  return p;
+}
+
+export const FOLLOW_CLAIM =/\b(backed by|backed|backing|endorsed|invested|partners?|partnered|partnerships?|in the ecosystem)\b/i;
 export function followProblems(text) {
   const p = proseProblems(text);
   const m = String(text ?? '').match(FOLLOW_CLAIM);

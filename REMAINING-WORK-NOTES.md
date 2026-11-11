@@ -5643,3 +5643,71 @@ re-verified, so the count overstated what alerts.
   Called bare (the heartbeat), it loads the watch state.
 - Fixture 103: synthetic split, the pure call, and LIVE "2 active · 2 demoted: EIGEN, ZRO"
   against the mirrored VPS cadence-watch.json.
+
+## 2026-11-11 — PERP-LIST WATCHER (BYBIT, BINANCE) AND THE TRADFI CATEGORY
+
+THE MISS. DANGOTEUSDT appeared on Bybit futures (symbolType stock, PreLaunch, launchTime
+09:22:26Z, auction 11:00Z, trading 11:30Z). The announcement poller saw the notice at
+09:22:15Z, 11 s before the contract existed. Its title contains "Tradfi", which matched the
+equity text rule, so classify() returned null. Null also means "matched no pattern", so the
+notice was filed in data/unclassified.json. It had been recognised and dropped, not missed.
+Nothing read Bybit's linear instrument list except loadDerivStockSymbols (a 6-hourly
+stock-symbol cache). The default list call returns Trading rows only: 930 rows, without
+DANGOTE.
+
+OPERATOR DECISIONS (2026-11-11):
+- TradFi perps are POSTED, as their own category (TRADFI, header "🏛 TRADFI PERP · <venue>").
+  - This covers Bybit symbolType stock/ETF and Binance TRADIFI_PERPETUAL × EQUITY (plus HK_,
+    KR_, CN_EQUITY and PREMARKET = pre-IPO).
+  - Commodity and forex contracts stay excluded (noteExcluded).
+  - TradFi perps never take the tier-1 bypass, and are never counted as crypto listings in
+    outcomes or the ladder.
+  - At most 5 messages per UTC day; the rest share one digest line. The prose lint applies.
+- The watcher is built for Bybit and Binance USD-M first. OKX and Bitget follow, one per session.
+- Equity announcement drops go to noteExcluded. TradFi notices route to the category.
+  loadDerivStockSymbols also reads the PreLaunch list.
+
+WHAT SHIPPED:
+- src/sources/cex/perp-watch.js polls each venue every 60 s.
+  - Bybit: the default list plus status=PreLaunch, paginated, with a 5-page cap. A list still
+    holding a cursor at the cap is cut off and refused.
+  - Binance: exchangeInfo, which carries PENDING_TRADING in the one list.
+  - The baseline is persisted (st.perpLists) and seeded silently on the first run.
+  - 90% shrink guard plus a 300-row floor.
+  - A missing symbol is never a delisting. It is carried forward for 30 days, so a short
+    list cannot make the symbols it dropped look new later.
+  - Pre-launch is alerted. The move to trading EDITS that message.
+  - New means a perpetual contract on a base the venue has not listed. Dated futures (24
+    Bybit expiries in 30 days) and a second quote for a known base (Binance HYPEUSDC) are
+    logged, not alerted.
+  - Instrument types the watcher does not know are recorded unclassified and never pushed.
+- Crypto perps from the watcher are PERP facts under PERP:<venue>:<BASE>. Announcements now
+  give their PERP alerts the same key and asset, so a perp seen by both alerts once (fixture
+  104 runs this through the real dispatch).
+- src/sources/cex/tradfi.js holds the message, the cap, the lint (TRADFI_CLAIM: no
+  "opportunity" framing; a hit is refused) and the hold.
+  - On a watched venue a TradFi notice is held 10 min so the watcher's fuller message wins.
+    If the watcher does not claim it, it is posted from the notice.
+  - On any other venue the notice is posted at once.
+- A published start time is shown only while it is ahead. Binance GAIBUSDT has sat in
+  PENDING_TRADING with an onboardDate of 2025-11-20.
+- The heartbeat carries one line per venue.
+
+BYPASS AUDIT, trigger 3 (re-run, comment beside LISTING_TIER1):
+- Binance is tier-1, and its PERP facts now also come from the instrument list.
+- Over the 30 days to 2026-11-11 there were 15 new Binance bases: 1 crypto (PREDICT) and 14
+  TradFi. The TradFi ones never take the tier-1 route. Added tier-1 volume is about one crypto
+  perp fact a month, deduplicated against the notice.
+- Bybit, in the same 30 days: 37 new bases (30 stock, 3 ETF, 1 forex, 2 innovation, 1 crypto).
+
+MEASURED LIVE (desktop, read-only, outputs stubbed): Bybit 938 contracts (8 pre-launch;
+627 crypto, 303 TradFi, 8 excluded); Binance 944 (3 pending; 709 crypto, 226 TradFi, 9
+excluded). No unknown types. About 1.3 s and 0.7 s per poll.
+
+KNOWN LIMITS:
+- On venues with no watcher (OKX, Bitget, KuCoin), a TradFi notice cannot be told from a
+  commodity one; both post as TradFi until those watchers exist.
+- The display name keeps everything but the legal suffix: "Dangote Petroleum Refinery and
+  Petrochemicals", not the operator's shortened "Dangote Petroleum Refinery".
+- DANGOTE itself is in the seeded baseline as pre-launch. When it opens at 11:30Z today
+  there is no opening message to edit, so it is logged, not posted late.

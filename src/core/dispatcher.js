@@ -45,6 +45,8 @@ const TAG = {
   'CEX:LISTING': '🆕 NEW LISTING',
   'CEX:ANNOUNCE': '📢 EXCHANGE ANNOUNCEMENT',
   'CEX:PERP': '⚔️ PERP LISTING',
+  // TradFi perps (v0.37.20): stock/ETF contracts on crypto venues. Own category, never a crypto listing.
+  'CEX:TRADFI': '🏛 TRADFI PERP',
   'CEX:UPBIT': '🇰🇷 UPBIT LISTING',
   'CEX:FUNDING': '⚡ FUNDING EXTREME',
   'CHAIN:WHALE': '🐋 WHALE MOVE',
@@ -81,6 +83,12 @@ const TAG = {
 // LISTING_FLOOR_USD are the qualifying conditions for the catalyst bypasses. Editing
 // either — adding a venue, moving the floor — changes which catalysts bypass the
 // budget. Re-run the bypass audit when you touch them.
+// Audit re-run 2026-11-11 (perp-watch.js reads Binance USD-M's instrument list): the
+// venue set is unchanged, but Binance PERP facts now also come from the list, not only
+// from notices. Measured over the 30 days to 2026-11-11: 15 new Binance bases, of which
+// 1 crypto (PREDICT, PERPETUAL × PREMARKET) and 14 TradFi; the TradFi ones never take
+// this route (catalystRoute defers TRADFI on every venue). Added volume: about one
+// tier-1 crypto perp fact a month, deduplicated against the notice by PERP:<venue>:<BASE>.
 export const LISTING_TIER1 = new Set(['upbit', 'bithumb', 'coinbase', 'binance']);
 export const LISTING_FLOOR_USD = Number(process.env.LISTING_FLOOR_USD || 25000);
 const LISTING_DEFER_MS = Number(process.env.LISTING_DEFER_MIN || 30) * 60e3;
@@ -110,6 +118,9 @@ const TITLE_SYMS = (title) => [...new Set(
   [...String(title || '').toUpperCase().matchAll(/\b([A-Z0-9]{2,15})(?:\/|-)?USDT\b/g)].map((m) => m[1] + 'USDT'),
 )];
 export function catalystRoute(alert) {
+  // TradFi perps never take the tier-1 bypass — that bypass is for crypto listings,
+  // which reprice an asset; a stock perp on Binance is not a Binance listing of a coin.
+  if (alert.type === 'TRADFI') return 'defer';
   if (!CATALYST_TYPES.has(alert.type) || alert.deferredEval) return 'push';
   const venue = alert.track?.exchange ?? alert.venue;
   if (listingRoute(venue) === 'push') return 'push'; // tier-1: unconditional, incl. delists
