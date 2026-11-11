@@ -4649,9 +4649,12 @@ console.log('103. heartbeat coverage line splits verified into active and demote
     none.verifiedActive === 3 && none.verifiedDemoted.length === 0 && none.line.includes('· 3 verified (3 active · 0 demoted) ('), none.line.slice(0, 140));
   const live = unlockCoverage();
   const liveDem = Object.keys(activeDemotions(JSON.parse(readFileSync('unlocks.json', 'utf8')).tokens, loadWatchState())).sort();
-  check('LIVE: the heartbeat line reads "4 verified (2 active · 2 demoted: EIGEN, ZRO) (3 cadence-watched · 0 contract-cliff · 1 review-dated)"',
-    liveDem.join() === 'EIGEN,ZRO' && live.verifiedDemoted.join() === 'EIGEN,ZRO'
-    && live.line.includes('· 4 verified (2 active · 2 demoted: EIGEN, ZRO) (3 cadence-watched · 0 contract-cliff · 1 review-dated) ·'), live.line.slice(0, 140));
+  // The demoted SET is the bot's to change (ENA demoted by the cadence watch 2026-11-10, after
+  // this pin read "EIGEN, ZRO"), so the LIVE check derives the expected line from the live
+  // demotions; the format is pinned by the two synthetic checks above.
+  const expectLive = `· 4 verified (${4 - liveDem.length} active · ${liveDem.length} demoted${liveDem.length ? ': ' + liveDem.join(', ') : ''}) (3 cadence-watched · 0 contract-cliff · 1 review-dated) ·`;
+  check(`LIVE: the heartbeat line names exactly the live demotions (${liveDem.join(', ') || 'none'}), every one a verified row`,
+    live.verifiedDemoted.join() === liveDem.join() && liveDem.every((s) => ['EIGEN', 'MOVE', 'ENA', 'ZRO'].includes(s)) && live.line.includes(expectLive), `${expectLive} | ${live.line.slice(0, 140)}`);
 }
 
 console.log('104. perp-list watcher (Bybit linear + Binance USD-M) and the TradFi category, from the real DANGOTE record');

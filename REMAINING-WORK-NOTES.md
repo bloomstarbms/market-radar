@@ -5711,3 +5711,18 @@ KNOWN LIMITS:
   Petrochemicals", not the operator's shortened "Dangote Petroleum Refinery".
 - DANGOTE itself is in the seeded baseline as pre-launch. When it opens at 11:30Z today
   there is no opening message to edit, so it is logged, not posted late.
+
+## 2026-11-11 — THE COVERAGE-LINE LIVE CHECK DERIVES THE DEMOTED SET
+
+v0.37.20 was tagged and pushed, then the pre-deploy mirror of the VPS cadence-watch.json
+turned one LIVE fixture red. The cadence watch DEMOTED ENA at 2026-11-10T02:03Z (kind DEMOTE,
+window 2026-11-05..2026-11-09). The v0.37.19 check had hard-pinned the demoted names as
+"EIGEN, ZRO". The live line now reads "4 verified (1 active · 3 demoted: EIGEN, ENA, ZRO)",
+which is the split doing its job. The gated deploy would have refused, correctly.
+
+The demoted set is the bot's to change, so a hard pin breaks on every verdict. The LIVE check
+now derives the expected line from activeDemotions over the live rows, and requires every
+name to be a verified row. The format stays pinned by fixture 103's synthetic checks. The tag
+does not move, so the fix ships as the next version and v0.37.20 is deployed only as part of it.
+
+Delivery of the ENA demote notice is not verifiable from disk: operator to confirm.
