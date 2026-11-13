@@ -29,6 +29,20 @@ export function proseProblems(text) {
 // The module runs this over its whole public rendering and refuses to send on a hit; an
 // account bio that trips it is withheld rather than quoted.
 // 2026-10-27: + "partner", "partnership" (and their plurals/tense), "in the ecosystem", "backed".
+// RELEASE SPIN (2026-11-13, macro forecasts). A release message states the actual beside
+// the forecast and the previous figure. "Above/below/in line with forecast" is allowed;
+// the words that characterise the print are not: "hotter than expected", "a beat", "a
+// miss", "surprise", "dovish", "hawkish". Separate from DIRECTION so the rest of the bot's
+// prose (an unlock "near miss" in an operator basis line) is not caught by a macro rule;
+// macro.js runs macroProblems over every public line it renders from data.
+export const MACRO_SPIN = /\b(hotter|cooler|beats?|beaten|miss(?:es)?|surpris(?:e|es|ed|ing)|dovish|hawkish)\b/i;
+export function macroProblems(text) {
+  const p = proseProblems(text);
+  const m = String(text ?? '').match(MACRO_SPIN);
+  if (m) p.push(`release spin ("${m[0]}")`);
+  return p;
+}
+
 // TRADFI CLAIM (2026-11-11). A TradFi perp message states a contract, its underlying and
 // its times. Nothing in it may frame the contract as a chance to be had ("IPO
 // opportunity", "get in early"). sources/cex/tradfi.js refuses to send on a hit.

@@ -5726,3 +5726,65 @@ name to be a verified row. The format stays pinned by fixture 103's synthetic ch
 does not move, so the fix ships as the next version and v0.37.20 is deployed only as part of it.
 
 Delivery of the ENA demote notice is not verifiable from disk: operator to confirm.
+
+## 2026-11-13 — MACRO RELEASES SHOW ACTUAL · FORECAST · PREVIOUS (CPI, PPI)
+
+SOURCES TESTED FROM THE VPS (2026-11-11, report first):
+- ForexFactory's weekly file (nfs.faireconomy.media/ff_calendar_thisweek.json) is the only
+  keyless source that answered with consensus forecasts. It covers the current week only (the
+  next-week file is a 404), with forecast and previous and no actual.
+- Trading Economics guest API: 410, discontinued. Nasdaq: timed out 4x. FXStreet 401,
+  TradingView 403, Investing 403, MarketWatch 401 (captcha redirect). Not worked around.
+- Myfxbook RSS carries Previous/Consensus/Actual for the current day only.
+- The Cleveland Fed nowcast is a model, not a consensus; not used.
+- Finnhub, FMP and FRED need keys (FRED has no forecasts).
+
+OPERATOR DECISIONS (2026-11-12):
+- ForexFactory, named "forecast: ForexFactory"; matched on country + title, never title alone.
+- A T-60m snapshot into state, stamped; only that snapshot is used.
+- Yearly lines show actual and previous with no forecast field. "forecast: not available"
+  appears only where a series normally has one. No Cleveland Fed figures.
+- Core CPI and core PPI actuals from BLS. Previous from BLS, revisions included.
+- Lint: hotter, cooler, beat, miss, surprise, dovish, hawkish.
+- NFP, PCE and the Fed are mapped only after each one's week is read and reported:
+  PCE 25 Nov, NFP 4 Dec, Fed 9 Dec.
+
+WHAT SHIPPED:
+- src/sources/calendar/forecasts.js
+  - FORECAST_MAP: CPI and PPI only, monthly lines only.
+    - CPI: "CPI m/m" and "Core CPI m/m"; PPI: "PPI m/m" and "Core PPI m/m"; all country USD.
+    - A row must also sit within 10 min of the release time.
+    - No row, two rows, or a value that is not a plain percentage: left out and named in the
+      snapshot's problems.
+  - The snapshot (rec.forecast) is due from T-60m to the release; a failed fetch is retried at
+    most every 5 min.
+  - It is stamped with when the fetch started. A snapshot at or after the release is refused
+    by buildSnapshot, and usableForecast will not read one, whatever its status says.
+- figures.js
+  - The BLS query adds CUSR0000SA0L1E/CUUR0000SA0L1E (core CPI) and WPSFD49104/WPUFD49104 (core
+    PPI), and reaches two years back.
+  - blsFigure returns rows: headline y/y, core y/y, headline m/m, core m/m, each with actual
+    and previous recomputed from the same response, so a revision is in it.
+  - A yearly change with no base-year index says so: October 2025 CPI was never published, so
+    October 2026 CPI y/y reads "not computable (BLS has no Oct 2025 index)".
+- macro.js: the T+5m (and T+30m, when it carries the figure) message for CPI and PPI renders
+  "📊 <full name> · Oct", the four lines, the market line, and "Source: BLS · forecast:
+  ForexFactory". The operator sees when the snapshot was taken, or why there was none.
+  - The full name stays in the title; the no-bare-abbreviation rule (fixture 74) still holds.
+- prose-lint.js: MACRO_SPIN and macroProblems. They are separate from DIRECTION, so an
+  operator basis line's "near miss" (unlock-promote) is not caught by a macro rule. The
+  bot's own "missed" stage word does not match.
+- Heartbeat: one "Macro forecasts:" line.
+- Fixture 105, on the two real captures (fixtures/ff-thisweek-2026-11-11.json,
+  fixtures/bls-cpi-ppi-2026-11-13.json):
+  - PPI renders with the real saved forecast (taken 47h before the release). Its October
+    index points are SYNTHETIC, appended to the real response, because October PPI was not
+    out at capture time.
+  - The capture taken after the 10 Nov CPI is refused as a CPI snapshot.
+  - Also covered: the Swiss "PPI m/m" in the same file, and "hotter than expected".
+
+FOLLOW-UPS (report only):
+- After the 13 Nov PPI: freeze the real October PPI and the real T-60m snapshot as fixtures,
+  replacing the synthetic points. Check Myfxbook's RSS for consensus and actual on the day.
+- PCE 25 Nov, NFP 4 Dec, Fed 9 Dec: read that week's file and report the mapping before
+  enabling each.

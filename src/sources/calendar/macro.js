@@ -22,8 +22,10 @@ import { dispatch } from '../../core/dispatcher.js';
 import { getState, save } from '../../core/store.js';
 import { btcPrice } from '../../core/outcomes.js';
 import { notePulse } from '../../core/pulse.js';
-import { proseProblems } from '../../core/prose-lint.js';
+import { proseProblems, macroProblems } from '../../core/prose-lint.js';
 import { figureFor, BLS_SERIES, BLS_DAILY_QUERIES } from './figures.js';
+import { FORECAST_MAP, FORECAST_SOURCE, takeSnapshot, snapshotDue, usableForecast } from './forecasts.js';
+import { PUBLIC_MAX_LINES } from './unlocks.js';
 
 const CAL_PATH = join(process.cwd(), 'data', 'macro-calendar.json');
 const STAGES = {
@@ -79,14 +81,15 @@ export const KIND_PLAIN = {
   PPI: 'How much the prices US producers receive rose last month — inflation one step before the shop shelf.',
 };
 export const ABBREVIATIONS = Object.keys(KIND_NAMES);
-export function eventName(ev) { return (ev.name && !proseProblems(ev.name).length ? ev.name : null) ?? KIND_NAMES[ev.kind] ?? ev.kind; }
-export function eventPlain(ev) { return (ev.plain && !proseProblems(ev.plain).length ? ev.plain : null) ?? KIND_PLAIN[ev.kind] ?? null; }
+// macroProblems = the prose lint plus the release-spin words ("hotter", "beat", "hawkish" …).
+export function eventName(ev) { return (ev.name && !macroProblems(ev.name).length ? ev.name : null) ?? KIND_NAMES[ev.kind] ?? ev.kind; }
+export function eventPlain(ev) { return (ev.plain && !macroProblems(ev.plain).length ? ev.plain : null) ?? KIND_PLAIN[ev.kind] ?? null; }
 // Pure: every public-rendered calendar field that fails the prose lint. [] when clean.
 export function calendarProseProblems(events) {
   const out = [];
   for (const ev of events || []) for (const f of ['name', 'plain']) {
     if (!ev[f]) continue;
-    const p = proseProblems(ev[f]);
+    const p = macroProblems(ev[f]);
     if (p.length) out.push({ id: ev.id, field: f, problems: p, text: String(ev[f]).slice(0, 80) });
   }
   return out;
@@ -100,6 +103,32 @@ export function priorLine(ev) {
   const cons = ev.consensus ? `${ev.consensus}${ev.consensusAsOf ? ` (as of ${ev.consensusAsOf})` : ''}` : 'not entered';
   return `Prior: ${ev.prior ?? 'not entered'} · consensus: ${cons}`;
 }
+// THE FIGURE BLOCK (2026-11-13): one line per series, "actual · forecast · previous".
+//   Headline y/y: 3.1% · previous 2.9%
+//   Headline m/m: 0.3% · forecast 0.2% · previous 0.4%
+// Yearly lines never carry a forecast field. A monthly line whose series normally has a
+// forecast (FORECAST_MAP) and has none in the snapshot says "forecast: not available".
+// `snapshot` is the raw state record; usableForecast is the only way a figure gets out of
+// it, so one taken at or after the release cannot reach a message from here either.
+const pctTxt = (x) => `${x.toFixed(1)}%`;
+export function figureBlock(ev, fig, snapshot, t0) {
+  const map = FORECAST_MAP[ev.kind] ?? {};
+  const fc = usableForecast(snapshot, t0);
+  let shown = 0;
+  const lines = fig.rows.map((r) => {
+    const f = !map[r.key] ? null : fc?.[r.key] ? (shown++, `forecast ${pctTxt(fc[r.key].forecast)}`) : 'forecast: not available';
+    return `${r.label}: ${[r.actual !== null ? pctTxt(r.actual) : r.why, f, r.previous !== null ? `previous ${pctTxt(r.previous)}` : null].filter(Boolean).join(' · ')}`;
+  });
+  const operator = !Object.keys(map).length ? []
+    : [fc ? `Forecast snapshot taken ${snapshot.takenAt.slice(0, 16)}Z from ${FORECAST_SOURCE}, before the release${snapshot.problems?.length ? ` · left out: ${snapshot.problems.join('; ')}` : ''}`
+      : `Forecast: no usable snapshot (${snapshot ? `${snapshot.status}${snapshot.why ? ': ' + snapshot.why : ''}${snapshot.takenAt ? ', stamped ' + snapshot.takenAt.slice(0, 16) + 'Z' : ''}` : 'none was taken before the release'}); nothing is filled in afterwards`];
+  return { lines, source: `Source: ${fig.sourceName ?? fig.source}${shown ? ` · forecast: ${FORECAST_SOURCE}` : ''}`, operator };
+}
+// The figure block, the market line and the source fit the public cap; a late-delivery
+// note joins the market line rather than adding a line past it.
+const withinCap = (block, market, lag, source) => (block.length + 2 + lag.length > PUBLIC_MAX_LINES
+  ? [...block, [market, ...lag].join(' · '), source] : [...block, market, ...lag, source]);
+
 // Pure: the message for one stage. ctx carries what the poll measured (t0, due, now,
 // reaction figures); nothing here fetches.
 export function macroMessage(ev, stage, ctx = {}) {
@@ -121,6 +150,10 @@ export function macroMessage(ev, stage, ctx = {}) {
     const { b = null, e = null, fig = null } = ctx;
     const react = b !== null ? `BTC ${sgn(b)}% · ETH ${sgn(e)}% from just before the release to T+${tPlus}m` : 'Reaction basis unavailable (bot was not up before the release).';
     const lag = [lagDisclosure(now - due, (m) => `delivered ${m}m after the T+5m mark — the window above is as stated, not live`)].filter(Boolean);
+    if (fig?.status === 'ok' && fig.rows) {
+      const blk = figureBlock(ev, fig, ctx.snapshot ?? null, t0);
+      return { title: `📊 ${name} · ${fig.refMon}`, lines: withinCap(blk.lines, react, lag, blk.source), operatorLines: [...op, ...figOp(fig), ...blk.operator] };
+    }
     if (fig?.status === 'ok') return { title: `📊 ${name}: ${fig.headline}`, lines: [...(fig.detail ? [fig.detail] : []), react, ...lag, ...cons, `Source: ${fig.source}`], operatorLines: [...op, ...figOp(fig)] };
     if (fig?.status === 'unparsed') return { title: `📊 ${name}: decision published, not parsed`, lines: [react, ...lag, `Statement: ${fig.link}`, `Source: ${fig.source}`], operatorLines: [...op, ...figOp(fig)] };
     const what = fig?.status === 'unavailable' ? 'Actual figure: not fetched by this bot.'
@@ -133,6 +166,10 @@ export function macroMessage(ev, stage, ctx = {}) {
   const lag30 = [lagDisclosure(now - due, (m) => `delivered ${m}m after the T+30m mark — observation window as stated, not live`)].filter(Boolean);
   const noClaim = 'No claim about the follow-through rate yet — that statistic starts accumulating from this event forward.';
   // ctx.fig is set only when the T+5m message lacked the figure: then T+30m carries it, or says it is not out.
+  if (fig?.status === 'ok' && fig.rows) {
+    const blk = figureBlock(ev, fig, ctx.snapshot ?? null, t0);
+    return { title: `📊 ${name} · ${fig.refMon} (T+${tPlus}m)`, lines: withinCap(blk.lines, move, lag30, blk.source), operatorLines: [...op, ...figOp(fig), ...blk.operator] };
+  }
   if (fig?.status === 'ok') return { title: `📊 ${name} · T+${tPlus}m: ${fig.headline}`, lines: [...(fig.detail ? [fig.detail] : []), move, ...lag30, `Source: ${fig.source}`], operatorLines: [...op, ...figOp(fig)] };
   if (fig?.status === 'unparsed') return { title: `📊 ${name} · T+${tPlus}m: decision published, not parsed`, lines: [move, ...lag30, `Statement: ${fig.link}`, `Source: ${fig.source}`], operatorLines: [...op, ...figOp(fig)] };
   return { title: `📊 ${name} · T+${tPlus}m — initial move is ${held}`, lines: [
@@ -202,6 +239,16 @@ export async function pollMacro() {
 
     // Freeze the pre-print market state just before the release so T+5m has a basis.
     if (now >= t0 - 10 * 60e3 && now < t0 && !rec.pre) { rec.pre = await marketSnap(); save(); }
+    // The forecast, saved ONCE in the hour before the release and stamped (forecasts.js).
+    // Only this record is ever read by a message; nothing is fetched or filled in after t0.
+    if (snapshotDue(ev, rec, t0, now)) {
+      rec.forecastTriedAt = now;
+      rec.forecast = await takeSnapshot(ev, t0, { now });
+      save();
+      const f = rec.forecast;
+      (f.status === 'ok' && !f.problems?.length ? console.log : console.error)(`[macro]${f.status === 'ok' && !f.problems?.length ? '' : '[OPERATOR]'} ${ev.id} forecast snapshot ${f.status} at ${f.takenAt.slice(11, 16)}Z: ${f.status === 'ok'
+        ? `${Object.entries(f.items).map(([k, v]) => `${k} ${v.raw}`).join(' · ') || 'no series'}${f.problems.length ? ` · left out: ${f.problems.join('; ')}` : ''}` : f.why}`);
+    }
 
     for (const stage of stages) {
       if (rec.fired[stage]) continue;
@@ -215,7 +262,7 @@ export async function pollMacro() {
         const k = `${p.id}:${p.field}`;
         if (!proseReported.has(k)) { proseReported.add(k); console.error(`[macro][OPERATOR] calendar ${p.id}.${p.field} fails the prose lint (${p.problems.join(', ')}): "${p.text}" — rendering the built-in sentence instead. Fix data/macro-calendar.json.`); }
       }
-      const ctx = { t0, now, due };
+      const ctx = { t0, now, due, snapshot: rec.forecast ?? null };
       const hasFigure = BLS_SERIES[ev.kind] || ev.kind === 'FOMC' || ev.kind === 'PCE';
       if (stage === 't30m' && ev.tier === 'STANDARD' && !(hasFigure && rec.fired.t5m && figureNeededAt30(rec.fig5))) { rec.fired.t30m = 'not-needed'; save(); continue; }
       if (stage === 't5m') {

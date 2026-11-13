@@ -4818,6 +4818,115 @@ console.log('104. perp-list watcher (Bybit linear + Binance USD-M) and the TradF
   check('index.js polls the perp lists', /pollPerpLists\(\)\]\)/.test(readFileSync('src/index.js', 'utf8')));
 }
 
+console.log('105. macro forecasts: ForexFactory snapshot at T-60m, matched by country + title, BLS actual and previous (core included), release spin linted');
+{
+  // (2026-11-12, operator decisions) The actual beside the forecast and the previous figure.
+  // The forecast is a T-60m snapshot stamped in state; nothing fetched after the release is
+  // ever used. Two real captures: the ForexFactory weekly file taken 2026-11-11T15:44Z (after
+  // the 10 Nov CPI, before the 13 Nov PPI) and the BLS keyless response taken 2026-11-13.
+  const m = await import('./src/sources/calendar/macro.js');
+  const F = await import('./src/sources/calendar/figures.js');
+  const fc = await import('./src/sources/calendar/forecasts.js');
+  const { renderMessage } = await import('./src/core/dispatcher.js');
+  const { macroProblems, MACRO_SPIN } = await import('./src/core/prose-lint.js');
+  const { PUBLIC_MAX_LINES, PUBLIC_MAX_CHARS } = await import('./src/sources/calendar/unlocks.js');
+  const ff = JSON.parse(readFileSync('fixtures/ff-thisweek-2026-11-11.json', 'utf8'));
+  const blsReal = JSON.parse(readFileSync('fixtures/bls-cpi-ppi-2026-11-13.json', 'utf8')).response;
+  const ffAt = Date.parse(ff.fetchedAt);
+  check('the captures are what they say: ForexFactory 2026-11-11T15:44Z with the USD PPI rows; BLS with October CPI and September PPI (October PPI not out)',
+    ff.fetchedAt === '2026-11-11T15:44:03.839Z' && ff.events.some((e) => e.country === 'USD' && e.title === 'PPI m/m' && e.forecast === '0.4%')
+    && blsReal.status === 'REQUEST_SUCCEEDED' && F.blsFigure('PPI', blsReal, { kind: 'PPI', date: '2026-11-13' }).status === 'pending');
+  check('BLS_SERIES carries the core CPI and core PPI series beside the headline ones', F.BLS_SERIES.CPI.includes('CUSR0000SA0L1E') && F.BLS_SERIES.CPI.includes('CUUR0000SA0L1E') && F.BLS_SERIES.PPI.includes('WPSFD49104') && F.BLS_SERIES.PPI.includes('WPUFD49104'));
+
+  // ---- PPI, 13 Nov: the REAL saved forecast (taken 47h before the release) with an October actual.
+  // The October PPI is not published at capture time, so its four index points are SYNTHETIC,
+  // appended to the real response: +0.4% headline, +0.3% core (seasonally adjusted).
+  const ppiEv = { id: 'ppi-2026-11', kind: 'PPI', tier: 'STANDARD', date: '2026-11-13', et: '08:30' };
+  const p0 = m.etToUtc(ppiEv.date, ppiEv.et);
+  const withOct = JSON.parse(JSON.stringify(blsReal));
+  const addOct = (id, factor) => { const s = withOct.Results.series.find((x) => x.seriesID === id); const sep = Number(s.data.find((d) => d.year === '2026' && d.period === 'M09').value); s.data.unshift({ year: '2026', period: 'M10', periodName: 'October', value: (sep * factor).toFixed(3), footnotes: [{}] }); };
+  addOct('WPSFD4', 1.004); addOct('WPUFD4', 1.002); addOct('WPSFD49104', 1.003); addOct('WPUFD49104', 1.002);
+  const ppiFig = F.blsFigure('PPI', withOct, ppiEv);
+  const ppiSnap = fc.buildSnapshot('PPI', ff.events, p0, ffAt);
+  check('the saved PPI snapshot: ok, stamped 2026-11-11T15:44Z, before the 13:30Z release; 0.4% headline and 0.3% core m/m; nothing left out',
+    p0 === Date.parse('2026-11-13T13:30:00Z') && ppiSnap.status === 'ok' && ppiSnap.takenAt === ff.fetchedAt && ppiSnap.items.headline_mm.forecast === 0.4 && ppiSnap.items.core_mm.forecast === 0.3 && !ppiSnap.problems.length, JSON.stringify(ppiSnap));
+  const ppi = renderMessage(m.macroMessage(ppiEv, 't5m', { t0: p0, now: p0 + 5 * 60e3, b: '0.12', e: '0.20', fig: ppiFig, snapshot: ppiSnap }), 'public');
+  const ppiOp = renderMessage(m.macroMessage(ppiEv, 't5m', { t0: p0, now: p0 + 5 * 60e3, b: '0.12', e: '0.20', fig: ppiFig, snapshot: ppiSnap }), 'operator');
+  check('PPI renders the standard way: "· Oct" title; m/m lines actual · forecast · previous (previous from BLS); y/y lines actual · previous with NO forecast field; source names both',
+    ppi.title === '📊 Producer Price Index (wholesale inflation) · Oct'
+    && ppi.lines[2] === 'Headline m/m: 0.4% · forecast 0.4% · previous 1.3%' && ppi.lines[3] === 'Core m/m: 0.3% · forecast 0.3% · previous 0.7%'
+    && /^Headline y\/y: -?\d+\.\d% · previous 6\.3%$/.test(ppi.lines[0]) && /^Core y\/y: -?\d+\.\d% · previous 5\.0%$/.test(ppi.lines[1])
+    && ppi.lines[4] === 'BTC +0.12% · ETH +0.20% from just before the release to T+5m' && ppi.lines[5] === 'Source: BLS · forecast: ForexFactory', ppi.lines.join(' | '));
+  check('within the public cap, lint-clean (direction, frequency, release spin), and the operator sees when the snapshot was taken',
+    ppi.lines.length <= PUBLIC_MAX_LINES && ppi.text.length <= PUBLIC_MAX_CHARS && [ppi.title, ...ppi.lines].every((l) => !macroProblems(l).length)
+    && ppiOp.lines.some((l) => l === 'Forecast snapshot taken 2026-11-11T15:44Z from ForexFactory, before the release'), `${ppi.lines.length} lines, ${ppi.text.length} chars`);
+  const ffRevised = ff.events.map((e) => (e.country === 'USD' && e.title === 'PPI m/m' ? { ...e, previous: '9.9%' } : e));
+  const ppi2 = renderMessage(m.macroMessage(ppiEv, 't5m', { t0: p0, now: p0 + 5 * 60e3, b: '0.12', e: '0.20', fig: ppiFig, snapshot: fc.buildSnapshot('PPI', ffRevised, p0, ffAt) }), 'public');
+  check('"previous" comes from BLS (revisions included), never from the forecast source: ForexFactory\'s previous changed to 9.9% renders the same 1.3%', ppi2.text === ppi.text);
+  const t30 = renderMessage(m.macroMessage(ppiEv, 't30m', { t0: p0, now: p0 + 30 * 60e3, b5: '0.12', b30: '0.30', held: 'HOLDING', fig: ppiFig, snapshot: ppiSnap }), 'public');
+  check('the T+30m message (when it carries the figure) renders the same block', t30.title === '📊 Producer Price Index (wholesale inflation) · Oct (T+30m)' && t30.lines[2] === ppi.lines[2] && t30.lines.at(-1) === 'Source: BLS · forecast: ForexFactory');
+
+  // ---- missing forecast
+  const none = renderMessage(m.macroMessage(ppiEv, 't5m', { t0: p0, now: p0 + 5 * 60e3, b: '0.12', e: '0.20', fig: ppiFig, snapshot: null }), 'public');
+  check('no snapshot: the m/m lines say "forecast: not available"; the y/y lines never carry a forecast field; the source names BLS only',
+    none.lines[2] === 'Headline m/m: 0.4% · forecast: not available · previous 1.3%' && none.lines[3] === 'Core m/m: 0.3% · forecast: not available · previous 0.7%'
+    && !/forecast/.test(none.lines[0] + none.lines[1]) && none.lines.at(-1) === 'Source: BLS', none.lines.join(' | '));
+  const oneMissing = { ...ppiSnap, items: { headline_mm: ppiSnap.items.headline_mm } };
+  const part = renderMessage(m.macroMessage(ppiEv, 't5m', { t0: p0, now: p0 + 5 * 60e3, b: '0.12', e: '0.20', fig: ppiFig, snapshot: oneMissing }), 'public');
+  check('one series not captured: only that line says "not available"; the other keeps its forecast', part.lines[2] === 'Headline m/m: 0.4% · forecast 0.4% · previous 1.3%' && part.lines[3] === 'Core m/m: 0.3% · forecast: not available · previous 0.7%');
+
+  // ---- a forecast fetched after the release is refused
+  const cpiEv = { id: 'cpi-2026-11', kind: 'CPI', tier: 'FULL', date: '2026-11-10', et: '08:30' };
+  const c0 = m.etToUtc(cpiEv.date, cpiEv.et);
+  const cpiSnap = fc.buildSnapshot('CPI', ff.events, c0, ffAt);
+  check('the REAL capture taken after the 10 Nov CPI release is REFUSED as a CPI snapshot (it holds the CPI rows; it was taken 26h late)',
+    ff.events.some((e) => e.country === 'USD' && e.title === 'CPI m/m') && cpiSnap.status === 'refused' && /at or after the 2026-11-10T13:30Z release/.test(cpiSnap.why) && !cpiSnap.items);
+  const forged = { status: 'ok', source: 'ForexFactory', takenAt: ff.fetchedAt, items: fc.pickForecasts('CPI', ff.events, c0).items, problems: [] };
+  const cpiFig = F.blsFigure('CPI', blsReal, cpiEv);
+  const cpi = renderMessage(m.macroMessage(cpiEv, 't5m', { t0: c0, now: c0 + 5 * 60e3, b: '0.31', e: '0.42', fig: cpiFig, snapshot: forged }), 'public');
+  check('a record marked ok but stamped after the release is still not read: usableForecast null, the message says "forecast: not available"',
+    Object.keys(forged.items).length === 2 && fc.usableForecast(forged, c0) === null && cpi.lines[2] === 'Headline m/m: 0.4% · forecast: not available · previous 0.6%' && !/forecast 0\.3%/.test(cpi.text), cpi.lines.join(' | '));
+  let fetched = 0;
+  const late = await fc.takeSnapshot(cpiEv, c0, { now: c0 + 1, fetchImpl: async () => { fetched++; return { ok: true, json: async () => ff.events }; } });
+  check('takeSnapshot at or after the release refuses without fetching', late.status === 'refused' && fetched === 0);
+  check('the REAL October CPI from BLS: 0.4% m/m (previous 0.6%), core 0.3% (previous 0.3%); y/y "not computable" because BLS has no October 2025 index',
+    cpi.title === '📊 Consumer Price Index (US inflation) · Oct' && cpi.lines[3] === 'Core m/m: 0.3% · forecast: not available · previous 0.3%'
+    && cpi.lines[0] === 'Headline y/y: not computable (BLS has no Oct 2025 index) · previous 3.7%' && cpi.lines[1] === 'Core y/y: not computable (BLS has no Oct 2025 index) · previous 2.6%', cpi.lines.join(' | '));
+
+  // ---- matching: country + title, at the release time, one row, a plain percentage
+  check('the real file holds a Swiss "PPI m/m" too: matching by title alone would find 2 rows; country + title finds the USD one',
+    ff.events.filter((e) => e.title === 'PPI m/m').length === 2 && fc.pickForecasts('PPI', ff.events, p0).items.headline_mm.country === 'USD');
+  const dup = [...ff.events, { ...ff.events.find((e) => e.country === 'USD' && e.title === 'PPI m/m'), forecast: '0.5%' }];
+  const pd = fc.pickForecasts('PPI', dup, p0);
+  check('two USD rows for the same series: ambiguous, left out and named, never one of them picked', !pd.items.headline_mm && pd.items.core_mm && pd.problems.some((x) => /headline_mm: 2 USD "PPI m\/m" rows at the release time \(ambiguous\)/.test(x)));
+  const odd = ff.events.map((e) => (e.country === 'USD' && e.title === 'Core PPI m/m' ? { ...e, forecast: '0.3' } : e));
+  check('a forecast that is not a plain percentage is left out', !fc.pickForecasts('PPI', odd, p0).items.core_mm);
+  check('a row at another time (the CPI rows, three days earlier) is not a PPI forecast, and CPI rows are found only at the CPI time', Object.keys(fc.pickForecasts('CPI', ff.events, p0).items).length === 0 && Object.keys(fc.pickForecasts('CPI', ff.events, c0).items).length === 2);
+  check('only CPI and PPI are enabled; NFP, PCE and the Fed have no forecast mapping until their week\'s file is reported', Object.keys(fc.FORECAST_MAP).join() === 'CPI,PPI'
+    && Object.values(fc.FORECAST_MAP).every((k) => Object.keys(k).join() === 'headline_mm,core_mm'));
+
+  // ---- the snapshot window and the poller
+  const rec = {};
+  check('the snapshot is due from T-60m to the release, never before or at it', !fc.snapshotDue(ppiEv, rec, p0, p0 - 61 * 60e3) && fc.snapshotDue(ppiEv, rec, p0, p0 - 60 * 60e3) && fc.snapshotDue(ppiEv, rec, p0, p0 - 60e3) && !fc.snapshotDue(ppiEv, rec, p0, p0));
+  check('a good snapshot is never retaken; a failed one is retried at most every 5 min', !fc.snapshotDue(ppiEv, { forecast: ppiSnap }, p0, p0 - 30 * 60e3)
+    && !fc.snapshotDue(ppiEv, { forecast: { status: 'failed' }, forecastTriedAt: p0 - 30 * 60e3 }, p0, p0 - 27 * 60e3) && fc.snapshotDue(ppiEv, { forecast: { status: 'failed' }, forecastTriedAt: p0 - 30 * 60e3 }, p0, p0 - 25 * 60e3)
+    && !fc.snapshotDue({ ...ppiEv, kind: 'NFP' }, {}, p0, p0 - 30 * 60e3));
+  const taken = await fc.takeSnapshot(ppiEv, p0, { now: p0 - 59 * 60e3, fetchImpl: async () => ({ ok: true, json: async () => ff.events }) });
+  check('takeSnapshot inside the window stamps when it was taken and holds the matched series', taken.status === 'ok' && taken.takenAt === new Date(p0 - 59 * 60e3).toISOString() && taken.items.headline_mm.forecast === 0.4);
+  const failed = await fc.takeSnapshot(ppiEv, p0, { now: p0 - 59 * 60e3, fetchImpl: async () => ({ ok: false, status: 503 }) });
+  check('a failed fetch is a stamped failure, not a forecast', failed.status === 'failed' && /HTTP 503/.test(failed.why) && fc.usableForecast(failed, p0) === null);
+  const msrc = readFileSync('src/sources/calendar/macro.js', 'utf8');
+  check('pollMacro takes the snapshot through snapshotDue/takeSnapshot and hands ONLY rec.forecast to the message', /if \(snapshotDue\(ev, rec, t0, now\)\) \{[\s\S]{0,120}rec\.forecast = await takeSnapshot\(ev, t0, \{ now \}\)/.test(msrc) && /const ctx = \{ t0, now, due, snapshot: rec\.forecast \?\? null \}/.test(msrc) && !/FF_URL/.test(msrc));
+  const hb = fc.forecastStatus({ macro: { 'ppi-2026-11': { forecast: ppiSnap } } }).line;
+  check('heartbeat: which releases get a forecast, from where, and the last snapshot', hb === 'Macro forecasts: CPI · PPI monthly lines from ForexFactory, saved once at T-60m · last snapshot ppi-2026-11 at 2026-11-11T15:44Z: 2 of 2 series', hb);
+
+  // ---- the lint
+  check('the lint catches "hotter than expected" and each listed word', macroProblems('Inflation came in hotter than expected').length === 1
+    && ['cooler print', 'a beat', 'beats forecast', 'a miss', 'misses forecast', 'a surprise', 'surprised markets', 'dovish', 'hawkish'].every((t) => macroProblems(t).length === 1));
+  check('"above / below / in line with forecast" is allowed, and the bot\'s own state word "missed" is not caught', ['above forecast', 'below forecast', 'in line with forecast', 'stage missed'].every((t) => !macroProblems(t).length) && !MACRO_SPIN.test('missed'));
+  check('a calendar `plain` sentence with release spin falls back to the built-in one', m.eventPlain({ kind: 'CPI', plain: 'Prints hotter than expected move the dollar.' }) === m.KIND_PLAIN.CPI);
+}
+
 // A block that mutes the console and forgets to restore it hides every section header after it.
 check('the suite ends with console.log and console.error as it started (every mute restored)', console.log === OUT && console.error === ERR);
 console.error = origErr;

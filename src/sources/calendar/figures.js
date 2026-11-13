@@ -21,8 +21,9 @@ export const BEA_API = 'https://apps.bea.gov/api/data/';
 export const BLS_DAILY_QUERIES = 25; // keyless v2 limit
 export const BLS_SERIES = {
   NFP: ['CES0000000001', 'LNS14000000'], // total nonfarm (level, thousands) · unemployment rate
-  CPI: ['CUSR0000SA0', 'CUUR0000SA0'],   // all items: seasonally adjusted (month) · not adjusted (year)
-  PPI: ['WPSFD4', 'WPUFD4'],             // final demand: seasonally adjusted (month) · not adjusted (year)
+  // [headline SA (month), headline NSA (year), core SA (month), core NSA (year)]
+  CPI: ['CUSR0000SA0', 'CUUR0000SA0', 'CUSR0000SA0L1E', 'CUUR0000SA0L1E'],   // all items · all items less food and energy
+  PPI: ['WPSFD4', 'WPUFD4', 'WPSFD49104', 'WPUFD49104'],                     // final demand · final demand less foods and energy
 };
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) market-radar (+https://github.com/bloomstarbms/market-radar)';
 const MONS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -147,13 +148,29 @@ export function blsFigure(kind, json, ev) {
     return { status: 'ok', source: 'bls.gov', headline: `${ch >= 0 ? '+' : '-'}${Math.abs(ch)}k jobs in ${mon} (first estimate)`,
       detail: ur !== null ? `Unemployment ${ur.toFixed(1)}%${urp !== null ? ` (prior ${urp.toFixed(1)}%)` : ''}` : 'Unemployment rate not in the BLS series yet' };
   }
-  const [saId, nsaId] = BLS_SERIES[kind] ?? [];
+  const [saId, nsaId, coreSaId, coreNsaId] = BLS_SERIES[kind] ?? [];
   if (!saId) return { status: 'error', why: `no BLS series for ${kind}` };
   const mom = pctChange(point(S[saId], y, m), point(S[saId], py, pm));
   if (mom === null) return { status: 'pending', why: `${mon} not in BLS series ${saId} yet` };
   const yoy = pctChange(point(S[nsaId], y, m), point(S[nsaId], y - 1, m));
   const what = kind === 'PPI' ? 'final demand ' : '';
-  return { status: 'ok', source: 'bls.gov',
+  // ROWS (2026-11-13): each series the message shows, with its actual and the PRIOR month
+  // recomputed from this same response, so a revision BLS made since last month is in it.
+  // A yearly change needs the index twelve months back; when BLS has none (October 2025
+  // CPI was never published) the row says so instead of vanishing.
+  const [ppy, ppm] = prevMonth(py, pm);
+  const monthly = (id) => ({ actual: id ? pctChange(point(S[id], y, m), point(S[id], py, pm)) : null,
+    previous: id ? pctChange(point(S[id], py, pm), point(S[id], ppy, ppm)) : null, why: 'not in the BLS series yet' });
+  const yearly = (id) => {
+    const cur = id ? point(S[id], y, m) : null, base = id ? point(S[id], y - 1, m) : null;
+    return { actual: pctChange(cur, base), previous: id ? pctChange(point(S[id], py, pm), point(S[id], py - 1, pm)) : null,
+      why: cur !== null && base === null ? `not computable (BLS has no ${mon} ${y - 1} index)` : 'not in the BLS series yet' };
+  };
+  const rows = [
+    { key: 'headline_yy', label: 'Headline y/y', ...yearly(nsaId) }, { key: 'core_yy', label: 'Core y/y', ...yearly(coreNsaId) },
+    { key: 'headline_mm', label: 'Headline m/m', ...monthly(saId) }, { key: 'core_mm', label: 'Core m/m', ...monthly(coreSaId) },
+  ];
+  return { status: 'ok', source: 'bls.gov', sourceName: 'BLS', refMon: mon, rows,
     headline: `${what}${signed(mom)} in ${mon}${yoy !== null ? `, ${yoy.toFixed(1)}% over the year` : ''}`,
     detail: `Monthly change seasonally adjusted${yoy !== null ? ' · yearly change not seasonally adjusted' : ' · yearly change not in the series yet'}` };
 }
@@ -196,7 +213,8 @@ export async function figureFor(ev, deps = {}) {
       if (deps.budget && !deps.budget.take()) return { status: 'error', why: `BLS keyless budget (${BLS_DAILY_QUERIES} queries a day) used up` };
       const [y] = refMonth(ev);
       const r = await fetchImpl(BLS_API, { method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': UA }, signal: AbortSignal.timeout(30000),
-        body: JSON.stringify({ seriesid: BLS_SERIES[ev.kind], startyear: String(y - 1), endyear: String(y) }) });
+        // Two years back: the PRIOR month's yearly change of a January release needs the December before last.
+        body: JSON.stringify({ seriesid: BLS_SERIES[ev.kind], startyear: String(y - 2), endyear: String(y) }) });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return blsFigure(ev.kind, await r.json(), ev);
     }
