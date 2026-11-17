@@ -30,6 +30,7 @@ import { cadenceStatus } from '../sources/calendar/cadence-watch.js';
 import { unlockCoverage, sourcedFiring } from '../sources/calendar/unlocks.js';
 import { suspensionNoticeStatus } from '../sources/cex/announcements.js';
 import { perpListStatus } from '../sources/cex/perp-watch.js';
+import { fundingNoticeStatus } from '../sources/cex/funding.js';
 import { verdictCorrections } from '../sources/calendar/cadence-watch.js';
 
 const DIGEST_HOUR = Number(process.env.DIGEST_HOUR_UTC ?? 18);
@@ -280,6 +281,8 @@ export function buildHeartbeat(now = Date.now(), deps = {}) {
       // Muted by default (2026-11-03): the notices are not sent, so their count is the only
       // place the detector's pulse is visible.
       (deps.suspensionNotices ?? suspensionNoticeStatus(getState(), now)).line,
+      // Muted by default (2026-11-17): the count is the only place the funding detector's pulse shows.
+      (deps.fundingNotices ?? fundingNoticeStatus(getState(), now)).line,
       // One line per watched futures list: size, age, what it found, what it refused.
       ...(deps.perpLists ?? perpListStatus(getState(), now)).lines,
       // Behavioural rows carry their falsifier; this line is the falsifier's own

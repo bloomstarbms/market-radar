@@ -269,7 +269,7 @@ async function handleUpdate(u) {
   if (cmd === '/start') {
     const added = addSubscriber(chatId);
     await sendTo(chatId, added
-      ? '✅ Subscribed to <b>Market Radar</b> alerts.\nSources: 🟢 revival · 🚀 pump · 📉 dump · 👀 volume · 🆕 listings · ⚡ funding · 🐋 whales · 🚨 rugs\n/stop unsubscribe · /status info · /stats signal scoreboard'
+      ? `✅ Subscribed to <b>Market Radar</b> alerts.\nSources: 🟢 revival · 🚀 pump · 📉 dump · 👀 volume · 🆕 listings${config.fundingNotices ? ' · ⚡ funding' : ''} · 🐋 whales · 🚨 rugs\n/stop unsubscribe · /status info · /stats signal scoreboard`
       : 'Already subscribed. /status for info.');
   } else if (cmd === '/stop') {
     removeSubscriber(chatId);

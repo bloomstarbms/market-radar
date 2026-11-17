@@ -45,7 +45,7 @@ const FACT_ROUTES = {
   MACRO: 'push via macro stages',
   DEPEG: 'push at detection',
   RUG: 'push at detection',
-  FUNDING: 'push at detection (fact: rate + OI, no direction)',
+  FUNDING: 'MUTED by default (config.fundingNotices): detected, logged to bot.log and state.fundingLog, written to outcomes (suppressed muted:config), counted on the heartbeat, sent nowhere; when on, push at detection (fact: rate + OI, no direction)',
   CASCADE: 'push at detection (producer lands in step 7)',
   OI: 'push at detection once the market holds 7d of its own hourly OI samples; digest pool before (perp/hyperliquid.js)',
   FOLLOW: 'ONE daily message at 13:00 UTC (looks at 01:00 and 13:00), fresh accounts only; a second watcher within 7d is listed in it as convergence, no edits (social/builder-follows.js)',

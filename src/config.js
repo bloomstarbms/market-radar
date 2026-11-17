@@ -13,7 +13,7 @@ if (existsSync(envPath)) {
   }
 }
 
-export const VERSION = '0.37.22';
+export const VERSION = '0.37.23';
 
 // A COPY OF THE TREE MUST NOT SEND. Twice (2026-09-15, 2026-09-17) a boot check on a
 // tree copy carried .env and pushed "cliff today" reminders that the live bot then
@@ -64,6 +64,11 @@ export const config = {
   // 2026-11-03). Still detected, logged to bot.log and state.suspensionLog, and counted on
   // the heartbeat; SUSPENSION_NOTICES=1 sends them again (announcements.js processSuspension).
   suspensionNotices: ['1', 'true', 'yes'].includes((process.env.SUSPENSION_NOTICES || '').toLowerCase()),
+  // FUNDING-RATE NOTICES ARE MUTED BY DEFAULT (operator, 2026-11-17): Binance and Hyperliquid
+  // funding extremes are still detected, logged to bot.log and state.fundingLog, measured in
+  // outcomes and counted on the heartbeat; no message is sent anywhere. FUNDING_NOTICES=1
+  // sends them again (the gate is in dispatcher.js, the one door every funding path uses).
+  fundingNotices: ['1', 'true', 'yes'].includes((process.env.FUNDING_NOTICES || '').toLowerCase()),
   etherscanKey: process.env.ETHERSCAN_API_KEY || '',
   heliusKey: process.env.HELIUS_API_KEY || '',
   arkhamKey: process.env.ARKHAM_API_KEY || '',

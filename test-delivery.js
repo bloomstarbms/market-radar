@@ -4927,6 +4927,59 @@ console.log('105. macro forecasts: ForexFactory snapshot at T-60m, matched by co
   check('a calendar `plain` sentence with release spin falls back to the built-in one', m.eventPlain({ kind: 'CPI', plain: 'Prints hotter than expected move the dollar.' }) === m.KIND_PLAIN.CPI);
 }
 
+console.log('106. funding-rate notices muted by default: detected, logged, measured, counted, never sent; FUNDING_NOTICES=1 sends again');
+{
+  // (2026-11-17, operator) Same pattern as deposit/withdrawal notices (config.suspensionNotices).
+  const fu = await import('./src/sources/cex/funding.js');
+  const { dispatch: realDispatch } = await import('./src/core/dispatcher.js');
+  const { digestSources, buildHeartbeat } = await import('./src/core/telemetry.js');
+  const { allOutcomes } = await import('./src/core/outcomes.js');
+  const { config: cfg } = await import('./src/config.js');
+  check('the flag defaults OFF and reads FUNDING_NOTICES like SUSPENSION_NOTICES', /fundingNotices: \['1', 'true', 'yes'\]\.includes\(\(process\.env\.FUNDING_NOTICES \|\| ''\)\.toLowerCase\(\)\)/.test(readFileSync('src/config.js', 'utf8')) && (process.env.FUNDING_NOTICES ? true : cfg.fundingNotices === false));
+
+  // ---- detection and the log: an extreme is admitted, recorded and logged; the heartbeat count rises
+  const st = {}, logged = [], t = Date.UTC(2026, 10, 17, 9);
+  const d = fu.fundingDecision(-0.9, 0.5, null);
+  check('a funding extreme is still detected (state entry fires)', d.fire && d.reason === 'entered');
+  const before = fu.fundingNoticeStatus(st, t, false);
+  const e = fu.noteFunding({ venue: 'binance', symbol: 'ZZFUNDUSDT', rate: '-0.900%/8h', reason: 'entered', severity: 'HIGH' }, { st, now: t, enabled: false, log: (s) => logged.push(s) });
+  const after = fu.noteFunding({ venue: 'hyperliquid', symbol: 'ZZHL', rate: '+0.0800%/h', reason: 'entered' }, { st, now: t + 60e3, enabled: false, log: (s) => logged.push(s) });
+  check('the extreme is recorded in state.fundingLog (action muted) and logged to bot.log', e.action === 'muted' && after.action === 'muted' && st.fundingLog.length === 2
+    && logged[0] === '[funding] extreme muted (config.fundingNotices off) · binance ZZFUNDUSDT -0.900%/8h · entered', logged[0]);
+  check('heartbeat: "Funding-rate notices: muted · N seen 24h", and the count rises', before.line === 'Funding-rate notices: muted · 0 seen 24h' && fu.fundingNoticeStatus(st, t + 120e3, false).line === 'Funding-rate notices: muted · 2 seen 24h'
+    && fu.fundingNoticeStatus(st, t + 25 * 3600e3, false).n === 0 && fu.fundingNoticeStatus(st, t + 120e3, true).line === 'Funding-rate notices: ON · 2 seen 24h');
+  check('the heartbeat carries the line', buildHeartbeat(Date.now(), { rows: [], fundingNotices: { line: 'FN-LINE' } }).lines.includes('FN-LINE'));
+
+  // ---- the gate, through the REAL dispatch (sending off): muted sends nothing, flag on sends
+  const tok = config.telegramToken, flag = config.fundingNotices;
+  config.telegramToken = '';
+  const alertFor = (sym) => ({ source: 'CEX', type: 'FUNDING', severity: 'HIGH', key: sym, cooldownMin: 240,
+    title: `⚡ FUNDING · ${sym} -0.900%/8h`, lines: ['-986% annualised · shorts paying longs'], track: { kind: 'cex', exchange: 'binance', symbol: sym, price: 1.5 } });
+  config.fundingNotices = false;
+  const muted = await realDispatch(alertFor('ZZMUTEUSDT'));
+  const mutedRow = allOutcomes().filter((r) => r.symbol === 'ZZMUTEUSDT').at(-1);
+  const stNow = getState();
+  check('muted (default): dispatch returns false, opens no thread (nothing to edit), and marks the cooldown so the detector\'s rhythm is unchanged',
+    muted === false && !stNow.threads?.['ZZMUTEUSDT:UP'] && onCooldown('CEX:FUNDING:ZZMUTEUSDT', 240));
+  check('muted, the OUTCOMES input keeps working: the row is still written (suppressed "muted:config", kind FACT) for the 24h measurement', mutedRow && mutedRow.suppressed === 'muted:config' && mutedRow.kind === 'FACT' && mutedRow.type === 'FUNDING', JSON.stringify(mutedRow ?? null));
+  config.fundingNotices = true;
+  const sent = await realDispatch(alertFor('ZZSENDUSDT'));
+  const sentRow = allOutcomes().filter((r) => r.symbol === 'ZZSENDUSDT').at(-1);
+  config.fundingNotices = flag; config.telegramToken = tok;
+  check('FUNDING_NOTICES=1: the same alert is dispatched again (returns true, thread opened, row unsuppressed)', sent === true && !!getState().threads?.['ZZSENDUSDT:UP'] && sentRow && sentRow.suppressed === null);
+
+  // ---- every funding path goes through the gate, before the escalation edit and the send
+  const dsrc = readFileSync('src/core/dispatcher.js', 'utf8');
+  const gateAt = dsrc.indexOf("if (alert.type === 'FUNDING' && !config.fundingNotices)");
+  check('the gate sits after admit and BEFORE both the escalation edit and the send, and covers both sources (type FUNDING: CEX and PERPDEX)',
+    gateAt > dsrc.indexOf('const verdict = admit(alert)') && gateAt < dsrc.indexOf("if (verdict.mode === 'escalate')") && gateAt < dsrc.indexOf('ids = await broadcast(text, { operatorText })'));
+  check('Binance (funding.js) and Hyperliquid both log the extreme with noteFunding BEFORE dispatching it',
+    /noteFunding\(\{ venue: 'binance'[\s\S]{0,200}\n\s*if \(await dispatch\(\{/.test(readFileSync('src/sources/cex/funding.js', 'utf8')) && /noteFunding\(\{ venue: 'hyperliquid'[\s\S]{0,200}\n\s*if \(await dispatch\(\{ source: 'PERPDEX', type: 'FUNDING'/.test(readFileSync('src/sources/perp/hyperliquid.js', 'utf8')));
+  check('inputs unaffected: CONFLUENCE takes no funding input, and the digest reads only listing-deferred rows (a muted row never enters it)',
+    !/funding/i.test(readFileSync('src/core/confluence.js', 'utf8')) && [...digestSources()].join() === 'listing-deferred');
+  check('the /start welcome lists funding only while funding notices are on', /\$\{config\.fundingNotices \? ' · ⚡ funding' : ''\}/.test(readFileSync('src/core/telegram.js', 'utf8')));
+}
+
 // A block that mutes the console and forgets to restore it hides every section header after it.
 check('the suite ends with console.log and console.error as it started (every mute restored)', console.log === OUT && console.error === ERR);
 console.error = origErr;

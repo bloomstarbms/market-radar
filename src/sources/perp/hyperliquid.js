@@ -33,7 +33,7 @@ import { notePulse } from '../../core/pulse.js';
 import { getState, save } from '../../core/store.js';
 import { classifySymbol } from '../../core/taxonomy.js';
 import { noteUnclassified, noteExcluded } from '../../core/unclassified.js';
-import { fundingDecision } from '../cex/funding.js';
+import { fundingDecision, noteFunding } from '../cex/funding.js';
 
 export const HL_INFO = 'https://api.hyperliquid.xyz/info';
 export const RULES = {
@@ -248,6 +248,8 @@ export async function pollHyperliquid() {
     if (!dec.fire) { if (st.hlFundingState[r.name]) st.hlFundingState[r.name].lastF = r.fundingPctH; continue; }
     st.hlFundingState[r.name] = { enteredAt: now, entryF: r.fundingPctH, lastF: r.fundingPctH };
     const c = { ...r, thresh, reason: dec.reason };
+    // Logged and recorded before dispatch, which withholds the message while funding notices are muted.
+    noteFunding({ venue: 'hyperliquid', symbol: r.name, rate: `${r.fundingPctH > 0 ? '+' : ''}${r.fundingPctH.toFixed(4)}%/h`, reason: dec.reason, severity: 'MEDIUM' }, { now });
     if (await dispatch({ source: 'PERPDEX', type: 'FUNDING', severity: 'MEDIUM', key: `hyperliquid:${r.name}`,
       cooldownMin: RULES.fundingCooldownMin, ...hlFundingMessage(c, { oi: changeOver(rings.get(r.name), 3600e3, now) }),
       track: { kind: 'cex', exchange: 'hyperliquid', symbol: r.name, price: r.px } })) alerts++;

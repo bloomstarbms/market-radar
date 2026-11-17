@@ -330,6 +330,26 @@ async function dispatchInner(alert) {
 
   const key = `${alert.source}:${alert.dedupeKey ?? `${alert.type}:${alert.key}`}`;
 
+  // FUNDING-RATE NOTICES MUTED (operator, 2026-11-17; config.fundingNotices, FUNDING_NOTICES=1).
+  // Placed here, after admit and before both the escalation edit and the send, so no funding
+  // message of either source (CEX:FUNDING, PERPDEX:FUNDING) leaves by any path. Only the message
+  // stops: the depth check still runs and seeds the universe verdict as a sent notice's does, the
+  // outcomes row is still written (suppressed 'muted:config', so pushed-vs-suppressed precision
+  // stays measurable), and the cooldown is marked so the detector's rhythm is unchanged.
+  if (alert.type === 'FUNDING' && !config.fundingNotices) {
+    if (alert.track?.exchange && alert.track?.symbol) {
+      const gate = await checkExecutable(alert.track.exchange, alert.track.symbol).catch(() => null);
+      if (gate) {
+        recordVerdict(alert.track.exchange, alert.track.symbol, gate);
+        alert.gate = { status: gate.status, executableUsd: gate.executableUsd, spreadBps: gate.spreadBps };
+      }
+    }
+    recordSuppressed({ ...alert, kind: verdict.kind ?? 'FACT' }, 'muted:config', verdict.score ?? null);
+    markAlerted(key);
+    console.log(`  [funding] notice muted (config.fundingNotices off) · ${alert.source}:${alert.type} · ${String(alert.title).slice(0, 80)}`);
+    return false;
+  }
+
   // A budget slot must be accounted for by an outcomes row, and recordAlert writes one only for an
   // alert with a track price. 29 Oct 20:59 UTC: a MULTIEX call had no track, spent a slot, and left
   // nothing to judge it by. A call that would do that is a detector bug: counted, loud, not pushed.

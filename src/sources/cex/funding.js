@@ -5,6 +5,33 @@
 import { dispatch } from '../../core/dispatcher.js';
 import { notePulse } from '../../core/pulse.js';
 import { getState, save } from '../../core/store.js';
+import { config } from '../../config.js';
+
+// FUNDING-RATE NOTICES ARE MUTED BY DEFAULT (operator, 2026-11-17). Every extreme the state
+// machine admits — Binance here, Hyperliquid in perp/hyperliquid.js — is recorded in
+// state.fundingLog and logged to bot.log BEFORE dispatch; dispatch withholds the message
+// while config.fundingNotices is off (FUNDING_NOTICES=1 restores it).
+// What else reads funding: OUTCOMES (a dispatched funding fact writes a tracked row; muted, it
+// is still written, suppressed 'muted:config') and EXECUTABILITY (the depth check seeds the
+// universe verdict; still run when muted). CONFLUENCE (whale + DEX activity) and the DIGEST
+// ('listing-deferred' rows only) take no funding input.
+export const FUNDING_LOG_CAP = 500;
+export function noteFunding(entry, deps = {}) {
+  const st = deps.st ?? getState();
+  const enabled = deps.enabled ?? config.fundingNotices;
+  const log = deps.log ?? ((s) => console.log(s));
+  const e = { ts: deps.now ?? Date.now(), ...entry, action: enabled ? 'send' : 'muted' };
+  (st.fundingLog ??= []).push(e);
+  while (st.fundingLog.length > FUNDING_LOG_CAP) st.fundingLog.shift();
+  if (!deps.st) save();
+  log(`[funding] extreme ${e.action === 'muted' ? 'muted (config.fundingNotices off)' : 'detected'} · ${e.venue} ${e.symbol} ${e.rate} · ${e.reason}`);
+  return e;
+}
+// The heartbeat's one line. "seen" is every admitted extreme in 24h, whatever its action.
+export function fundingNoticeStatus(st = getState(), now = Date.now(), enabled = config.fundingNotices) {
+  const n = (st.fundingLog || []).filter((e) => now - e.ts < 24 * 3600e3).length;
+  return { n, line: `Funding-rate notices: ${enabled ? 'ON' : 'muted'} · ${n} seen 24h` };
+}
 
 // 99th percentile of a pair's OWN |funding| over ~90 days (Binance publishes one
 // settlement every 8h, so 270 records). Cached 7 days: the shape of a pair's funding
@@ -161,6 +188,7 @@ export async function pollFunding() {
       : (severe || building || oiConfirm) ? 'HIGH' : 'MEDIUM';
 
     const msg = fundingMessage(c, { building, velocity, oiChange, oiConfirm, ls });
+    noteFunding({ venue: 'binance', symbol: c.symbol, rate: `${c.f > 0 ? '+' : ''}${c.f.toFixed(3)}%/8h`, reason: c.reason, severity });
     if (await dispatch({
       source: 'CEX', type: 'FUNDING', severity, key: c.symbol, cooldownMin: RULES.cooldownMin,
       title: msg.title, lines: msg.lines, operatorLines: msg.operatorLines, url: msg.url,

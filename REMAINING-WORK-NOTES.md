@@ -5788,3 +5788,35 @@ FOLLOW-UPS (report only):
   replacing the synthetic points. Check Myfxbook's RSS for consensus and actual on the day.
 - PCE 25 Nov, NFP 4 Dec, Fed 9 Dec: read that week's file and report the mapping before
   enabling each.
+
+## 2026-11-17 — FUNDING-RATE NOTICES MUTED (operator)
+
+Operator: no funding-rate messages to the channel or the operator DM. Detection and logging
+continue, so the history is kept. FUNDING_NOTICES=1 (config.fundingNotices) re-enables them,
+the same pattern as SUSPENSION_NOTICES. Default off.
+
+- THE GATE is in dispatcher.js, after admit and before both the escalation edit and the send:
+  type FUNDING, both sources (CEX:FUNDING from Binance funding.js, PERPDEX:FUNDING from
+  Hyperliquid). No funding message leaves by any path while muted, including an edit of a
+  thread opened before the mute.
+- DETECTION unchanged: percentile threshold and state-entry machine. Every admitted extreme is
+  recorded in state.fundingLog (cap 500, action muted|send) and logged to bot.log ("[funding]
+  extreme muted (config.fundingNotices off) · venue SYMBOL rate · reason") BEFORE dispatch.
+- Heartbeat line: "Funding-rate notices: muted · N seen 24h" (ON when the flag is set).
+
+WHAT USES FUNDING AS AN INPUT (checked, left working):
+- OUTCOMES: yes. A dispatched funding fact writes a tracked outcomes row, used for the 24h
+  measurement and the pushed-vs-suppressed comparison per module. Muted, the row is still
+  written, suppressed 'muted:config', kind FACT.
+- EXECUTABILITY: yes, as a side effect. Each funding notice ran the depth check and seeded the
+  universe verdict for its pair. Muted, the check still runs and still seeds the verdict.
+- CONFLUENCE: no (whale withdrawals + DEX/CEX activity only).
+- DIGEST: no (it reads only 'listing-deferred' rows, so a muted row never enters it).
+- The cooldown is still marked on a muted alert, so the detector's rhythm is unchanged.
+- The /start welcome lists "⚡ funding" only while funding notices are on.
+- Not affected: Hyperliquid OPEN INTEREST messages (type OI). They quote the market's funding
+  rate in a line but are not funding notices, so they still send.
+
+Fixture 106 runs the real dispatch with sending off. Muted: false, no thread, cooldown set,
+outcomes row written. Flag on: sent. Also covered: the log line and the heartbeat count, and
+that the gate sits before both the escalation edit and the send.
