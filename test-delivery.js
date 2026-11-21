@@ -4838,42 +4838,47 @@ console.log('105. macro forecasts: ForexFactory snapshot at T-60m, matched by co
     && blsReal.status === 'REQUEST_SUCCEEDED' && F.blsFigure('PPI', blsReal, { kind: 'PPI', date: '2026-11-13' }).status === 'pending');
   check('BLS_SERIES carries the core CPI and core PPI series beside the headline ones', F.BLS_SERIES.CPI.includes('CUSR0000SA0L1E') && F.BLS_SERIES.CPI.includes('CUUR0000SA0L1E') && F.BLS_SERIES.PPI.includes('WPSFD49104') && F.BLS_SERIES.PPI.includes('WPUFD49104'));
 
-  // ---- PPI, 13 Nov: the REAL saved forecast (taken 47h before the release) with an October actual.
-  // The October PPI is not published at capture time, so its four index points are SYNTHETIC,
-  // appended to the real response: +0.4% headline, +0.3% core (seasonally adjusted).
+  // ---- PPI, 13 Nov, all REAL: the October figures from BLS one hour after the release
+  // (fixtures/bls-ppi-2026-11-13-after-release.json, keyless) and the bot's own T-60m
+  // ForexFactory snapshot, frozen from VPS state (fixtures/ppi-2026-11-snapshot.json).
   const ppiEv = { id: 'ppi-2026-11', kind: 'PPI', tier: 'STANDARD', date: '2026-11-13', et: '08:30' };
   const p0 = m.etToUtc(ppiEv.date, ppiEv.et);
-  const withOct = JSON.parse(JSON.stringify(blsReal));
-  const addOct = (id, factor) => { const s = withOct.Results.series.find((x) => x.seriesID === id); const sep = Number(s.data.find((d) => d.year === '2026' && d.period === 'M09').value); s.data.unshift({ year: '2026', period: 'M10', periodName: 'October', value: (sep * factor).toFixed(3), footnotes: [{}] }); };
-  addOct('WPSFD4', 1.004); addOct('WPUFD4', 1.002); addOct('WPSFD49104', 1.003); addOct('WPUFD49104', 1.002);
-  const ppiFig = F.blsFigure('PPI', withOct, ppiEv);
+  const blsAfter = JSON.parse(readFileSync('fixtures/bls-ppi-2026-11-13-after-release.json', 'utf8'));
+  const live = JSON.parse(readFileSync('fixtures/ppi-2026-11-snapshot.json', 'utf8'));
+  const ppiFig = F.blsFigure('PPI', blsAfter.response, ppiEv);
+  const realSnap = live.forecast;
+  check('the bot\'s real snapshot: ok, taken 2026-11-13T12:30:47Z (T-59m, before the 13:30Z release), 0.4% headline and 0.3% core m/m, nothing left out',
+    p0 === Date.parse('2026-11-13T13:30:00Z') && realSnap.status === 'ok' && realSnap.takenAt === '2026-11-13T12:30:47.376Z' && Date.parse(realSnap.takenAt) < p0 && Date.parse(realSnap.takenAt) >= p0 - fc.SNAPSHOT_LEAD_MS
+    && realSnap.items.headline_mm.forecast === 0.4 && realSnap.items.core_mm.forecast === 0.3 && !realSnap.problems.length, JSON.stringify(realSnap));
   const ppiSnap = fc.buildSnapshot('PPI', ff.events, p0, ffAt);
-  check('the saved PPI snapshot: ok, stamped 2026-11-11T15:44Z, before the 13:30Z release; 0.4% headline and 0.3% core m/m; nothing left out',
-    p0 === Date.parse('2026-11-13T13:30:00Z') && ppiSnap.status === 'ok' && ppiSnap.takenAt === ff.fetchedAt && ppiSnap.items.headline_mm.forecast === 0.4 && ppiSnap.items.core_mm.forecast === 0.3 && !ppiSnap.problems.length, JSON.stringify(ppiSnap));
-  const ppi = renderMessage(m.macroMessage(ppiEv, 't5m', { t0: p0, now: p0 + 5 * 60e3, b: '0.12', e: '0.20', fig: ppiFig, snapshot: ppiSnap }), 'public');
-  const ppiOp = renderMessage(m.macroMessage(ppiEv, 't5m', { t0: p0, now: p0 + 5 * 60e3, b: '0.12', e: '0.20', fig: ppiFig, snapshot: ppiSnap }), 'operator');
-  check('PPI renders the standard way: "· Oct" title; m/m lines actual · forecast · previous (previous from BLS); y/y lines actual · previous with NO forecast field; source names both',
+  check('the 11 Nov capture, taken 47h before the release, gives the same two forecasts', ppiSnap.status === 'ok' && ppiSnap.takenAt === ff.fetchedAt && ppiSnap.items.headline_mm.forecast === 0.4 && ppiSnap.items.core_mm.forecast === 0.3);
+  const ppi = renderMessage(m.macroMessage(ppiEv, 't5m', { t0: p0, now: p0 + 6 * 60e3, b: '1.08', e: '1.00', fig: ppiFig, snapshot: realSnap }), 'public');
+  const ppiOp = renderMessage(m.macroMessage(ppiEv, 't5m', { t0: p0, now: p0 + 6 * 60e3, b: '1.08', e: '1.00', fig: ppiFig, snapshot: realSnap }), 'operator');
+  check('the REAL October PPI renders exactly as the bot sent it at 13:35Z (bot.log): y/y actual · previous, m/m actual · forecast · previous, source names both',
     ppi.title === '📊 Producer Price Index (wholesale inflation) · Oct'
-    && ppi.lines[2] === 'Headline m/m: 0.4% · forecast 0.4% · previous 1.3%' && ppi.lines[3] === 'Core m/m: 0.3% · forecast 0.3% · previous 0.7%'
-    && /^Headline y\/y: -?\d+\.\d% · previous 6\.3%$/.test(ppi.lines[0]) && /^Core y\/y: -?\d+\.\d% · previous 5\.0%$/.test(ppi.lines[1])
-    && ppi.lines[4] === 'BTC +0.12% · ETH +0.20% from just before the release to T+5m' && ppi.lines[5] === 'Source: BLS · forecast: ForexFactory', ppi.lines.join(' | '));
-  check('within the public cap, lint-clean (direction, frequency, release spin), and the operator sees when the snapshot was taken',
+    && JSON.stringify(ppi.lines) === JSON.stringify(['Headline y/y: 6.5% · previous 6.3%', 'Core y/y: 5.0% · previous 5.0%', 'Headline m/m: 0.3% · forecast 0.4% · previous 1.4%',
+      'Core m/m: 0.3% · forecast 0.3% · previous 0.8%', 'BTC +1.08% · ETH +1.00% from just before the release to T+6m', 'Source: BLS · forecast: ForexFactory']), ppi.lines.join(' | '));
+  check('the fixture reproduces the live figure rows the bot stored at T+5m, value for value', ['headline_yy', 'core_yy', 'headline_mm', 'core_mm'].every((k) => {
+    const a = ppiFig.rows.find((r) => r.key === k), b = live.fig5.rows.find((r) => r.key === k); return a && b && a.actual === b.actual && a.previous === b.previous; }));
+  check('within the public cap, lint-clean (direction, frequency, release spin), and the operator sees when the snapshot was taken and that the yearly figures were computed (keyless capture)',
     ppi.lines.length <= PUBLIC_MAX_LINES && ppi.text.length <= PUBLIC_MAX_CHARS && [ppi.title, ...ppi.lines].every((l) => !macroProblems(l).length)
-    && ppiOp.lines.some((l) => l === 'Forecast snapshot taken 2026-11-11T15:44Z from ForexFactory, before the release'), `${ppi.lines.length} lines, ${ppi.text.length} chars`);
-  const ffRevised = ff.events.map((e) => (e.country === 'USD' && e.title === 'PPI m/m' ? { ...e, previous: '9.9%' } : e));
-  const ppi2 = renderMessage(m.macroMessage(ppiEv, 't5m', { t0: p0, now: p0 + 5 * 60e3, b: '0.12', e: '0.20', fig: ppiFig, snapshot: fc.buildSnapshot('PPI', ffRevised, p0, ffAt) }), 'public');
-  check('"previous" comes from BLS (revisions included), never from the forecast source: ForexFactory\'s previous changed to 9.9% renders the same 1.3%', ppi2.text === ppi.text);
-  const t30 = renderMessage(m.macroMessage(ppiEv, 't30m', { t0: p0, now: p0 + 30 * 60e3, b5: '0.12', b30: '0.30', held: 'HOLDING', fig: ppiFig, snapshot: ppiSnap }), 'public');
+    && ppiOp.lines.includes('Forecast snapshot taken 2026-11-13T12:30Z from ForexFactory, before the release') && ppiOp.lines.includes('Yearly: Headline y/y computed from BLS index levels · Core y/y computed from BLS index levels'), ppiOp.lines.join(' | '));
+  const ffPrev = (t) => ff.events.find((e) => e.country === 'USD' && e.title === t).previous;
+  check('"previous" comes from BLS with its revision, never from the forecast source: ForexFactory said September was 1.3% / 0.7%; BLS revised it to 1.4% / 0.8%, and the message says 1.4% / 0.8%',
+    ffPrev('PPI m/m') === '1.3%' && ffPrev('Core PPI m/m') === '0.7%' && /previous 1\.4%$/.test(ppi.lines[2]) && /previous 0\.8%$/.test(ppi.lines[3]));
+  const ppi2 = renderMessage(m.macroMessage(ppiEv, 't5m', { t0: p0, now: p0 + 6 * 60e3, b: '1.08', e: '1.00', fig: ppiFig, snapshot: ppiSnap }), 'public');
+  check('the 11 Nov snapshot renders the same public block (same forecasts; only the operator stamp differs)', ppi2.text === ppi.text);
+  const t30 = renderMessage(m.macroMessage(ppiEv, 't30m', { t0: p0, now: p0 + 30 * 60e3, b5: '1.08', b30: '0.90', held: 'HOLDING', fig: ppiFig, snapshot: realSnap }), 'public');
   check('the T+30m message (when it carries the figure) renders the same block', t30.title === '📊 Producer Price Index (wholesale inflation) · Oct (T+30m)' && t30.lines[2] === ppi.lines[2] && t30.lines.at(-1) === 'Source: BLS · forecast: ForexFactory');
 
   // ---- missing forecast
-  const none = renderMessage(m.macroMessage(ppiEv, 't5m', { t0: p0, now: p0 + 5 * 60e3, b: '0.12', e: '0.20', fig: ppiFig, snapshot: null }), 'public');
+  const none = renderMessage(m.macroMessage(ppiEv, 't5m', { t0: p0, now: p0 + 6 * 60e3, b: '1.08', e: '1.00', fig: ppiFig, snapshot: null }), 'public');
   check('no snapshot: the m/m lines say "forecast: not available"; the y/y lines never carry a forecast field; the source names BLS only',
-    none.lines[2] === 'Headline m/m: 0.4% · forecast: not available · previous 1.3%' && none.lines[3] === 'Core m/m: 0.3% · forecast: not available · previous 0.7%'
+    none.lines[2] === 'Headline m/m: 0.3% · forecast: not available · previous 1.4%' && none.lines[3] === 'Core m/m: 0.3% · forecast: not available · previous 0.8%'
     && !/forecast/.test(none.lines[0] + none.lines[1]) && none.lines.at(-1) === 'Source: BLS', none.lines.join(' | '));
-  const oneMissing = { ...ppiSnap, items: { headline_mm: ppiSnap.items.headline_mm } };
-  const part = renderMessage(m.macroMessage(ppiEv, 't5m', { t0: p0, now: p0 + 5 * 60e3, b: '0.12', e: '0.20', fig: ppiFig, snapshot: oneMissing }), 'public');
-  check('one series not captured: only that line says "not available"; the other keeps its forecast', part.lines[2] === 'Headline m/m: 0.4% · forecast 0.4% · previous 1.3%' && part.lines[3] === 'Core m/m: 0.3% · forecast: not available · previous 0.7%');
+  const oneMissing = { ...realSnap, items: { headline_mm: realSnap.items.headline_mm } };
+  const part = renderMessage(m.macroMessage(ppiEv, 't5m', { t0: p0, now: p0 + 6 * 60e3, b: '1.08', e: '1.00', fig: ppiFig, snapshot: oneMissing }), 'public');
+  check('one series not captured: only that line says "not available"; the other keeps its forecast', part.lines[2] === 'Headline m/m: 0.3% · forecast 0.4% · previous 1.4%' && part.lines[3] === 'Core m/m: 0.3% · forecast: not available · previous 0.8%');
 
   // ---- a forecast fetched after the release is refused
   const cpiEv = { id: 'cpi-2026-11', kind: 'CPI', tier: 'FULL', date: '2026-11-10', et: '08:30' };
@@ -4885,13 +4890,14 @@ console.log('105. macro forecasts: ForexFactory snapshot at T-60m, matched by co
   const cpiFig = F.blsFigure('CPI', blsReal, cpiEv);
   const cpi = renderMessage(m.macroMessage(cpiEv, 't5m', { t0: c0, now: c0 + 5 * 60e3, b: '0.31', e: '0.42', fig: cpiFig, snapshot: forged }), 'public');
   check('a record marked ok but stamped after the release is still not read: usableForecast null, the message says "forecast: not available"',
-    Object.keys(forged.items).length === 2 && fc.usableForecast(forged, c0) === null && cpi.lines[2] === 'Headline m/m: 0.4% · forecast: not available · previous 0.6%' && !/forecast 0\.3%/.test(cpi.text), cpi.lines.join(' | '));
+    Object.keys(forged.items).length === 2 && fc.usableForecast(forged, c0) === null && cpi.lines[0] === 'Headline m/m: 0.4% · forecast: not available · previous 0.6%' && !/forecast 0\.3%/.test(cpi.text), cpi.lines.join(' | '));
   let fetched = 0;
   const late = await fc.takeSnapshot(cpiEv, c0, { now: c0 + 1, fetchImpl: async () => { fetched++; return { ok: true, json: async () => ff.events }; } });
   check('takeSnapshot at or after the release refuses without fetching', late.status === 'refused' && fetched === 0);
-  check('the REAL October CPI from BLS: 0.4% m/m (previous 0.6%), core 0.3% (previous 0.3%); y/y "not computable" because BLS has no October 2025 index',
-    cpi.title === '📊 Consumer Price Index (US inflation) · Oct' && cpi.lines[3] === 'Core m/m: 0.3% · forecast: not available · previous 0.3%'
-    && cpi.lines[0] === 'Headline y/y: not computable (BLS has no Oct 2025 index) · previous 3.7%' && cpi.lines[1] === 'Core y/y: not computable (BLS has no Oct 2025 index) · previous 2.6%', cpi.lines.join(' | '));
+  const cpiOp = renderMessage(m.macroMessage(cpiEv, 't5m', { t0: c0, now: c0 + 5 * 60e3, b: '0.31', e: '0.42', fig: cpiFig, snapshot: forged }), 'operator');
+  check('the REAL October CPI (keyless capture): 0.4% m/m (previous 0.6%), core 0.3% (previous 0.3%); both y/y lines LEFT OUT of the public message (no October 2025 index), the reason in the operator lines; "not computable" appears nowhere',
+    cpi.title === '📊 Consumer Price Index (US inflation) · Oct' && cpi.lines[1] === 'Core m/m: 0.3% · forecast: not available · previous 0.3%' && !/y\/y/.test(cpi.text) && !/not computable/.test(cpi.text + cpiOp.text)
+    && cpiOp.lines.includes('Headline y/y omitted: BLS published no 12-month change for Oct 2026 and has no Oct 2025 index') && cpiOp.lines.includes('Core y/y omitted: BLS published no 12-month change for Oct 2026 and has no Oct 2025 index'), cpiOp.lines.join(' | '));
 
   // ---- matching: country + title, at the release time, one row, a plain percentage
   check('the real file holds a Swiss "PPI m/m" too: matching by title alone would find 2 rows; country + title finds the USD one',
@@ -4978,6 +4984,72 @@ console.log('106. funding-rate notices muted by default: detected, logged, measu
   check('inputs unaffected: CONFLUENCE takes no funding input, and the digest reads only listing-deferred rows (a muted row never enters it)',
     !/funding/i.test(readFileSync('src/core/confluence.js', 'utf8')) && [...digestSources()].join() === 'listing-deferred');
   check('the /start welcome lists funding only while funding notices are on', /\$\{config\.fundingNotices \? ' · ⚡ funding' : ''\}/.test(readFileSync('src/core/telegram.js', 'utf8')));
+}
+
+console.log('107. yearly lines: BLS-published 12-month change, else computed from both index levels, else left out (a key failure never drops a computable line)');
+{
+  // (2026-11-21, operator) Order: published (key + calculations=true) -> computed -> omitted.
+  // fixtures/bls-calc-2026-11-21.json is the REAL keyed response (the key is not in it).
+  const m = await import('./src/sources/calendar/macro.js');
+  const F = await import('./src/sources/calendar/figures.js');
+  const { renderMessage } = await import('./src/core/dispatcher.js');
+  const calc = JSON.parse(readFileSync('fixtures/bls-calc-2026-11-21.json', 'utf8'));
+  const after = JSON.parse(readFileSync('fixtures/bls-ppi-2026-11-13-after-release.json', 'utf8')).response;
+  const snap = JSON.parse(readFileSync('fixtures/ppi-2026-11-snapshot.json', 'utf8')).forecast;
+  const ppiEv = { id: 'ppi-2026-11', kind: 'PPI', tier: 'STANDARD', date: '2026-11-13', et: '08:30' }, p0 = m.etToUtc(ppiEv.date, ppiEv.et);
+  const cpiEv = { id: 'cpi-2026-11', kind: 'CPI', tier: 'FULL', date: '2026-11-10', et: '08:30' }, c0 = m.etToUtc(cpiEv.date, cpiEv.et);
+  const sepCpiEv = { id: 'cpi-2026-10', kind: 'CPI', tier: 'FULL', date: '2026-10-14', et: '08:30' }, s0 = m.etToUtc(sepCpiEv.date, sepCpiEv.et);
+  const row = (fig, k) => fig.rows.find((r) => r.key === k);
+  const msg = (ev, t0, fig, s = null, aud = 'public') => renderMessage(m.macroMessage(ev, 't5m', { t0, now: t0 + 6 * 60e3, b: '1.08', e: '1.00', fig, snapshot: s }), aud);
+  check('the real keyed capture carries BLS calculations, and no registration key', calc.response.status === 'REQUEST_SUCCEEDED' && calc.response.Results.series.some((s) => s.data.some((d) => d.calculations?.pct_changes?.['12']))
+    && !/registrationkey/i.test(JSON.stringify(calc)));
+
+  // ---- 1. published
+  const pPub = F.blsFigure('PPI', calc.response, ppiEv);
+  const pubOp = msg(ppiEv, p0, pPub, snap, 'operator');
+  check('PPI with the key: the y/y lines use BLS\'s PUBLISHED 12-month change (6.5%, previous 6.3%; core 5.0%, previous 5.0%), and the operator line says so',
+    row(pPub, 'headline_yy').basis === 'published' && row(pPub, 'headline_yy').actual === 6.5 && row(pPub, 'headline_yy').previous === 6.3 && row(pPub, 'core_yy').actual === 5.0 && row(pPub, 'core_yy').basis === 'published'
+    && pubOp.lines.includes('Yearly: Headline y/y published by BLS · Core y/y published by BLS') && msg(ppiEv, p0, pPub, snap).lines[0] === 'Headline y/y: 6.5% · previous 6.3%', pubOp.lines.join(' | '));
+  const tweaked = JSON.parse(JSON.stringify(calc.response));
+  tweaked.Results.series.find((s) => s.seriesID === 'WPUFD4').data.find((d) => d.year === '2026' && d.period === 'M10').calculations.pct_changes['12'] = '9.9';
+  check('MUTATION, the published figure changed to 9.9: the line says 9.9% — the published figure wins over the index levels (which give 6.5)', row(F.blsFigure('PPI', tweaked, ppiEv), 'headline_yy').actual === 9.9);
+  const sepCpi = msg(sepCpiEv, s0, F.blsFigure('CPI', calc.response, sepCpiEv));
+  check('CPI with a published 12-month change renders it: September 2026 CPI, real keyed capture, "Headline y/y: 3.7% · previous 2.9%"-shaped line from BLS\'s own figure',
+    row(F.blsFigure('CPI', calc.response, sepCpiEv), 'headline_yy').basis === 'published' && /^Headline y\/y: 3\.7% · previous \d+\.\d%$/.test(sepCpi.lines[0]), sepCpi.lines.join(' | '));
+
+  // ---- 3. omitted: October 2026 CPI (real): BLS published none and has no October 2025 index
+  const cOct = F.blsFigure('CPI', calc.response, cpiEv);
+  const cOctPub = msg(cpiEv, c0, cOct), cOctOp = msg(cpiEv, c0, cOct, null, 'operator');
+  check('October 2026 CPI, real keyed capture: BLS published NO 12-month change (and has no October 2025 index) — both y/y lines are left out of the public message, the reason logged in the operator lines',
+    row(cOct, 'headline_yy').actual === null && row(cOct, 'headline_yy').basis === null && !/y\/y/.test(cOctPub.text) && !/not computable/.test(cOctPub.text)
+    && cOctOp.lines.includes('Headline y/y omitted: BLS published no 12-month change for Oct 2026 and has no Oct 2025 index') && cOctPub.lines[0] === 'Headline m/m: 0.4% · forecast: not available · previous 0.6%', cOctOp.lines.join(' | '));
+
+  // ---- 2. computed, whatever happened to the key
+  const calls = [];
+  const fake = (onKeyed) => async (url, init) => { const body = JSON.parse(init.body); calls.push(body); return body.registrationkey ? onKeyed() : { ok: true, status: 200, json: async () => after }; };
+  const budget = () => { let n = 0; return { take: () => (++n, true), get n() { return n; } }; };
+  const b1 = budget();
+  const rejected = await F.figureFor(ppiEv, { blsKey: 'TESTKEY0123', budget: b1, fetchImpl: fake(() => ({ ok: true, status: 200, json: async () => ({ status: 'REQUEST_NOT_PROCESSED', message: ['Invalid registration key'] }) })) });
+  const rejMsg = msg(ppiEv, p0, rejected, snap), rejOp = msg(ppiEv, p0, rejected, snap, 'operator');
+  check('KEY REJECTED, both index levels present: retried once without the key, and the y/y lines render the COMPUTED figure (6.5%, 5.0%) — not dropped',
+    calls.length === 2 && calls[0].registrationkey === 'TESTKEY0123' && calls[0].calculations === true && !('registrationkey' in calls[1]) && !('calculations' in calls[1]) && b1.n === 2
+    && row(rejected, 'headline_yy').basis === 'computed' && rejMsg.lines[0] === 'Headline y/y: 6.5% · previous 6.3%' && rejMsg.lines[1] === 'Core y/y: 5.0% · previous 5.0%'
+    && rejOp.lines.includes('BLS: BLS refused the keyed request (REQUEST_NOT_PROCESSED: Invalid registration key); retried without the key'), rejOp.lines.join(' | '));
+  check('the key never appears in the figure, its notes or the rendered message', !JSON.stringify(rejected).includes('TESTKEY0123') && !rejOp.text.includes('TESTKEY0123'));
+  calls.length = 0;
+  const broke = await F.figureFor(ppiEv, { blsKey: 'TESTKEY0123', fetchImpl: fake(() => { throw new Error('socket hang up'); }) });
+  check('KEYED REQUEST FAILED (network): the same fallback, computed lines kept', calls.length === 2 && row(broke, 'headline_yy').actual === 6.5 && /keyed BLS request failed \(socket hang up\); retried without the key/.test(broke.keyNote));
+  calls.length = 0;
+  const disabled = await F.figureFor(ppiEv, { blsKey: 'TESTKEY0123', fetchImpl: fake(() => ({ ok: true, status: 200, json: async () => ({ ...after, message: ['Calculations have been disabled for this request.'] }) })) });
+  check('key sent but calculations not given ("disabled"): ONE request, the lines computed from its index levels, and the note says why', calls.length === 1 && row(disabled, 'headline_yy').basis === 'computed' && row(disabled, 'headline_yy').actual === 6.5 && /key not accepted for calculations/.test(disabled.keyNote));
+  calls.length = 0;
+  const noKey = await F.figureFor(ppiEv, { blsKey: '', fetchImpl: fake(() => { throw new Error('must not send a key'); }) });
+  check('NO KEY: one keyless request, computed lines, and the note says the yearly changes are computed', calls.length === 1 && !('registrationkey' in calls[0]) && row(noKey, 'headline_yy').basis === 'computed' && /no BLS_API_KEY/.test(noKey.keyNote));
+  calls.length = 0;
+  const keyed = await F.figureFor(ppiEv, { blsKey: 'TESTKEY0123', fetchImpl: fake(() => ({ ok: true, status: 200, json: async () => calc.response })) });
+  check('KEY ACCEPTED: one request, with calculations=true, and the y/y lines are BLS\'s published figures', calls.length === 1 && calls[0].calculations === true && row(keyed, 'headline_yy').basis === 'published' && row(keyed, 'core_yy').basis === 'published');
+  check('heartbeat: the macro line says whether the 12-month changes are published or computed', /BLS key: published 12-month changes, computed where BLS has none/.test(F.macroFigureCoverage({ blsKey: 'k', beaKey: '' }).line) && /no BLS key: 12-month changes computed from index levels/.test(F.macroFigureCoverage({ blsKey: '', beaKey: '' }).line));
+  check('config reads BLS_API_KEY as optional, beside BEA_API_KEY', /blsKey: process\.env\.BLS_API_KEY \|\| ''/.test(readFileSync('src/config.js', 'utf8')));
 }
 
 // A block that mutes the console and forgets to restore it hides every section header after it.

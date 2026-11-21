@@ -1,0 +1,64 @@
+{
+ "note": "FROZEN from the VPS state (state.macro['ppi-2026-11']): the T-60m ForexFactory snapshot the bot took before the 2026-11-13 13:30Z PPI release, and the T+5m figure rows it rendered (bot.log 13:35Z). Copied 2026-11-21T07:39:08.583Z.",
+ "forecast": {
+  "status": "ok",
+  "kind": "PPI",
+  "source": "ForexFactory",
+  "takenAt": "2026-11-13T12:30:47.376Z",
+  "items": {
+   "headline_mm": {
+    "forecast": 0.4,
+    "raw": "0.4%",
+    "title": "PPI m/m",
+    "country": "USD"
+   },
+   "core_mm": {
+    "forecast": 0.3,
+    "raw": "0.3%",
+    "title": "Core PPI m/m",
+    "country": "USD"
+   }
+  },
+  "problems": []
+ },
+ "fig5": {
+  "status": "ok",
+  "refMon": "Oct",
+  "rows": [
+   {
+    "key": "headline_yy",
+    "label": "Headline y/y",
+    "actual": 6.5,
+    "previous": 6.3,
+    "why": "not in the BLS series yet"
+   },
+   {
+    "key": "core_yy",
+    "label": "Core y/y",
+    "actual": 5,
+    "previous": 5,
+    "why": "not in the BLS series yet"
+   },
+   {
+    "key": "headline_mm",
+    "label": "Headline m/m",
+    "actual": 0.3,
+    "previous": 1.4,
+    "why": "not in the BLS series yet"
+   },
+   {
+    "key": "core_mm",
+    "label": "Core m/m",
+    "actual": 0.3,
+    "previous": 0.8,
+    "why": "not in the BLS series yet"
+   }
+  ],
+  "at": 1794576947649
+ },
+ "fired": {
+  "t24h": 1794490223400,
+  "t5m": 1794576957206,
+  "t30m": "not-needed"
+ }
+}

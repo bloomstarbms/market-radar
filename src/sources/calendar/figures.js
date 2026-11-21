@@ -5,7 +5,9 @@
 // Nothing here estimates, interpolates or fills a gap: "never guess".
 //
 //   Federal Reserve rate decision   federalreserve.gov press feed -> the statement page (keyless)
-//   CPI · Non-Farm Payrolls · PPI   api.bls.gov v2 timeseries (keyless, 25 queries a day)
+//   CPI · Non-Farm Payrolls · PPI   api.bls.gov v2 timeseries (25 queries a day budgeted); with
+//                                   BLS_API_KEY, calculations=true gives BLS's own 12-month
+//                                   changes, and without it (or if BLS refuses it) they are computed
 //   PCE                             apps.bea.gov API with BEA_API_KEY (free registration);
 //                                   without a key it is not fetched, and the heartbeat says why
 //
@@ -135,6 +137,14 @@ const point = (series, y, m) => {
 };
 // BLS computes percent changes from the published (3-decimal) index levels, rounded to one decimal.
 const pctChange = (a, b) => (a !== null && b !== null && b !== 0 ? Math.round(((a / b) - 1) * 1000) / 10 : null);
+// BLS's own 12-month percent change for a point, present only when the request carried a valid
+// key and calculations=true (keyless: "Calculations have been disabled for this request").
+const published12 = (series, y, m) => {
+  const d = series?.data?.find((x) => x.year === String(y) && x.period === `M${String(m).padStart(2, '0')}`);
+  const raw = d?.calculations?.pct_changes?.['12'];
+  const v = raw === undefined || raw === null || String(raw).trim() === '' ? NaN : Number(raw);
+  return Number.isFinite(v) ? v : null;
+};
 const signed = (x, unit = '%') => `${x >= 0 ? '+' : '-'}${Math.abs(x).toFixed(1)}${unit}`;
 export function blsFigure(kind, json, ev) {
   if (json?.status !== 'REQUEST_SUCCEEDED') return { status: 'error', why: `BLS answered ${json?.status ?? 'nothing'} ${(json?.message ?? []).join(' ').slice(0, 80)}`.trim() };
@@ -159,12 +169,21 @@ export function blsFigure(kind, json, ev) {
   // A yearly change needs the index twelve months back; when BLS has none (October 2025
   // CPI was never published) the row says so instead of vanishing.
   const [ppy, ppm] = prevMonth(py, pm);
-  const monthly = (id) => ({ actual: id ? pctChange(point(S[id], y, m), point(S[id], py, pm)) : null,
-    previous: id ? pctChange(point(S[id], py, pm), point(S[id], ppy, ppm)) : null, why: 'not in the BLS series yet' });
+  const monthly = (id) => { const a = id ? pctChange(point(S[id], y, m), point(S[id], py, pm)) : null;
+    return { actual: a, previous: id ? pctChange(point(S[id], py, pm), point(S[id], ppy, ppm)) : null, basis: a !== null ? 'computed' : null, why: a !== null ? null : `${mon} ${y} not in the BLS series yet` }; };
+  // YEARLY ORDER (operator, 2026-11-21): BLS's own published 12-month change (calculations=true,
+  // needs the key) -> computed from the two index levels when both exist -> no figure, and the
+  // line is left out of the public message (macro.js), the reason going to the operator lines.
+  // A key failure only ever drops to "computed"; it never removes a line the bot can calculate.
+  // Real case, 2026-11-21: October 2026 CPI has no published 12-month change and no October
+  // 2025 index, so both CPI yearly lines are omitted; October PPI is published (6.5%, 5.0%).
   const yearly = (id) => {
+    const pubA = published12(S[id], y, m), pubP = published12(S[id], py, pm);
     const cur = id ? point(S[id], y, m) : null, base = id ? point(S[id], y - 1, m) : null;
-    return { actual: pctChange(cur, base), previous: id ? pctChange(point(S[id], py, pm), point(S[id], py - 1, pm)) : null,
-      why: cur !== null && base === null ? `not computable (BLS has no ${mon} ${y - 1} index)` : 'not in the BLS series yet' };
+    const compA = pctChange(cur, base), compP = id ? pctChange(point(S[id], py, pm), point(S[id], py - 1, pm)) : null;
+    const actual = pubA ?? compA;
+    return { actual, previous: pubP ?? compP, basis: pubA !== null ? 'published' : compA !== null ? 'computed' : null,
+      why: actual !== null ? null : cur !== null ? `BLS published no 12-month change for ${mon} ${y}${base === null ? ` and has no ${mon} ${y - 1} index` : ''}` : `${mon} ${y} not in the BLS series yet` };
   };
   const rows = [
     { key: 'headline_yy', label: 'Headline y/y', ...yearly(nsaId) }, { key: 'core_yy', label: 'Core y/y', ...yearly(coreNsaId) },
@@ -210,13 +229,36 @@ export async function figureFor(ev, deps = {}) {
       return { status: 'ok', source: 'federalreserve.gov', link: item.link, headline: s.headline, detail: s.detail, line: s.line, problems: parsed.problems };
     }
     if (BLS_SERIES[ev.kind]) {
-      if (deps.budget && !deps.budget.take()) return { status: 'error', why: `BLS keyless budget (${BLS_DAILY_QUERIES} queries a day) used up` };
       const [y] = refMonth(ev);
-      const r = await fetchImpl(BLS_API, { method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': UA }, signal: AbortSignal.timeout(30000),
-        // Two years back: the PRIOR month's yearly change of a January release needs the December before last.
-        body: JSON.stringify({ seriesid: BLS_SERIES[ev.kind], startyear: String(y - 2), endyear: String(y) }) });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return blsFigure(ev.kind, await r.json(), ev);
+      // Two years back: the PRIOR month's yearly change of a January release needs the December before last.
+      const base = { seriesid: BLS_SERIES[ev.kind], startyear: String(y - 2), endyear: String(y) };
+      const ask = async (body) => {
+        if (deps.budget && !deps.budget.take()) return { budgetOut: true };
+        const r = await fetchImpl(BLS_API, { method: 'POST', headers: { 'Content-Type': 'application/json', 'User-Agent': UA }, signal: AbortSignal.timeout(30000), body: JSON.stringify(body) });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`); // the body carries the key: it is never logged
+        return { json: await r.json() };
+      };
+      // With the key: BLS's published 12-month changes. A rejected key, a refusal or a failed
+      // request falls back to ONE keyless request, which computes the same lines from the index
+      // levels: a key problem never costs the reader a line the bot can calculate.
+      const key = deps.blsKey ?? config.blsKey;
+      let keyNote = key ? null : 'no BLS_API_KEY: yearly changes computed from index levels';
+      if (key) {
+        try {
+          const a = await ask({ ...base, registrationkey: key, calculations: true });
+          if (a.budgetOut) return { status: 'error', why: `BLS budget (${BLS_DAILY_QUERIES} queries a day) used up` };
+          if (a.json?.status === 'REQUEST_SUCCEEDED') {
+            const fig = blsFigure(ev.kind, a.json, ev);
+            const disabled = (a.json.message ?? []).find((s) => /calculations have been disabled/i.test(s));
+            return { ...fig, keyNote: disabled ? `key not accepted for calculations ("${disabled.slice(0, 60)}"): yearly changes computed from index levels` : 'BLS key used: published 12-month changes where BLS has them' };
+          }
+          keyNote = `BLS refused the keyed request (${a.json?.status ?? 'no status'}${(a.json?.message ?? []).length ? `: ${String(a.json.message[0]).slice(0, 60)}` : ''}); retried without the key`;
+        } catch (e) { keyNote = `keyed BLS request failed (${String(e.message).slice(0, 40)}); retried without the key`; }
+      }
+      const b = await ask(base);
+      if (b.budgetOut) return { status: 'error', why: `BLS budget (${BLS_DAILY_QUERIES} queries a day) used up` };
+      const fig = blsFigure(ev.kind, b.json, ev);
+      return { ...fig, keyNote };
     }
     if (ev.kind === 'PCE') {
       const key = deps.key ?? config.beaKey;
@@ -233,5 +275,5 @@ export async function figureFor(ev, deps = {}) {
 }
 // The heartbeat's line: which figures are fetched, from where, and why one is not.
 export function macroFigureCoverage(cfg = config) {
-  return { line: `Macro figures: CPI · NFP · PPI from api.bls.gov (keyless, ${BLS_DAILY_QUERIES}/day) · Fed decision from federalreserve.gov · PCE ${cfg.beaKey ? 'from apps.bea.gov' : '⚠️ not fetched: no BEA_API_KEY in .env (free key at apps.bea.gov/API/signup)'}` };
+  return { line: `Macro figures: CPI · NFP · PPI from api.bls.gov (${cfg.blsKey ? 'BLS key: published 12-month changes, computed where BLS has none' : 'no BLS key: 12-month changes computed from index levels'}, ${BLS_DAILY_QUERIES}/day) · Fed decision from federalreserve.gov · PCE ${cfg.beaKey ? 'from apps.bea.gov' : '⚠️ not fetched: no BEA_API_KEY in .env (free key at apps.bea.gov/API/signup)'}` };
 }

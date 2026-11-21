@@ -5820,3 +5820,57 @@ WHAT USES FUNDING AS AN INPUT (checked, left working):
 Fixture 106 runs the real dispatch with sending off. Muted: false, no thread, cooldown set,
 outcomes row written. Flag on: sent. Also covered: the log line and the heartbeat count, and
 that the gate sits before both the escalation edit and the send.
+
+## 2026-11-21 — YEARLY LINES: BLS-PUBLISHED, ELSE COMPUTED, ELSE LEFT OUT; THE 13 NOV PPI
+
+THE 13 NOV PPI (v0.37.22, from disk):
+- The snapshot was taken at 12:30:47Z (T-59m): PPI m/m 0.4%, Core PPI m/m 0.3%, nothing left
+  out.
+- T+5m was sent at 13:35:57Z, and bot.log has it verbatim:
+  - "📊 Producer Price Index (wholesale inflation) · Oct"
+  - Headline y/y: 6.5% · previous 6.3%
+  - Core y/y: 5.0% · previous 5.0%
+  - Headline m/m: 0.3% · forecast 0.4% · previous 1.4%
+  - Core m/m: 0.3% · forecast 0.3% · previous 0.8%
+  - BTC +1.08% · ETH +1.00% to T+6m
+  - Source: BLS · forecast: ForexFactory
+- No T+30m (figure out at T+5m). Delivery: operator to confirm.
+- BLS revised September between ForexFactory's file and the release (headline 1.3 -> 1.4, core
+  0.7 -> 0.8). The message showed the revised BLS figures, as designed.
+- Myfxbook's RSS on the day carried previous, consensus and actual for 7 US PPI lines. PPI MoM
+  consensus 0.4%, actual 0.3%; Core PPI MoM 0.3%/0.3%; PPI YoY 6.6%/6.5%; Core PPI YoY
+  5.0%/5.0%. Its m/m consensus equals ForexFactory's. It is a possible same-day backup, and it
+  alone has y/y consensus. Not wired.
+
+BLS CALCULATIONS (operator, 2026-11-13/21):
+- Keyless, BLS answers "Calculations have been disabled for this request".
+- BLS_API_KEY was added to the VPS .env on 2026-11-13 by a streamed script; never read or
+  printed.
+- The real keyed capture (fixtures/bls-calc-2026-11-21.json, key not in it) shows that October
+  2026 CPI has NO published 12-month change, headline or core (October 2025 index missing). It
+  has published 1-month changes (0.4%, 0.3%). October PPI is published: 6.5% headline, 5.0% core.
+
+WHAT SHIPPED:
+- figures.js
+  - With the key: calculations=true. Yearly lines in order: BLS's published 12-month change,
+    else computed from both index levels, else no figure.
+  - A refused keyed request (status, HTTP or network) is retried ONCE without the key, so a
+    key problem only ever drops to "computed".
+  - The key is in the POST body only, never logged, and never in a figure or a note.
+  - Heartbeat: "BLS key: published 12-month changes, computed where BLS has none" or
+    "no BLS key: …".
+- macro.js: a line with no figure is LEFT OUT of the public message. The operator lines (in the
+  bot.log disk record) say "<line> omitted: <reason>", and which yearly lines were published or
+  computed. "not computable" is gone.
+- Fixture 105 is now all real:
+  - October PPI from the after-release BLS capture (fixtures/bls-ppi-2026-11-13-after-release.json).
+  - The bot's own snapshot (fixtures/ppi-2026-11-snapshot.json, from VPS state).
+  - It reproduces the 13:35Z message line for line and the stored figure rows value for value.
+  - The synthetic October points are gone.
+- Fixture 107 covers each path:
+  - Published: October PPI, and September CPI (3.7%).
+  - Published wins over computed.
+  - October CPI: lines omitted, with the reason given.
+  - Key rejected, or the keyed request failed: retried keyless, computed lines kept.
+  - Calculations disabled: computed.
+  - No key: one keyless request.

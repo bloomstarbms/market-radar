@@ -1,5 +1,5 @@
 <!-- PREMISE
-Written against: v0.37.23
+Written against: v0.37.24
 Tracks: live
 Reviewed: 2026-08-29
 Assumes:

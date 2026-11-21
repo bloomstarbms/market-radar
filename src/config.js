@@ -13,7 +13,7 @@ if (existsSync(envPath)) {
   }
 }
 
-export const VERSION = '0.37.23';
+export const VERSION = '0.37.24';
 
 // A COPY OF THE TREE MUST NOT SEND. Twice (2026-09-15, 2026-09-17) a boot check on a
 // tree copy carried .env and pushed "cliff today" reminders that the live bot then
@@ -78,6 +78,9 @@ export const config = {
   twitterapiKey: process.env.TWITTERAPI_KEY || '', // builder-follows; PAID (cap in builder-follows.json)
   sosovalueKey: process.env.SOSOVALUE_KEY || '', // US spot ETF flows (SoSoValue API); without it the module is OFF
   beaKey: process.env.BEA_API_KEY || '', // PCE figures (free key, apps.bea.gov/API/signup); without it PCE is "not fetched"
+  // BLS registration key (free): unlocks BLS's own published 12-month changes (calculations=true).
+  // Optional — without it, or when BLS rejects it, yearly lines are computed from index levels.
+  blsKey: process.env.BLS_API_KEY || '',
   // Tier delivery declarations — read by the boot assertion in core/routes.js.
   // A tier with no reader is a CONFIG BUG unless it is DECLARED recorded-only here;
   // that distinction (intent vs accident) is the entire value of the guard, and

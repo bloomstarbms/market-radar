@@ -115,13 +115,23 @@ export function figureBlock(ev, fig, snapshot, t0) {
   const map = FORECAST_MAP[ev.kind] ?? {};
   const fc = usableForecast(snapshot, t0);
   let shown = 0;
-  const lines = fig.rows.map((r) => {
+  // A series with no figure is LEFT OUT of the public message (operator, 2026-11-21): no
+  // "not computable", no placeholder. The reason goes to the operator lines, which the disk
+  // record (bot.log) carries.
+  const present = fig.rows.filter((r) => r.actual !== null);
+  const lines = present.map((r) => {
     const f = !map[r.key] ? null : fc?.[r.key] ? (shown++, `forecast ${pctTxt(fc[r.key].forecast)}`) : 'forecast: not available';
-    return `${r.label}: ${[r.actual !== null ? pctTxt(r.actual) : r.why, f, r.previous !== null ? `previous ${pctTxt(r.previous)}` : null].filter(Boolean).join(' · ')}`;
+    return `${r.label}: ${[pctTxt(r.actual), f, r.previous !== null ? `previous ${pctTxt(r.previous)}` : null].filter(Boolean).join(' · ')}`;
   });
-  const operator = !Object.keys(map).length ? []
-    : [fc ? `Forecast snapshot taken ${snapshot.takenAt.slice(0, 16)}Z from ${FORECAST_SOURCE}, before the release${snapshot.problems?.length ? ` · left out: ${snapshot.problems.join('; ')}` : ''}`
-      : `Forecast: no usable snapshot (${snapshot ? `${snapshot.status}${snapshot.why ? ': ' + snapshot.why : ''}${snapshot.takenAt ? ', stamped ' + snapshot.takenAt.slice(0, 16) + 'Z' : ''}` : 'none was taken before the release'}); nothing is filled in afterwards`];
+  const yearlyBasis = fig.rows.filter((r) => r.actual !== null && /_yy$/.test(r.key)).map((r) => `${r.label} ${r.basis === 'published' ? 'published by BLS' : 'computed from BLS index levels'}`);
+  const operator = [
+    ...fig.rows.filter((r) => r.actual === null).map((r) => `${r.label} omitted: ${r.why}`),
+    ...(yearlyBasis.length ? [`Yearly: ${yearlyBasis.join(' · ')}`] : []),
+    ...(fig.keyNote ? [`BLS: ${fig.keyNote}`] : []),
+    ...(!Object.keys(map).length ? []
+      : [fc ? `Forecast snapshot taken ${snapshot.takenAt.slice(0, 16)}Z from ${FORECAST_SOURCE}, before the release${snapshot.problems?.length ? ` · left out: ${snapshot.problems.join('; ')}` : ''}`
+        : `Forecast: no usable snapshot (${snapshot ? `${snapshot.status}${snapshot.why ? ': ' + snapshot.why : ''}${snapshot.takenAt ? ', stamped ' + snapshot.takenAt.slice(0, 16) + 'Z' : ''}` : 'none was taken before the release'}); nothing is filled in afterwards`]),
+  ];
   return { lines, source: `Source: ${fig.sourceName ?? fig.source}${shown ? ` · forecast: ${FORECAST_SOURCE}` : ''}`, operator };
 }
 // The figure block, the market line and the source fit the public cap; a late-delivery
