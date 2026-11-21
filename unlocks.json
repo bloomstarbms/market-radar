@@ -1,7 +1,7 @@
 {
  "comment": "Token unlock watchlist. Two entry types: 'monthlyDay' = recurring cliff on that day each month (most vesting contracts release monthly); 'date' = one-off YYYY-MM-DD. Bot pings 7 days and 3 days before. verified:true = confirmed against cryptorank.io/token-unlock on 2026-08-01; others are recurring-schedule estimates — check the date on cryptorank before acting.",
  "source": "https://cryptorank.io/token-unlock (free public page)",
- "lastReviewed": "2026-11-05 (observation on STRK via promote-unlock.js)",
+ "lastReviewed": "2026-11-21 (sourced RE via promote-unlock.js)",
  "tokens": [
   {
    "sym": "EIGEN",
@@ -64,7 +64,7 @@
    "name": "ZetaChain",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
     {
      "t": 1785637890,
@@ -175,8 +175,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0xf091867ec603a6628ed83d274e835539d82e9cc8",
-   "circSupply": 1699113094.3799505,
-   "totalLocked": 400891390.84779525,
+   "circSupply": 1701844158.8695655,
+   "totalLocked": 398160326.3581803,
    "maxSupply": 2100004485.2277458
   },
   {
@@ -192,7 +192,7 @@
    "name": "Maverick Protocol",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
     {
      "t": 1785540576,
@@ -315,8 +315,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0x7448c7456a97769f6cd04f1e83a4a23ccdc46abd",
-   "circSupply": 1118858804.4543412,
-   "totalLocked": 881141195.5456588,
+   "circSupply": 1122878848.9977708,
+   "totalLocked": 877121151.0022292,
    "maxSupply": 2000000000
   },
   {
@@ -332,14 +332,8 @@
    "name": "Starknet",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
-    {
-     "t": 1784093604,
-     "type": "cliff",
-     "n": 226356431,
-     "cats": "insiders+liquidity+privateSale"
-    },
     {
      "t": 1786723347,
      "type": "cliff",
@@ -435,6 +429,12 @@
      "type": "cliff",
      "n": 63523098,
      "cats": "insiders+liquidity"
+    },
+    {
+     "t": 1828799235,
+     "type": "cliff",
+     "n": 63523098,
+     "cats": "insiders+liquidity"
     }
    ],
    "chain": "starknet",
@@ -465,8 +465,8 @@
     }
    },
    "token": "starknet:0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d",
-   "circSupply": 7145762221.26087,
-   "totalLocked": 2849237770.73913,
+   "circSupply": 7372118652.086957,
+   "totalLocked": 2622881339.913043,
    "maxSupply": 9994999992
   },
   {
@@ -474,14 +474,8 @@
    "name": "Arbitrum",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
-    {
-     "t": 1784183604,
-     "type": "cliff",
-     "n": 92645833,
-     "cats": "insiders+privateSale"
-    },
     {
      "t": 1786813347,
      "type": "cliff",
@@ -553,8 +547,8 @@
     }
    },
    "token": "arbitrum:0x912ce59144191c1204e64559fe8253a0e49e6548",
-   "circSupply": 7147500300.6129265,
-   "totalLocked": 2852499699.3870735,
+   "circSupply": 7249899727.375418,
+   "totalLocked": 2750100272.6245823,
    "maxSupply": 10000000000
   },
   {
@@ -568,14 +562,8 @@
    "name": "zkSync",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
-    {
-     "t": 1784325985,
-     "type": "cliff",
-     "n": 173038250,
-     "cats": "privateSale+insiders"
-    },
     {
      "t": 1786955728,
      "type": "cliff",
@@ -671,6 +659,12 @@
      "type": "cliff",
      "n": 173038250,
      "cats": "privateSale+insiders"
+    },
+    {
+     "t": 1829031616,
+     "type": "cliff",
+     "n": 173038250,
+     "cats": "privateSale+insiders"
     }
    ],
    "chain": "unconfirmed",
@@ -678,8 +672,8 @@
    "note": "",
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
-   "circSupply": 7213535000,
-   "totalLocked": 13786465000,
+   "circSupply": 7386573250,
+   "totalLocked": 13613426750,
    "maxSupply": 21000000000
   },
   {
@@ -717,14 +711,8 @@
    "name": "Cyber",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
-    {
-     "t": 1784098605,
-     "type": "cliff",
-     "n": 886117,
-     "cats": "noncirculating+insiders"
-    },
     {
      "t": 1786728348,
      "type": "cliff",
@@ -820,6 +808,12 @@
      "type": "cliff",
      "n": 163200,
      "cats": "noncirculating"
+    },
+    {
+     "t": 1828804236,
+     "type": "cliff",
+     "n": 163200,
+     "cats": "noncirculating"
     }
    ],
    "chain": "ethereum",
@@ -828,8 +822,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0x14778860e937f509e651192a90589de711fb88a9",
-   "circSupply": 78307100,
-   "totalLocked": 21692899.999999985,
+   "circSupply": 82161550,
+   "totalLocked": 17838449.999999985,
    "maxSupply": 99999999.99999999
   },
   {
@@ -843,7 +837,7 @@
    "name": "Sui",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
     {
      "t": 1785524661,
@@ -1088,14 +1082,8 @@
    "name": "Sei",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
-    {
-     "t": 1784012205,
-     "type": "cliff",
-     "n": 121111110,
-     "cats": "staking+privateSale+insiders"
-    },
     {
      "t": 1786641948,
      "type": "cliff",
@@ -1191,6 +1179,12 @@
      "type": "cliff",
      "n": 11250000,
      "cats": "staking"
+    },
+    {
+     "t": 1828717836,
+     "type": "cliff",
+     "n": 11250000,
+     "cats": "staking"
     }
    ],
    "chain": "unconfirmed",
@@ -1198,8 +1192,8 @@
    "note": "",
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
-   "circSupply": 7699722193,
-   "totalLocked": 2300277767,
+   "circSupply": 7819583303,
+   "totalLocked": 2180416657,
    "maxSupply": 9999999960
   },
   {
@@ -1207,22 +1201,9 @@
    "name": "Aptos",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
     {
-     "t": 1783871235,
-     "type": "cliff",
-     "n": 11309783,
-     "cats": "noncirculating+insiders+privateSale"
-    },
-    {
-     "t": 1783871235,
-     "type": "linear",
-     "n": 796100,
-     "cats": "staking",
-     "rd": 30.44
-    },
-    {
      "t": 1786500978,
      "type": "cliff",
      "n": 11309783,
@@ -1231,7 +1212,7 @@
     {
      "t": 1786500978,
      "type": "linear",
-     "n": 798200,
+     "n": 793600,
      "cats": "staking",
      "rd": 30.44
     },
@@ -1244,7 +1225,7 @@
     {
      "t": 1789130721,
      "type": "linear",
-     "n": 800400,
+     "n": 795800,
      "cats": "staking",
      "rd": 30.44
     },
@@ -1253,6 +1234,13 @@
      "type": "cliff",
      "n": 11309783,
      "cats": "noncirculating+insiders+privateSale"
+    },
+    {
+     "t": 1791760464,
+     "type": "linear",
+     "n": 797900,
+     "cats": "staking",
+     "rd": 30.44
     },
     {
      "t": 1794390207,
@@ -1331,6 +1319,12 @@
      "type": "cliff",
      "n": 4543478,
      "cats": "noncirculating"
+    },
+    {
+     "t": 1828576866,
+     "type": "cliff",
+     "n": 4543478,
+     "cats": "noncirculating"
     }
    ],
    "chain": "unconfirmed",
@@ -1338,8 +1332,8 @@
    "note": "",
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
-   "circSupply": 877179987.0691667,
-   "totalLocked": 1222820012.9308333,
+   "circSupply": 889430686.76904,
+   "totalLocked": 1210569313.23096,
    "maxSupply": 2100000000
   },
   {
@@ -1347,116 +1341,8 @@
    "name": "Celestia",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
-    {
-     "t": 1783367326,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1783453726,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1783540126,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1783626526,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1783712926,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1783799326,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1783885726,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1783972126,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1784058526,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1784144926,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1784231326,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1784317726,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1784404126,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1784490526,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1784576926,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1784663326,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1784749726,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
-    {
-     "t": 1784836126,
-     "type": "cliff",
-     "n": 183562,
-     "cats": "ecosystem"
-    },
     {
      "t": 1784922526,
      "type": "cliff",
@@ -4360,8 +4246,8 @@
    "note": "",
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 31 upcoming batch events at ingest. Not independently verified.",
-   "circSupply": 1114975380.128971,
-   "totalLocked": 221120530.48974323,
+   "circSupply": 1119904918.7785254,
+   "totalLocked": 216190991.84018898,
    "maxSupply": 1336095910.6187143
   },
   {
@@ -4439,20 +4325,8 @@
    "name": "Wormhole",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
-    {
-     "t": 1783641600,
-     "type": "cliff",
-     "n": 50411392,
-     "cats": "insiders"
-    },
-    {
-     "t": 1784851200,
-     "type": "cliff",
-     "n": 50411392,
-     "cats": "insiders"
-    },
     {
      "t": 1786060800,
      "type": "cliff",
@@ -4662,6 +4536,18 @@
      "type": "cliff",
      "n": 50411392,
      "cats": "insiders"
+    },
+    {
+     "t": 1828396800,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
+    },
+    {
+     "t": 1829606400,
+     "type": "cliff",
+     "n": 50411392,
+     "cats": "insiders"
     }
    ],
    "chain": "unconfirmed",
@@ -4669,8 +4555,8 @@
    "note": "",
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified.",
-   "circSupply": 6718400663.091709,
-   "totalLocked": 3281599336.9083633,
+   "circSupply": 6796780265.5866165,
+   "totalLocked": 3203219734.413456,
    "maxSupply": 10000000000.000072
   },
   {
@@ -4760,20 +4646,8 @@
    "name": "Forta",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
-    {
-     "t": 1783814400,
-     "type": "cliff",
-     "n": 50000,
-     "cats": "farming"
-    },
-    {
-     "t": 1784419200,
-     "type": "cliff",
-     "n": 50000,
-     "cats": "farming"
-    },
     {
      "t": 1785024000,
      "type": "cliff",
@@ -5205,6 +5079,24 @@
      "type": "cliff",
      "n": 50000,
      "cats": "farming"
+    },
+    {
+     "t": 1828569600,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1829174400,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
+    },
+    {
+     "t": 1829779200,
+     "type": "cliff",
+     "n": 50000,
+     "cats": "farming"
     }
    ],
    "chain": "ethereum",
@@ -5213,8 +5105,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 4 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0x41545f8b9472d758bb669ed8eaeeecd7a9c4ec29",
-   "circSupply": 624790000.0000005,
-   "totalLocked": 375209999.9999995,
+   "circSupply": 624890000.0000005,
+   "totalLocked": 375109999.9999995,
    "maxSupply": 1000000000
   },
   {
@@ -5222,26 +5114,8 @@
    "name": "Hashflow",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
-    {
-     "t": 1783466976,
-     "type": "cliff",
-     "n": 2775000,
-     "cats": "insiders"
-    },
-    {
-     "t": 1783487902,
-     "type": "cliff",
-     "n": 15113333,
-     "cats": "community+privateSale"
-    },
-    {
-     "t": 1783586118,
-     "type": "cliff",
-     "n": 462963,
-     "cats": "insiders"
-    },
     {
      "t": 1786096719,
      "type": "cliff",
@@ -5445,6 +5319,12 @@
      "type": "cliff",
      "n": 1875000,
      "cats": "insiders"
+    },
+    {
+     "t": 1828291749,
+     "type": "cliff",
+     "n": 462963,
+     "cats": "insiders"
     }
    ],
    "chain": "ethereum",
@@ -5453,8 +5333,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0xb3999F658C0391d94A37f7FF328F3feC942BcADC",
-   "circSupply": 925537592.5925927,
-   "totalLocked": 74462407.40740728,
+   "circSupply": 943888888.888889,
+   "totalLocked": 56111111.111111045,
    "maxSupply": 1000000000
   },
   {
@@ -5462,14 +5342,8 @@
    "name": "Orderly",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
-    {
-     "t": 1783900800,
-     "type": "cliff",
-     "n": 500000,
-     "cats": "farming"
-    },
     {
      "t": 1785110400,
      "type": "cliff",
@@ -5685,6 +5559,12 @@
      "type": "cliff",
      "n": 500000,
      "cats": "farming"
+    },
+    {
+     "t": 1828656000,
+     "type": "cliff",
+     "n": 500000,
+     "cats": "farming"
     }
    ],
    "chain": "ethereum",
@@ -5894,8 +5774,8 @@
     }
    },
    "token": "ethereum:0xABD4C63d2616A5201454168269031355f4764337",
-   "circSupply": 492354232.0834983,
-   "totalLocked": 507645767.9165017,
+   "circSupply": 498642183.6778984,
+   "totalLocked": 501357816.3221016,
    "maxSupply": 1000000000
   },
   {
@@ -5903,14 +5783,8 @@
    "name": "CARV",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
-    {
-     "t": 1783743003,
-     "type": "cliff",
-     "n": 52929813,
-     "cats": "ecosystem+staking+privateSale+insiders"
-    },
     {
      "t": 1786372746,
      "type": "cliff",
@@ -6018,6 +5892,12 @@
      "type": "cliff",
      "n": 2472234,
      "cats": "staking"
+    },
+    {
+     "t": 1828472286,
+     "type": "cliff",
+     "n": 2472234,
+     "cats": "staking"
     }
    ],
    "chain": "ethereum",
@@ -6026,8 +5906,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0xc08cd26474722ce93f4d0c34d16201461c10aa8c",
-   "circSupply": 764649074.466582,
-   "totalLocked": 235350925.53341806,
+   "circSupply": 774401299.9858699,
+   "totalLocked": 225598700.01413012,
    "maxSupply": 1000000000
   },
   {
@@ -6035,7 +5915,7 @@
    "name": "Yield Basis",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
     {
      "t": 1789430400,
@@ -6051,8 +5931,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 0 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0x01791F726B4103694969820be083196cC7c045fF",
-   "circSupply": 461906008.81728363,
-   "totalLocked": 538093991.1827164,
+   "circSupply": 481962021.29713655,
+   "totalLocked": 518037978.70286345,
    "maxSupply": 1000000000
   },
   {
@@ -6060,7 +5940,7 @@
    "name": "fx Protocol",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
     {
      "t": 1789665978,
@@ -6083,8 +5963,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0x365accfca291e7d3914637abf1f7635db165bb09",
-   "circSupply": 1296941.8260036146,
-   "totalLocked": 703875.8456153716,
+   "circSupply": 1300679.662973867,
+   "totalLocked": 700138.0086451191,
    "maxSupply": 2000817.6716189862
   },
   {
@@ -6092,7 +5972,7 @@
    "name": "Humanity",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
     {
      "t": 1784909859,
@@ -6195,6 +6075,12 @@
      "type": "cliff",
      "n": 105357143,
      "cats": "ecosystem+noncirculating+staking"
+    },
+    {
+     "t": 1829615490,
+     "type": "cliff",
+     "n": 105357143,
+     "cats": "ecosystem+noncirculating+staking"
     }
    ],
    "chain": "ethereum",
@@ -6212,7 +6098,7 @@
    "name": "Layer3",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
     {
      "t": 1785411442,
@@ -6324,8 +6210,8 @@
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified. MECHANISM continuous-claim (2026-10-01): 2367 distinct claimants pull from 0x8E02d37b on 100% of days; best replay 0.25 of 4 index cliffs across 9 parameterisations — a stream, not a cliff",
    "mechanismBasis": "2367 distinct claimants pull from 0x8E02d37b on 100% of days; best replay 0.25 of 4 index cliffs across 9 parameterisations — a stream, not a cliff",
    "token": "ethereum:0x88909D489678dD17aA6D9609F89B0419Bf78FD9a",
-   "circSupply": 958449993.4687396,
-   "totalLocked": 2374883339.5312605,
+   "circSupply": 958792904.1564811,
+   "totalLocked": 2374540428.8435187,
    "maxSupply": 3333333333
   },
   {
@@ -6333,7 +6219,7 @@
    "name": "Renzo",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
     {
      "t": 1785438261,
@@ -6399,7 +6285,7 @@
    "name": "Across",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
     {
      "t": 1785568317,
@@ -6510,8 +6396,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0x44108f0223a3c3028f5fe7aec7f9bb2e66bef82f",
-   "circSupply": 725754810.159448,
-   "totalLocked": 274245189.840552,
+   "circSupply": 728198863.4603155,
+   "totalLocked": 271801136.53968453,
    "maxSupply": 1000000000
   },
   {
@@ -6519,7 +6405,7 @@
    "name": "Centrifuge",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
     {
      "t": 1785633801,
@@ -6642,13 +6528,13 @@
     }
    ],
    "chain": "ethereum",
-   "stage": "STANDARD",
+   "stage": "LOGGED",
    "note": "",
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0xcccccccccc33d538dbc2ee4feab0a7a1ff4e8a94",
-   "circSupply": 590507861.1036798,
-   "totalLocked": 101292138.89632022,
+   "circSupply": 594427460.2701595,
+   "totalLocked": 97372539.72984052,
    "maxSupply": 691800000
   },
   {
@@ -6656,7 +6542,7 @@
    "name": "ZORA Protocol",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
     {
      "t": 1785439173,
@@ -6776,14 +6662,8 @@
    "name": "Kaito",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
-    {
-     "t": 1784542431,
-     "type": "cliff",
-     "n": 17597619,
-     "cats": "noncirculating+insiders+privateSale"
-    },
     {
      "t": 1787172174,
      "type": "cliff",
@@ -6879,6 +6759,12 @@
      "type": "cliff",
      "n": 17597619,
      "cats": "noncirculating+insiders+privateSale"
+    },
+    {
+     "t": 1829248062,
+     "type": "cliff",
+     "n": 17597619,
+     "cats": "noncirculating+insiders+privateSale"
     }
    ],
    "chain": "base",
@@ -6887,8 +6773,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "base:0x98d0baa52b2d063e780de12f615f963fe8537553",
-   "circSupply": 494864285.71428585,
-   "totalLocked": 505135714.2857145,
+   "circSupply": 512461904.76190495,
+   "totalLocked": 487538095.2380954,
    "maxSupply": 1000000000.0000004
   },
   {
@@ -6896,7 +6782,7 @@
    "name": "Walrus Protocol",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
     {
      "t": 1785109488,
@@ -7117,7 +7003,7 @@
    "name": "Plasma",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
     {
      "t": 1785055830,
@@ -7220,6 +7106,12 @@
      "type": "cliff",
      "n": 227777778,
      "cats": "ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1829761461,
+     "type": "cliff",
+     "n": 227777778,
+     "cats": "ecosystem+insiders+privateSale"
     }
    ],
    "chain": "unconfirmed",
@@ -7236,7 +7128,7 @@
    "name": "Aster",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
     {
      "t": 1785434172,
@@ -7354,8 +7246,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 2 upcoming batch events at ingest. Not independently verified.",
    "token": "bsc:0x000ae314e2a2172a039b26378814c252734f556a",
-   "circSupply": 2976656450.589154,
-   "totalLocked": 5023343549.410847,
+   "circSupply": 2982901315.00986,
+   "totalLocked": 5017098684.99014,
    "maxSupply": 8000000000
   },
   {
@@ -7363,7 +7255,7 @@
    "name": "Falcon Finance",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
     {
      "t": 1785385515,
@@ -7525,7 +7417,7 @@
    "name": "Lista DAO",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
     {
      "t": 1789844661,
@@ -7556,6 +7448,12 @@
      "type": "cliff",
      "n": 8437500,
      "cats": "noncirculating+farming+insiders"
+    },
+    {
+     "t": 1829290806,
+     "type": "cliff",
+     "n": 8437500,
+     "cats": "noncirculating+farming+insiders"
     }
    ],
    "chain": "bsc",
@@ -7564,8 +7462,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "bsc:0xfceb31a79f71ac9cbdcf853519c1b12d379edc46",
-   "circSupply": 578703211.5701299,
-   "totalLocked": 221296788.4298694,
+   "circSupply": 580687193.5743895,
+   "totalLocked": 219312806.42560983,
    "maxSupply": 799999999.9999993
   },
   {
@@ -7573,7 +7471,7 @@
    "name": "StakeStone",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
     {
      "t": 1785714288,
@@ -7684,8 +7582,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0x1d88713b483a8e45cff0e5cd7c2e15e5fab4534d",
-   "circSupply": 457554078.0141845,
-   "totalLocked": 542445921.9858159,
+   "circSupply": 478905806.73758864,
+   "totalLocked": 521094193.2624117,
    "maxSupply": 1000000000.0000004
   },
   {
@@ -7693,14 +7591,8 @@
    "name": "Solv Protocol",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
-    {
-     "t": 1784407374,
-     "type": "cliff",
-     "n": 402577427,
-     "cats": "noncirculating+ecosystem+insiders+privateSale"
-    },
     {
      "t": 1786924800,
      "type": "cliff",
@@ -7802,6 +7694,12 @@
      "type": "cliff",
      "n": 154459780,
      "cats": "noncirculating+ecosystem+insiders+privateSale"
+    },
+    {
+     "t": 1829113005,
+     "type": "cliff",
+     "n": 154459780,
+     "cats": "noncirculating+ecosystem+insiders+privateSale"
     }
    ],
    "chain": "bsc",
@@ -7810,8 +7708,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "bsc:0xabe8e5cabe24cb36df9540088fd7ce1175b9bc52",
-   "circSupply": 5716102727.503974,
-   "totalLocked": 3943897272.496026,
+   "circSupply": 5902680154.742978,
+   "totalLocked": 3757319845.257022,
    "maxSupply": 9660000000
   },
   {
@@ -7819,14 +7717,8 @@
    "name": "Re",
    "provenance": "sourced",
    "source": "defillama",
-   "sourceFetchedAt": "2026-11-02T20:02",
+   "sourceFetchedAt": "2026-11-21T09:02",
    "sourceEvents": [
-    {
-     "t": 1784370543,
-     "type": "cliff",
-     "n": 7091667,
-     "cats": "airdrop"
-    },
     {
      "t": 1787000286,
      "type": "cliff",
@@ -7922,6 +7814,12 @@
      "type": "cliff",
      "n": 17369444,
      "cats": "airdrop+privateSale+insiders"
+    },
+    {
+     "t": 1829076174,
+     "type": "cliff",
+     "n": 17369444,
+     "cats": "airdrop+privateSale+insiders"
     }
    ],
    "chain": "ethereum",
@@ -7930,8 +7828,8 @@
    "mechanism": "pending",
    "operatorNote": "Sourced from defillama's unlock schedule; 1 upcoming batch events at ingest. Not independently verified.",
    "token": "ethereum:0x526526528f35ac738177003b8773b402b8df8143",
-   "circSupply": 187966666.66666663,
-   "totalLocked": 812033333.3333334,
+   "circSupply": 195058333.33333328,
+   "totalLocked": 804941666.6666667,
    "maxSupply": 1000000000
   }
  ]

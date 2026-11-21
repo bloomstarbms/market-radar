@@ -1038,7 +1038,9 @@ console.log('49. FALSIFIER STRENGTH is derived on EVERY verified row (chance rat
     arbNow.provenance === 'sourced' && !arbNow.verified && !arbNow.events && arbNow.source === 'defillama' && arbNow.tierHistory?.from === 'verified' && /custodian-like 0x1e7016f7/.test(arbNow.tierHistory.reason)
     && arbNow.tierHistory.retracted.monthlyDay === 16 && arbNow.tierHistory.retracted.reviewBy === '2026-11-30' && arbNow.tierHistory.retracted.falsifier?.verdict === 'NONE' && /92\.65M ARB monthly/.test(arbNow.tierHistory.retracted.events?.[0]?.detail));
   check('LIVE: ARB keeps its amount (92,645,833 every event) and takes the index day (15th, Aug–Dec 2026), with the 16th-vs-15th discrepancy noted',
-    arbNow.sourceEvents.length === 8 && arbNow.sourceEvents.every((e) => e.n === 92645833) && arbNow.sourceEvents.filter((e) => /^2026-(08|09|10|11|12)-15$/.test(new Date(e.t * 1000).toISOString().slice(0, 10))).length === 5
+    // No event COUNT: the index keeps a 120-day past window, so each refresh drops the oldest
+    // events (2026-11-21: 8 -> 7, the 2026-07-16 one). The claim is the amount and the day.
+    arbNow.sourceEvents.length >= 5 && arbNow.sourceEvents.every((e) => e.n === 92645833) && arbNow.sourceEvents.filter((e) => /^2026-(08|09|10|11|12)-15$/.test(new Date(e.t * 1000).toISOString().slice(0, 10))).length === 5
     && /retired verified claim said the 16th/.test(arbNow.operatorNote) && /looks like a custodian/.test(arbNow.operatorNote));
   // LIVE: STRK is sourced too. The index figure is the claim now; the old 127M is retracted, with
   // where it sits inside the index recorded as an observation.
@@ -1048,7 +1050,8 @@ console.log('49. FALSIFIER STRENGTH is derived on EVERY verified row (chance rat
     strkNow.provenance === 'sourced' && !strkNow.verified && !strkNow.events && strkNow.source === 'defillama' && strkNow.tierHistory?.from === 'verified' && /LockedTokenGrants/.test(strkNow.tierHistory.reason)
     && strkNow.tierHistory.retracted.monthlyDay === 15 && strkNow.tierHistory.retracted.reviewBy === '2026-11-30' && strkNow.tierHistory.retracted.falsifier?.verdict === 'NONE' && /127M STRK monthly/.test(strkNow.tierHistory.retracted.events?.[0]?.detail));
   check('LIVE: STRK carries the index figure (226,356,431 on the 13th–14th through Dec 2026) and the observation that 127M = Jan–Feb total 190,523,098 − 63,523,098',
-    strkNow.sourceEvents.length === 17 && strkN('2026-11-13') === 226356431 && strkN('2026-12-14') === 226356431 && strkN('2027-01-13') - strkN('2027-03-15') === 127000000
+    // No event count (the past window rolls at every refresh); the dated figures are the claim.
+    strkNow.sourceEvents.length >= 3 && strkN('2026-11-13') === 226356431 && strkN('2026-12-14') === 226356431 && strkN('2027-01-13') - strkN('2027-03-15') === 127000000
     && /OBSERVED, NOT CLAIMED \(2026-11-05\): the retired verified claim \(127M STRK/.test(strkNow.operatorNote) && /exactly 127,000,000/.test(strkNow.operatorNote));
   const cov = unlockCoverage();
   check(`coverage (the heartbeat line) counts ${LIVE_VERIFIED.length} verified`, cov.verified === LIVE_VERIFIED.length && cov.line.includes(`· ${LIVE_VERIFIED.length} verified (`), cov.line.slice(0, 140));

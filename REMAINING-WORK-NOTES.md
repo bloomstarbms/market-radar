@@ -5874,3 +5874,34 @@ WHAT SHIPPED:
   - Key rejected, or the keyed request failed: retried keyless, computed lines kept.
   - Calculations disabled: computed.
   - No key: one keyless request.
+
+## 2026-11-21 — UNLOCK INDEX REFRESHED (ROUTE B, 2026-11-21)
+
+The 18 Nov refresh had not been done: the live index was still 2026-11-02T20:02 and would have
+gone stale (21d) at ~2026-11-23T20:02Z. Done today, per NEXT-SESSION.md (Route B):
+- Keep-set: 53 symbols.
+- Pane job on defillama.com/unlocks/celestia: 49 protocols from a list of 372 in ~2m14s (one per
+  2s). No challenge, no failures, no missing slug (MOVE -> movement, INJ -> injective-orderbook).
+- Carried as 22,848 chars of gzip+base64 in 8 pieces. Each piece's sha-256 matched the pane's
+  hash, and so did the whole blob; the gzip CRC passed.
+- build-index (the bot's own trim()):
+  - NEW 2026-11-21T09:02: 49 protocols, 1,396 events, 953 future, 38 with a future event.
+  - OLD 2026-11-02T20:02: 49 / 1,416 / 931 / 38. Same symbol set.
+  - PARITY: 47 identical, 2 differ, both DefiLlama revising its own past figures, not carrying
+    errors:
+    - APT: monthly linear amounts restated ~0.6% lower (793.6k vs 798.2k), and an 11 Oct event
+      added.
+    - BERA: the 2 Nov cliff restated 57,180 -> 73,656.
+    - All past events; no forward reminder changes.
+- VPS: old index to data/unlock-index.2026-11-21.bak.json (the date is the refresh day, as with
+  the 10-01 and 11-02 backups), new one installed.
+- reingest-sourced.js: 32 rows; no key lost, no row missing, no "[OPERATOR] dates MOVED" line.
+  - Stage flip: CFG STANDARD -> LOGGED. CFG sits exactly on the floor (median 0.0597). This is
+    the expected flip, and its stage is the operator's call.
+  - "First event moved" entries are the 120-day past window rolling forward. ARB lost its
+    2026-07-16 event (8 -> 7); amount, the 15th and its notes unchanged.
+- derive-pressure-floor.js: recorded 0.0597 = derived 0.0597 (p15, n 32). UNCHANGED, no flips.
+- The VPS suite then failed ONE LIVE fixture: ARB's sourceEvents.length === 8 pinned the window,
+  not the claim. Fixed in this version by dropping the count for ARB and STRK; the amount and the
+  dated figures are what the checks hold.
+- Next refresh due: the index is stale at 21d (~2026-12-12T09:02Z); refresh by ~2026-12-07.
